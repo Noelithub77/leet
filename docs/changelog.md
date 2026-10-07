@@ -5,6 +5,8 @@
 - Run Codex, Claude Code, OpenCode, Antigravity, Gemini CLI, or Cursor Agent locally with live models, reasoning levels, and Fast tier.
 - Install OpenCode or Antigravity from the AI menu to use free models.
 - Solve edits, tests, and retries LeetCode submissions, asking before each submit.
+- Syntax highlighting in Debug mode follows the editor theme.
+- Larger array cells and pointer labels with longer stems and smoother movement.
 - Debug mode replays every test case with a seek bar, line heat, and live data structures for Python and C++.
 - Explain a recorded case to mark the step where it first goes wrong.
 - Animated arrays, grids, trees, graphs, linked lists, stacks, queues, heaps, maps, sets, and intervals.

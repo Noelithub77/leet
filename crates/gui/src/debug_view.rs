@@ -1,12 +1,14 @@
 //! Debug mode: every test case recorded up front by the native tracer, then scrubbed like
 //! a video. Code with a heat gutter on the left, live state on the right, seek bar below.
 
+use std::ops::Range;
 use std::time::{Duration, Instant};
 
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Spring, spring};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::spinner::Spinner;
+use gpui_kit::component::highlighter::SyntaxHighlighter;
 use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
@@ -55,12 +57,36 @@ enum Recording {
     Failed(String),
 }
 
+struct SourceLine {
+    text: SharedString,
+    range: Range<usize>,
+}
+
+// Parse the whole snapshot so multiline tokens keep their context across rows.
+fn source_lines(source: &str) -> Vec<SourceLine> {
+    let mut offset = 0;
+    source.split_inclusive('\n').map(|row| {
+        let text = row.strip_suffix('\n').unwrap_or(row);
+        let text = text.strip_suffix('\r').unwrap_or(text);
+        let line = SourceLine { text: text.to_owned().into(), range: offset..offset + text.len() };
+        offset += row.len();
+        line
+    }).collect()
+}
+
+fn line_highlights(highlighter: &SyntaxHighlighter, range: &Range<usize>, theme: &gpui_kit::component::highlighter::HighlightTheme) -> Vec<(Range<usize>, HighlightStyle)> {
+    highlighter.styles(range, theme).into_iter()
+        .map(|(token, style)| (token.start - range.start..token.end - range.start, style))
+        .collect()
+}
+
 pub struct Debugger {
     workspace: WeakEntity<Workspace>,
     assist: Entity<Assist>,
     focus: FocusHandle,
     snapshot: Option<Snapshot>,
-    lines: Vec<SharedString>,
+    lines: Vec<SourceLine>,
+    highlighter: SyntaxHighlighter,
     traces: Vec<Recording>,
     selected: usize,
     playback: Playback,
@@ -76,7 +102,7 @@ pub struct Debugger {
 impl Debugger {
     pub fn new(workspace: WeakEntity<Workspace>, assist: Entity<Assist>, cx: &mut Context<Self>) -> Self {
         let observe = cx.observe(&assist, |_, _, cx| cx.notify());
-        Self { workspace, assist, _observe: observe, focus: cx.focus_handle(), snapshot: None, lines: vec![], traces: vec![], selected: 0, playback: Playback::new(0),
+        Self { workspace, assist, _observe: observe, focus: cx.focus_handle(), snapshot: None, lines: vec![], highlighter: SyntaxHighlighter::new("python"), traces: vec![], selected: 0, playback: Playback::new(0),
             last_frame: Instant::now(), ticker: None, generation: 0, unsupported: None, code_scroll: ScrollHandle::new() }
     }
 
@@ -88,7 +114,10 @@ impl Debugger {
             && old.cases.iter().map(|c| (&c.input, &c.expected)).eq(snapshot.cases.iter().map(|c| (&c.input, &c.expected))));
         if same && !self.traces.iter().any(|t| matches!(t, Recording::Failed(_))) { self.select(selected.min(self.traces.len().saturating_sub(1)), cx); return; }
         self.generation += 1;
-        self.lines = snapshot.code.lines().map(|l| SharedString::from(l.replace('\t', "    "))).collect();
+        let source = snapshot.code.replace('\t', "    ");
+        self.lines = source_lines(&source);
+        self.highlighter = SyntaxHighlighter::new(snapshot.language.id());
+        self.highlighter.update(None, &ropey::Rope::from_str(&source), None);
         self.unsupported = if snapshot.slug.starts_with("cf:") { Some("Native tracing supports LeetCode function problems. Use AI Dry run for stdin problems.".into()) } else { debugger::requirement(snapshot.language, &snapshot.python).err() };
         self.traces = snapshot.cases.iter().map(|_| Recording::Waiting).collect();
         self.selected = selected.min(snapshot.cases.len().saturating_sub(1));
@@ -320,7 +349,8 @@ impl Debugger {
                             .child(div().w(px(4.)).h(px(LINE_H - 6.)).rounded_full().mr_2()
                                 .bg(if ran { theme.warning.opacity(0.25 + 0.75 * (count as f32).ln_1p() / hottest.ln_1p()) } else { theme.muted.opacity(0.4) }))
                             .child(div().flex_1().min_w_0().whitespace_nowrap().font_family(theme.mono_font_family.clone()).text_size(px(12.5))
-                                .text_color(if ran || n == current { theme.foreground } else { theme.muted_foreground.opacity(0.7) }).child(line.clone()))
+                                .text_color(theme.foreground).opacity(if ran || n == current { 1. } else { 0.65 })
+                                .child(StyledText::new(line.text.clone()).with_highlights(line_highlights(&self.highlighter, &line.range, &theme.highlight_theme))))
                             .when(ran, |el| el.child(div().text_size(px(10.)).text_color(theme.muted_foreground.opacity(0.7)).child(format!("×{count}"))))
                     }))))
             .into_any_element()
@@ -405,5 +435,34 @@ impl Workspace {
             code: self.editor.read(cx).value().to_string(), meta: question.meta.clone(), cases: session.cases.clone(),
             compare: Compare::for_statement(&question.content),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gpui_kit::component::highlighter::HighlightTheme;
+
+    #[::core::prelude::v1::test]
+    fn debug_highlights_keep_multiline_context_and_row_byte_offsets() {
+        let source = "def solve():\r\n\ttext = \"\"\"héllo\r\n世界\r\nend\"\"\"\r\n\treturn text\r\n".replace('\t', "    ");
+        let lines = source_lines(&source);
+        let mut highlighter = SyntaxHighlighter::new("python");
+        highlighter.update(None, &ropey::Rope::from_str(&source), None);
+        let theme = HighlightTheme::default_dark();
+        assert_eq!(lines.len(), 5);
+        assert_eq!(lines[2].text.as_ref(), "世界");
+        assert!(lines[1].text.starts_with("    text"));
+        for line in &lines {
+            assert_eq!(&source[line.range.clone()], line.text.as_ref());
+            for (range, _) in line_highlights(&highlighter, &line.range, &theme) {
+                assert!(range.end <= line.text.len());
+                assert!(line.text.is_char_boundary(range.start) && line.text.is_char_boundary(range.end));
+            }
+        }
+        let keyword = line_highlights(&highlighter, &lines[0].range, &theme);
+        assert!(keyword.iter().any(|(range, style)| range.start == 0 && range.end == 3 && style.color.is_some()));
+        let string = line_highlights(&highlighter, &lines[2].range, &theme);
+        assert!(string.iter().any(|(range, style)| range == &(0.."世界".len()) && style.color.is_some()));
     }
 }
