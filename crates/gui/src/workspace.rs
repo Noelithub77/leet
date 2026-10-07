@@ -217,6 +217,8 @@ pub struct Workspace {
     pub syncing: bool,
     pub update_ready: bool,
     pub release_update: crate::update::State,
+    pub ai: crate::ai::State,
+    pub language_picker: crate::language_picker::State,
     /// Last shortcut, shown briefly in the status bar.
     pub flash: Option<(SharedString, u64)>,
     flash_seq: u64,
@@ -300,6 +302,8 @@ impl Workspace {
             syncing: false,
             update_ready: false,
             release_update: crate::update::State::default(),
+            ai: crate::ai::State::default(),
+            language_picker: crate::language_picker::State::default(),
             flash: None,
             flash_seq: 0,
             save_task: Task::ready(()),
@@ -321,7 +325,8 @@ impl Workspace {
         this.load_catalog(window, cx);
         if accounts[1].is_some() { this.refresh_neetcode(window, cx); }
         this._tasks.push(this.watch_disk(window, cx));
-        this._tasks.push(crate::update::watch(window, cx));
+        let watcher = crate::update::watch(&mut this, window, cx);
+        this._tasks.push(watcher);
         this._tasks.push(crate::update::check(window, cx));
         this.start_companion(window, cx);
         if !this.config.onboarding_completed { this.begin_onboarding(false, window, cx); }
@@ -658,30 +663,7 @@ impl Workspace {
             let fetch_slug = slug.clone();
             let loaded = cx
                 .background_spawn(async move {
-                    let mut q = match db.question(&fetch_slug)? {
-                        Some(q) => q,
-                        None => {
-                            let q = if fetch_slug.starts_with("cf:") { practice::codeforces::cached_question(&db, &fetch_slug)? } else { client.question(&fetch_slug)? };
-                            db.save_question(&q)?;
-                            q
-                        }
-                    };
-                    if q.starter(language).is_none() {
-                        q = if fetch_slug.starts_with("cf:") { practice::codeforces::question(&fetch_slug)? } else { client.question(&fetch_slug)? };
-                        db.save_question(&q)?;
-                    }
-                    let frontend_id = q.frontend_id.parse().unwrap_or(0);
-                    let rel = ws::solution_rel(frontend_id, &q.slug, language);
-                    let starter = q.starter(language).ok_or_else(|| anyhow::anyhow!("{} has no {} starter", q.title, language.label()))?;
-                    let path = ws::ensure_solution(&workspace, &rel, starter)?;
-                    let code = std::fs::read_to_string(&path)?;
-                    let mtime = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
-                    let custom = db.custom_tests(&q.slug)?;
-                    let saved_cases = db.test_cases(&q.slug)?;
-                    let history = crate::history::local_versions(&workspace, q.frontend_id.parse().unwrap_or(0), &q.slug);
-                    let statement = if q.meta["statementMarkdown"].as_bool() == Some(true) { vec![practice::description::Block::Markdown(q.content.clone())] } else { practice::description::parse(&q.content) };
-                    let hints: Vec<String> = q.hints.iter().map(|h| prompts::statement_markdown(h)).collect();
-                    anyhow::Ok(Loaded { q, rel, path, code, mtime, custom, saved_cases, history, statement, hints })
+                    load_question(&db, &client, &workspace, &fetch_slug, language)
                 })
                 .await;
             let _ = this.update_in(cx, |this, window, cx| {
@@ -689,6 +671,56 @@ impl Workspace {
             });
         })
         .detach();
+    }
+
+    pub fn switch_language(&mut self, language: Language, window: &mut Window, cx: &mut Context<Self>) {
+        if self.language_picker.loading { return; }
+        let Some(session) = self.session.as_ref() else {
+            self.config.preferred_language = language;
+            self.save_config(window, cx);
+            crate::language_picker::close(self, window, cx);
+            return;
+        };
+        if session.language == language { crate::language_picker::close(self, window, cx); return; }
+        if session.question.is_none() || session.running || matches!(session.judge, Some(Judge::Running { .. })) { return; }
+        let slug = session.slug.clone();
+        let previous = session.language;
+        let tab = self.active_tab;
+        let editor = self.editor.clone();
+        self.save_now(cx);
+        if self.session.as_ref().is_some_and(|session| std::fs::read_to_string(&session.path).ok().as_deref() != Some(self.editor.read(cx).value().as_ref())) {
+            self.toast(Notification::error("Solution could not be saved; language kept"), window, cx);
+            return;
+        }
+        self.language_picker.loading = true;
+        let (db, client, directory) = (self.db.clone(), self.client.clone(), self.config.workspace.clone());
+        cx.notify();
+        cx.spawn_in(window, async move |this, cx| {
+            let fetch_slug = slug.clone();
+            let loaded = cx.background_spawn(async move { load_question(&db, &client, &directory, &fetch_slug, language) }).await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                this.language_picker.loading = false;
+                if this.active_tab != tab || this.editor != editor || !this.session.as_ref().is_some_and(|session| session.slug == slug && session.language == previous && !session.running && !matches!(session.judge, Some(Judge::Running { .. }))) { cx.notify(); return; }
+                match loaded {
+                    Ok(loaded) => {
+                        this.save_now(cx);
+                        if this.session.as_ref().is_some_and(|session| std::fs::read_to_string(&session.path).ok().as_deref() != Some(this.editor.read(cx).value().as_ref())) {
+                            this.toast(Notification::error("Solution could not be saved; language kept"), window, cx);
+                            return;
+                        }
+                        this.config.preferred_language = language;
+                        this.save_config(window, cx);
+                        if let Some(session) = this.session.as_mut() { session.language = language; session.compile_error = None; session.judge = None; }
+                        this.new_editor(window, cx);
+                        this.apply_loaded(loaded, window, cx);
+                        crate::language_picker::close(this, window, cx);
+                        this.focus_editor(window, cx);
+                    }
+                    Err(error) => this.toast(Notification::error(format!("Language unavailable: {error}")), window, cx),
+                }
+                cx.notify();
+            });
+        }).detach();
     }
 
     pub(crate) fn apply_loaded(&mut self, l: Loaded, window: &mut Window, cx: &mut Context<Self>) {
@@ -1105,6 +1137,33 @@ impl Workspace {
         self.roadmap.scroll.scroll_to_item(0, ScrollStrategy::Top);
         self.focus_nav(Focus::RoadmapTopic, window, cx);
     }
+}
+
+fn load_question(db: &Db, client: &Client, workspace: &std::path::Path, slug: &str, language: Language) -> anyhow::Result<Loaded> {
+    let mut q = match db.question(slug)? {
+        Some(q) => q,
+        None => {
+            let q = if slug.starts_with("cf:") { practice::codeforces::cached_question(&db, slug)? } else { client.question(slug)? };
+            db.save_question(&q)?;
+            q
+        }
+    };
+    if q.starter(language).is_none() {
+        q = if slug.starts_with("cf:") { practice::codeforces::question(slug)? } else { client.question(slug)? };
+        db.save_question(&q)?;
+    }
+    let frontend_id = q.frontend_id.parse().unwrap_or(0);
+    let rel = ws::solution_rel(frontend_id, &q.slug, language);
+    let starter = q.starter(language).ok_or_else(|| anyhow::anyhow!("{} has no {} starter", q.title, language.label()))?;
+    let path = ws::ensure_solution(workspace, &rel, starter)?;
+    let code = std::fs::read_to_string(&path)?;
+    let mtime = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
+    let custom = db.custom_tests(&q.slug)?;
+    let saved_cases = db.test_cases(&q.slug)?;
+    let history = crate::history::local_versions(workspace, q.frontend_id.parse().unwrap_or(0), &q.slug);
+    let statement = if q.meta["statementMarkdown"].as_bool() == Some(true) { vec![practice::description::Block::Markdown(q.content.clone())] } else { practice::description::parse(&q.content) };
+    let hints: Vec<String> = q.hints.iter().map(|h| prompts::statement_markdown(h)).collect();
+    anyhow::Ok(Loaded { q, rel, path, code, mtime, custom, saved_cases, history, statement, hints })
 }
 
 pub(crate) struct Loaded {

@@ -23,7 +23,7 @@ Use `./ops snapshot --help` for public bundle refreshes. Data operations must id
 
 New installs use `~/.config/leet`, `~/.local/share/leet`, and `~/leet`. Existing vg paths remain supported so an upgrade does not lose saved state. Keyring identity remains compatible with verd. Do not relocate or overwrite personal data as a side effect of a build.
 
-Update `docs/changelog.md` for user-visible milestones. Verify source checks, rendered native UI/keyboard behavior, and installed commands separately, and report any unverified layer. Commit only task changes with a clear title and useful body. The user authorized public distribution of this repository. Creating unrelated repositories requires explicit authorization.
+Update `docs/changelog.md` for user-visible milestones. Every release must publish concise, user-facing bullet lists classified as **Feat** and **Fix**. Use `<details open>` with `<summary>Feat</summary>` and `<details>` with `<summary>Fix</summary>` so Feat starts expanded and Fix collapsed on GitHub and in the native changelog. Keep one change per short bullet; omit implementation logs, repeated explanations, and installation requirements. Keep download/setup information in `docs/releases.md` and the release's separate Downloads section. Maintain the current release's categorized notes in `docs/changelog.md`; the release workflow publishes them and tests enforce the format. Verify source checks, rendered native UI/keyboard behavior, and installed commands separately, and report any unverified layer. Commit only task changes with a clear title and useful body. The user authorized public distribution of this repository. Creating unrelated repositories requires explicit authorization.
 
 ## Public distribution
 

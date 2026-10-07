@@ -1,16 +1,18 @@
 //! Picks up new development builds: `./ops local:deploy` repoints the `leet` symlink, and the
 //! running app offers a restart instead of updating under the user.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 use std::sync::{Arc, atomic::{AtomicU64, Ordering}};
 
+use gpui_kit::base::Disableable as _;
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::*;
 use gpui_kit::component::{ActiveTheme as _, Sizable as _, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::text::TextView;
+use gpui_kit::component::accordion::Accordion;
 use gpui_kit::assets::IconName;
 use gpui_kit::prelude::FluentBuilder as _;
 
@@ -23,20 +25,41 @@ fn launcher() -> PathBuf {
     let link = dirs::executable_dir()
         .or_else(|| dirs::home_dir().map(|h| h.join(".local/bin")))
         .map(|d| d.join("leet"));
+    launch_path(current, link)
+}
+
+fn launch_path(current: PathBuf, link: Option<PathBuf>) -> PathBuf {
     match link {
         Some(link) if std::fs::canonicalize(&link).ok().as_ref() == Some(&current) => link,
         _ => current,
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum UpdateAction { Update, Downloading, Restart, UpToDate }
+
 pub struct State {
+    open: bool,
+    pinned: bool,
+    trigger_hovered: bool,
+    panel_hovered: bool,
+    hide_epoch: u64,
+    categories: Vec<usize>,
     pub latest: Option<practice::updates::Latest>,
     pub checking: bool,
     pub downloading: bool,
     pub error: Option<String>,
     progress: Arc<AtomicU64>,
     restart_path: Option<PathBuf>,
+    local_build_ready: bool,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self { open: false, pinned: false, trigger_hovered: false, panel_hovered: false, hide_epoch: 0,
+            categories: vec![0], latest: None, checking: false, downloading: false, error: None,
+            progress: Arc::default(), restart_path: None, local_build_ready: false }
+    }
 }
 
 pub fn check(window: &mut Window, cx: &mut Context<Workspace>) -> Task<()> {
@@ -64,7 +87,10 @@ fn install(this: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace
         Ok(path) => path,
         Err(error) => { this.release_update.error = Some(error.to_string()); cx.notify(); return; }
     };
-    this.release_update.restart_path = Some(launcher());
+    if this.release_update.restart_path.is_none() {
+        this.release_update.restart_path = Some(launcher());
+    }
+    this.release_update.pinned = true;
     this.release_update.downloading = true;
     this.release_update.error = None;
     this.release_update.progress.store(0, Ordering::Relaxed);
@@ -92,7 +118,6 @@ fn install(this: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace
             match result {
                 Ok(()) => {
                     this.update_ready = true;
-                    restart(this, cx);
                 },
                 Err(error) => this.release_update.error = Some(format!("Update failed: {error}")),
             }
@@ -102,67 +127,126 @@ fn install(this: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace
     cx.notify();
 }
 
+impl State {
+    fn action(&self, ready: bool) -> UpdateAction {
+        if self.downloading { UpdateAction::Downloading }
+        else if ready { UpdateAction::Restart }
+        else if self.latest.as_ref().is_some_and(|latest| latest.available.is_some()) { UpdateAction::Update }
+        else { UpdateAction::UpToDate }
+    }
+
+    pub(crate) fn close(&mut self) {
+        self.open = false;
+        self.pinned = false;
+        self.panel_hovered = false;
+        self.hide_epoch = self.hide_epoch.wrapping_add(1);
+    }
+}
+
+fn hover(this: &mut Workspace, panel: bool, entered: bool, window: &mut Window, cx: &mut Context<Workspace>) {
+    let state = &mut this.release_update;
+    if panel { state.panel_hovered = entered; } else { state.trigger_hovered = entered; }
+    state.hide_epoch = state.hide_epoch.wrapping_add(1);
+    if entered { state.open = true; cx.notify(); return; }
+    if state.pinned || state.trigger_hovered || state.panel_hovered { return; }
+    let epoch = state.hide_epoch;
+    // Allow the pointer to cross the small gap from the footer into the panel.
+    cx.spawn_in(window, async move |this, cx| {
+        cx.background_executor().timer(Duration::from_millis(180)).await;
+        let _ = this.update(cx, |this, cx| {
+            let state = &mut this.release_update;
+            if state.hide_epoch == epoch && !state.pinned && !state.trigger_hovered && !state.panel_hovered {
+                state.close();
+                cx.notify();
+            }
+        });
+    }).detach();
+}
+
 pub fn button(this: &Workspace, cx: &mut Context<Workspace>) -> impl IntoElement {
     let available = this.update_ready || this.release_update.latest.as_ref().is_some_and(|latest| latest.available.is_some());
-    let workspace = cx.entity().downgrade();
     div().id("release-update-hover").relative().flex_shrink_0()
-        .hoverable_tooltip(move |_, cx| cx.new(|cx| {
-            if let Some(entity) = workspace.upgrade() {
-                cx.observe(&entity, |_, _, cx| cx.notify()).detach();
-            }
-            Changelog { workspace: workspace.clone() }
-        }).into())
+        .on_hover(cx.listener(|this, entered, window, cx| hover(this, false, *entered, window, cx)))
         .child(Button::new("release-updates").ghost().small()
             .icon(gpui_kit::component::Icon::new(IconName::Download).text_color(cx.theme().primary))
-            .accessibility_label(if this.update_ready { "Restart updated app" } else { "Download and install update" })
+            .accessibility_label("Changelog and updates")
             .on_click(cx.listener(|this, _, window, cx| {
-                if this.release_update.downloading { return; }
-                if this.update_ready { restart(this, cx); }
-                else { install(this, window, cx); }
+                crate::ai::close(this, window, cx);
+                crate::language_picker::close(this, window, cx);
+                this.omni.open = false;
+                this.release_update.open = true;
+                this.release_update.pinned = true;
+                cx.notify();
             })))
         .when(available, |el| el.child(div().absolute().top_0().right_0().size(px(5.)).rounded_full().bg(cx.theme().primary)))
 }
 
-struct Changelog {
-    workspace: WeakEntity<Workspace>,
+pub fn panel(this: &Workspace, window: &Window, cx: &mut Context<Workspace>) -> Option<AnyElement> {
+    if !this.release_update.open { return None; }
+    let state = &this.release_update;
+    let action = state.action(this.update_ready);
+    let status = if state.local_build_ready { "New local build ready".into() }
+        else if this.update_ready { "Update ready".into() }
+        else if state.downloading { format!("Downloading · {}%", state.progress.load(Ordering::Relaxed)) }
+        else if state.checking { "Checking for updates…".into() }
+        else if let Some(latest) = &state.latest {
+            if latest.available.is_some() { format!("Update available · {}", latest.version) }
+            else { format!("Up to date · {}", env!("LEET_VERSION")) }
+        } else { format!("leet {}", env!("LEET_VERSION")) };
+    let notes = state.latest.as_ref().filter(|latest| latest.available.is_some() || !is_development_build(env!("LEET_VERSION")))
+        .map(|latest| latest.notes.clone()).filter(|notes| !notes.trim().is_empty())
+        .unwrap_or_else(|| include_str!("../../../docs/changelog.md").to_owned());
+    let parsed = practice::release_notes::Changelog::parse(&notes);
+    let notes = if parsed.is_empty() { practice::release_notes::Changelog::parse(include_str!("../../../docs/changelog.md")) } else { parsed };
+    let bullets = |items: Vec<String>| items.into_iter().map(|item| format!("- {item}")).collect::<Vec<_>>().join("\n");
+    let label = match action {
+        UpdateAction::Restart => "Restart",
+        UpdateAction::Downloading => "Updating…",
+        UpdateAction::Update | UpdateAction::UpToDate => "Update",
+    };
+    let notes_height = (window.viewport_size().height - px(190.)).max(px(40.)).min(px(300.));
+    Some(v_flex().id("release-update-panel").absolute().bottom(px(36.)).right(px(12.)).w(px(380.)).max_w_full()
+        .occlude().p_4().gap_3().rounded_lg().border_1().border_color(cx.theme().border)
+        .bg(cx.theme().popover).text_color(cx.theme().foreground).shadow_lg()
+        .on_hover(cx.listener(|this, entered, window, cx| hover(this, true, *entered, window, cx)))
+        .on_mouse_down_out(cx.listener(|this, _, _, cx| {
+            if !this.release_update.trigger_hovered { this.release_update.close(); cx.notify(); }
+        }))
+        .child(div().text_sm().child(status))
+        .when_some(state.error.clone(), |el, error| el.child(div().text_xs().text_color(cx.theme().danger).child(error)))
+        .child(div().id("release-notes-scroll").max_h(notes_height).overflow_y_scroll()
+            .child(Accordion::new("release-categories").multiple(true).bordered(false).small()
+                .item(|item| item.title("Feat").open(state.categories.contains(&0))
+                    .child(TextView::markdown("release-feat", bullets(notes.feat)).selectable(true)))
+                .item(|item| item.title("Fix").open(state.categories.contains(&1))
+                    .child(TextView::markdown("release-fix", bullets(notes.fix)).selectable(true)))
+                .on_toggle_click(cx.listener(|this, open: &[usize], _, cx| { this.release_update.categories = open.to_vec(); cx.notify(); }))))
+        .child(Button::new("release-update-action").primary().small().label(label)
+            .disabled(matches!(action, UpdateAction::Downloading | UpdateAction::UpToDate))
+            .on_click(cx.listener(|this, _, window, cx| match this.release_update.action(this.update_ready) {
+                UpdateAction::Update => install(this, window, cx),
+                UpdateAction::Restart => restart(this, cx),
+                UpdateAction::Downloading | UpdateAction::UpToDate => {},
+            })))
+        .into_any_element())
 }
 
-impl Render for Changelog {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let workspace = self.workspace.upgrade();
-        let this = workspace.as_ref().map(|workspace| workspace.read(cx));
-        let state = this.map(|this| &this.release_update);
-        let status = if this.is_some_and(|this| this.update_ready) { "Update ready · click to restart".into() }
-            else if state.is_some_and(|state| state.downloading) {
-                format!("Downloading update ({}%)", state.map(|state| state.progress.load(Ordering::Relaxed)).unwrap_or(0))
-            } else if state.is_some_and(|state| state.checking) { "Checking for updates…".into() }
-            else if let Some(latest) = state.and_then(|state| state.latest.as_ref()) {
-                if latest.available.is_some() { format!("{} · click to update", latest.version) }
-                else { format!("Up to date · {}", latest.version) }
-            } else { format!("leet {}", env!("LEET_VERSION")) };
-        let error = state.and_then(|state| state.error.clone());
-        let notes = state.and_then(|state| state.latest.as_ref()).map(|latest| latest.notes.clone())
-            .filter(|notes| !notes.trim().is_empty())
-            .unwrap_or_else(|| include_str!("../../../docs/changelog.md").to_owned());
-        v_flex().w(px(380.)).p_4().gap_3().rounded_lg().border_1()
-            .border_color(cx.theme().border).bg(cx.theme().popover).text_color(cx.theme().foreground).shadow_lg()
-            .child(div().text_sm().child(status))
-            .when_some(error, |el, error| el.child(div().text_xs().text_color(cx.theme().danger).child(error)))
-            .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child("Changelog"))
-            .child(div().id("release-notes-scroll").max_h(px(300.)).overflow_y_scroll()
-                .child(TextView::markdown("release-notes", notes).selectable(true)))
-    }
+fn is_development_build(display: &str) -> bool {
+    display.split_once('(').is_some_and(|(_, describe)| {
+        describe.trim_end_matches(')') != format!("v{}", practice::updates::current_version(display))
+    })
 }
 
-fn fingerprint(path: &PathBuf) -> Option<(PathBuf, SystemTime)> {
+fn fingerprint(path: &Path) -> Option<(PathBuf, SystemTime)> {
     let target = std::fs::canonicalize(path).ok()?;
     let modified = std::fs::metadata(&target).and_then(|m| m.modified()).ok()?;
     Some((target, modified))
 }
 
-pub fn watch(window: &mut Window, cx: &mut Context<Workspace>) -> Task<()> {
+pub fn watch(workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace>) -> Task<()> {
     let launcher = launcher();
     let started = fingerprint(&launcher);
+    workspace.release_update.restart_path = Some(launcher.clone());
     cx.spawn_in(window, async move |this, cx| {
         loop {
             cx.background_executor().timer(Duration::from_secs(2)).await;
@@ -172,6 +256,7 @@ pub fn watch(window: &mut Window, cx: &mut Context<Workspace>) -> Task<()> {
             }
             let _ = this.update_in(cx, |this, window, cx| {
                 this.update_ready = true;
+                this.release_update.local_build_ready = true;
                 window.push_notification(
                     Notification::info("New leet build ready · ctrl+shift+r restarts").title("Update"),
                     cx,
@@ -203,5 +288,43 @@ pub fn restart(this: &mut Workspace, cx: &mut Context<Workspace>) {
     } else {
         this.release_update.error = Some("Update installed; click to retry restarting".into());
         cx.notify();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[::core::prelude::v1::test]
+    fn update_action_waits_for_explicit_restart() {
+        let mut state = State::default();
+        assert_eq!(state.action(false), UpdateAction::UpToDate);
+        state.downloading = true;
+        assert_eq!(state.action(true), UpdateAction::Downloading);
+        state.downloading = false;
+        assert_eq!(state.action(true), UpdateAction::Restart);
+        assert_eq!(state.categories, [0]);
+    }
+
+    #[cfg(unix)]
+    #[::core::prelude::v1::test]
+    fn captured_launcher_survives_repointing_and_removing_old_build() {
+        let directory = std::env::temp_dir().join(format!("leet-launcher-test-{}-{}", std::process::id(), SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos()));
+        std::fs::create_dir(&directory).unwrap();
+        let old = directory.join("old-build");
+        let new = directory.join("new-build");
+        let link = directory.join("leet");
+        std::fs::write(&old, "old").unwrap();
+        std::fs::write(&new, "new").unwrap();
+        std::os::unix::fs::symlink(&old, &link).unwrap();
+        let captured = launch_path(old.clone(), Some(link.clone()));
+        let started = fingerprint(&captured);
+        std::fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink(&new, &link).unwrap();
+        std::fs::remove_file(&old).unwrap();
+        assert_eq!(captured, link);
+        assert_ne!(fingerprint(&captured), started);
+        assert_eq!(std::fs::canonicalize(captured).unwrap(), new);
+        std::fs::remove_dir_all(directory).unwrap();
     }
 }

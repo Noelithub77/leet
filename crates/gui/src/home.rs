@@ -1,9 +1,10 @@
 //! The pinned landing view uses the shared, in-memory recent-problem list.
 use gpui_kit::assets::IconName;
-use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::base::{Tab, Tabs};
+use gpui_kit::component::button::{Button, ButtonCustomVariant, ButtonVariants as _};
+use gpui_kit::base::{Tab, Tabs, Transition, transition};
+use std::time::Duration;
 use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, h_flex, v_flex};
+use gpui_kit::component::{ActiveTheme as _, Colorize as _, Icon, Sizable as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
@@ -220,7 +221,7 @@ impl Workspace {
         self.show_home(window, cx);
     }
 
-    pub fn render_tabs(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    pub fn render_tabs(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let selected = match self.center { Center::Home => 0, Center::Editor => self.active_tab.map_or(0, |i| i + 1), _ => usize::MAX };
         let theme = cx.theme().clone();
         let make_tab = |index| Tab::new(("workspace-tab", index)).selected(selected == index)
@@ -255,7 +256,25 @@ impl Workspace {
                     })))
                 .on_click(cx.listener(move |this, _, window, cx| this.select_tab(index, window, cx))));
         }
-        h_flex().m_2().gap_2().min_w_0().child(home).child(tabs).child(Button::new("open-settings-icon").ghost().small().icon(IconName::Settings)
+        let panels = !self.zen && self.center == Center::Editor;
+        let left = !self.zen && ((self.center == Center::Editor && self.left) || (self.center == Center::Home && self.home.sidebar));
+        let toggles: [(&str, IconName, &str, bool, Box<dyn Action>); 3] = [
+            ("toggle-left-panel", IconName::PanelLeft, "Toggle sidebar", left, Box::new(actions::ToggleLeft)),
+            ("toggle-bottom-panel", IconName::PanelBottom, "Toggle bottom panel", panels && self.bottom, Box::new(actions::ToggleBottom)),
+            ("toggle-right-panel", IconName::PanelRight, "Toggle problem panel", panels && self.right, Box::new(actions::ToggleRight)),
+        ];
+        let mut controls = h_flex().gap_1();
+        for (id, icon, label, enabled, action) in toggles {
+            let highlight = transition(id, if enabled { 1. } else { 0. }, Transition::new(Duration::from_millis(160)), window, cx);
+            let style = ButtonCustomVariant::new(cx)
+                .foreground(theme.muted_foreground.mix_oklab(theme.primary, highlight))
+                .color(theme.primary.opacity(0.12 * highlight))
+                .hover(theme.primary.opacity(0.18)).active(theme.primary.opacity(0.24));
+            controls = controls.child(Button::new(id).custom(style).small().icon(icon)
+                .toggled(enabled).accessibility_label(label).tooltip_with_action(label, action.as_ref(), Some(actions::WORKSPACE))
+                .on_click(move |_, window, cx| window.dispatch_action(action.boxed_clone(), cx)));
+        }
+        h_flex().m_2().gap_2().min_w_0().child(home).child(tabs).child(controls).child(Button::new("open-settings-icon").ghost().small().icon(IconName::Settings)
             .accessibility_label("Settings").tooltip_with_action("Settings", &actions::OpenSettings, Some(actions::WORKSPACE))
             .on_click(cx.listener(|this, _, window, cx| this.open_settings(None, window, cx))))
     }

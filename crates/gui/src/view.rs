@@ -64,7 +64,7 @@ impl Render for Workspace {
         let left_w = spring("left-w", if show_left { LEFT_W * z } else { 0. }, panel_spring(), window, cx);
         let right_w = spring("right-w", if panels && self.right { RIGHT_W * z } else { 0. }, panel_spring(), window, cx);
         let bottom_h = spring("bottom-h", if panels && self.bottom { BOTTOM_H * z } else { 0. }, panel_spring(), window, cx);
-        let tabs = self.render_tabs(cx);
+        let tabs = self.render_tabs(window, cx);
         let center = match self.center {
             Center::Onboarding => div().flex_1().h_full().children(self.onboarding.clone()).into_any_element(),
             Center::Home => self.render_home(window, cx).into_any_element(),
@@ -103,6 +103,7 @@ impl Render for Workspace {
         )
         .child(self.render_status(window, cx))
         .children(omnibar)
+        .children(crate::update::panel(self, window, cx))
     }
 }
 
@@ -569,16 +570,8 @@ impl Workspace {
             .when_some(flash, |el, (label, _)| {
                 el.child(div().opacity(flash_opacity).text_color(theme.foreground).child(label))
             })
-            .when_some(self.session.as_ref(), |row, session| {
-                let detail = self.intelligence.detail(session.language);
-                row.child(div().id("status-lsp").child(gpui_kit::component::Icon::default()
-                    .path(format!("languages/{}.svg", session.language.id())).xsmall())
-                    .tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(detail.clone()).build(window, cx)))
-            })
-            .child(div().id("status-ai").child(h_flex().gap_1().items_center().child(crate::brand::icon(self.config.prompt_provider).xsmall()).child(self.config.prompt_style.label()))
-                .cursor_pointer().on_click(cx.listener(|this, _, window, cx| crate::ai::open(this, window, cx)))
-                .tooltip({ let label = format!("{} · {}", self.config.prompt_provider.label(), self.config.prompt_style.label());
-                    move |window, cx| gpui_kit::component::tooltip::Tooltip::new(label.clone()).action(&crate::actions::ConfigureAi, Some(crate::actions::WORKSPACE)).build(window, cx) }))
+            .child(crate::language_picker::status(self, cx))
+            .child(crate::ai::status(self, cx))
             .child(if self.client.signed_in() { "LeetCode ✓" } else { "LeetCode signed out" })
             .child(h_flex().gap_1().child(key(crate::actions::key_for("Search", &self.config))).child("commands"))
             .child(crate::update::button(self, cx))

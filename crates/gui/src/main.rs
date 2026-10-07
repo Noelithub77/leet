@@ -13,6 +13,7 @@ mod library;
 mod roadmap;
 mod onboarding;
 mod language_server;
+mod language_picker;
 mod sources;
 mod home;
 mod contests;

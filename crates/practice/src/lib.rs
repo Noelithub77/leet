@@ -27,3 +27,5 @@ pub mod python;
 pub mod contests;
 
 pub mod updates;
+
+pub mod release_notes;

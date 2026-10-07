@@ -3,38 +3,69 @@ use std::collections::BTreeMap;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Textarea, TextareaState};
 use gpui_kit::component::select::{Select, SelectEvent, SelectState};
-use gpui_kit::component::{ActiveTheme as _, IndexPath, Selectable as _, WindowExt as _, h_flex, v_flex};
+use gpui_kit::component::{ActiveTheme as _, IndexPath, Sizable as _, Selectable as _, h_flex, v_flex};
 use gpui_kit::*;
 use practice::config::Config;
 use practice::prompts::{Provider, Style};
 use crate::workspace::{Focus, Workspace};
 
-gpui_kit::actions!(ai, [SaveAi]);
+gpui_kit::actions!(ai, [SaveAi, CloseAi]);
 pub fn bind_keys(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("ctrl-enter", SaveAi, Some("AiForm")),
         KeyBinding::new("ctrl-enter", SaveAi, Some("AiForm > Input")),
+        KeyBinding::new("escape", CloseAi, Some("AiForm")),
+        KeyBinding::new("escape", CloseAi, Some("AiForm > Input")),
     ]);
 }
 
+#[derive(Default)]
+pub struct State {
+    pub form: Option<Entity<AiForm>>,
+    return_focus: Option<Focus>,
+}
+
 pub fn open(ws: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace>) {
+    ws.release_update.close();
+    crate::language_picker::close(ws, window, cx);
     let weak = cx.weak_entity();
     let config = ws.config.clone();
     let return_focus = ws.focus_area;
-    let form = cx.new(|cx| AiForm::new(weak.clone(), config, return_focus, window, cx));
+    let form = cx.new(|cx| AiForm::new(weak, config, return_focus, window, cx));
     let focus = form.read(cx).instructions.clone();
-    window.open_dialog(cx, move |dialog, _, _| {
-        let weak = weak.clone();
-        dialog.title("AI assist").w(px(460.)).child(form.clone())
-            .on_ok(|_, _, _| false)
-            .on_close(move |_, window, cx| {
-                let _ = weak.update(cx, |ws, cx| match return_focus { Focus::Editor | Focus::Omnibar => ws.focus_editor(window, cx), focus => ws.focus_nav(focus, window, cx) });
-            })
-    });
+    ws.ai.return_focus = Some(return_focus);
+    ws.ai.form = Some(form);
+    cx.notify();
     window.defer(cx, move |window, cx| focus.update(cx, |state, cx| state.focus(window, cx)));
 }
 
-struct AiForm {
+pub fn close(ws: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace>) {
+    ws.ai.form = None;
+    if let Some(focus) = ws.ai.return_focus.take() {
+        match focus {
+            Focus::Editor | Focus::Omnibar => ws.focus_editor(window, cx),
+            focus => ws.focus_nav(focus, window, cx),
+        }
+    }
+    cx.notify();
+}
+
+pub fn status(ws: &Workspace, cx: &mut Context<Workspace>) -> impl IntoElement {
+    use gpui_kit::component::popover::Popover;
+    let form = ws.ai.form.clone();
+    Popover::new("status-ai-popup").anchor(Anchor::BottomRight).offset(px(8.))
+        .open(form.is_some())
+        .on_open_change(cx.listener(|this, open, window, cx| {
+            if *open { self::open(this, window, cx); } else { close(this, window, cx); }
+        }))
+        .trigger(Button::new("status-ai").ghost().xsmall()
+            .icon(crate::brand::icon(ws.config.prompt_provider).xsmall()).label(ws.config.prompt_style.label())
+            .accessibility_label("AI assist")
+            .tooltip_with_action("AI assist", &crate::actions::ConfigureAi, Some(crate::actions::WORKSPACE)))
+        .content(move |_, _, _| div().w(px(420.)).max_w_full().children(form.clone()))
+}
+
+pub struct AiForm {
     workspace: WeakEntity<Workspace>,
     return_focus: Focus,
     provider: Provider,
@@ -86,11 +117,11 @@ impl AiForm {
             config.prompt_style = style;
             config.prompt_instructions = instructions;
             match config.save() {
-                Ok(()) => { ws.config = config; match return_focus { Focus::Editor | Focus::Omnibar => ws.focus_editor(window, cx), focus => ws.focus_nav(focus, window, cx) }; ws.flash("AI preferences saved", cx); true }
+                Ok(()) => { ws.config = config; ws.ai.form = None; ws.ai.return_focus = None; cx.notify(); match return_focus { Focus::Editor | Focus::Omnibar => ws.focus_editor(window, cx), focus => ws.focus_nav(focus, window, cx) }; ws.flash("AI preferences saved", cx); true }
                 Err(error) => { ws.toast(gpui_kit::component::notification::Notification::error(error.to_string()), window, cx); false }
             }
         }).unwrap_or(false);
-        if saved { window.close_dialog(cx); }
+        if saved { cx.notify(); }
     }
 }
 
@@ -98,6 +129,15 @@ impl Render for AiForm {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let muted = cx.theme().muted_foreground;
         v_flex().key_context("AiForm").gap_3()
+            .child(h_flex().items_center().justify_between()
+                .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child("AI assist"))
+                .child(Button::new("close-ai").ghost().xsmall().icon(gpui_kit::assets::IconName::X)
+                    .accessibility_label("Close AI assist").on_click(cx.listener(|this, _, window, cx| {
+                        let _ = this.workspace.update(cx, |ws, cx| close(ws, window, cx));
+                    }))))
+            .on_action(cx.listener(|this, _: &CloseAi, window, cx| {
+                let _ = this.workspace.update(cx, |ws, cx| close(ws, window, cx));
+            }))
             .on_action(cx.listener(|this, _: &SaveAi, window, cx| this.save(window, cx)))
             .child(h_flex().gap_3()
                 .child(h_flex().flex_1().gap_1().children(Provider::ALL.into_iter().enumerate().map(|(index, provider)| {
@@ -108,7 +148,9 @@ impl Render for AiForm {
                 .child(v_flex().flex_1().gap_1().child(div().text_xs().text_color(muted).child("Prompt style")).child(Select::new(&self.style))))
             .child(v_flex().gap_1().child(div().text_xs().text_color(muted).child("Instructions")).child(Textarea::new(&self.instructions)))
             .child(h_flex().items_center().justify_between()
-                .child(div().text_xs().text_color(muted).child("Ctrl+Enter saves"))
+                .child(h_flex().gap_2().text_xs().text_color(muted)
+                    .child(crate::view::key("ctrl-enter")).child("Save")
+                    .child(crate::view::key("escape")).child("Close"))
                 .child(Button::new("save-ai").primary().icon(gpui_kit::assets::IconName::Check).accessibility_label("Save AI preferences").tooltip("Save · Ctrl+Enter").on_click(cx.listener(|this, _, window, cx| this.save(window, cx)))))
     }
 }
