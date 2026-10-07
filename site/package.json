@@ -1,0 +1,12 @@
+{
+  "name": "leet-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "test": "node --test",
+    "ops": "node ops.mjs"
+  },
+  "devDependencies": { "vite": "^8.0.10" }
+}

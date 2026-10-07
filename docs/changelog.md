@@ -1,3 +1,11 @@
+## 2026-10-07 · Public desktop releases
+
+- Minimal platform-aware download page, with one command to install and open leet on Linux/macOS and a portable Windows x64 executable.
+- GitHub Actions build native Linux x86_64/ARM64, macOS Intel/Apple Silicon, and Windows x64 artifacts from version tags or a manual release run. Releases publish after all builds succeed and include SHA-256 checksums.
+- macOS accounts use Keychain; Windows accounts use Credential Manager. Linux retains compatible Secret Service/private-file storage.
+- Windows local runners use executable suffixes and the platform's Python command. Windows launches without a terminal window.
+- First builds are unsigned; OS security prompts remain possible. Requirements and local toolchain limits are documented in `docs/releases.md`.
+
 ## 2026-10-07 · 1337 launch alias
 
 - `1337` launches the same installed app as `leet` and `vg`. The Rust installer updates and verifies all three symlinks at each deployment.

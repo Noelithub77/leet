@@ -47,7 +47,7 @@ fn execute(mut command: Command, input: String, timeout: Duration, scratch: &Pat
 }
 pub fn run(language: Language, python: &str, path: &Path, cases: &[Case], timeout: Duration, mut result: impl FnMut(CaseResult)) -> Result<Option<String>> {
     let scratch = Scratch::new()?;
-    let binary = scratch.0.join("solution");
+    let binary = scratch.0.join(format!("solution{}", std::env::consts::EXE_SUFFIX));
     if language != Language::Python {
         let mut compiler = match language {
             Language::Cpp => { let mut cmd = Command::new("g++"); cmd.args(["-std=c++20", "-O2"]); cmd },

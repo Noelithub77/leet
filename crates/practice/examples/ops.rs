@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 //! Standalone, local-only project operations; credentials and user data stay untouched.
+#[cfg(unix)]
+mod unix {
 use std::{path::{Path,PathBuf},process::{Command,Stdio},time::{SystemTime,UNIX_EPOCH}};
 use anyhow::{Result,Context,bail};
 use serde_json::json;
@@ -9,12 +11,12 @@ fn run(program:&str,args:&[&str])->Result<()> {
     eprint!("{}",String::from_utf8_lossy(&output.stdout));
     if !output.status.success(){bail!("{program} failed with {}",output.status);} Ok(())
 }
-fn main(){if let Err(error)=execute(){eprintln!("{}",json!({"environment":"local","error":error.to_string()}));std::process::exit(1);}}
+pub fn main(){if let Err(error)=execute(){eprintln!("{}",json!({"environment":"local","error":error.to_string()}));std::process::exit(1);}}
 fn execute()->Result<()> {
     let args:Vec<_>=std::env::args().skip(1).collect();
     let command=args.first().map(String::as_str).unwrap_or("--help");
     if matches!(command,"--help"|"-h"|"help"){
-        println!("./ops <check|build|local:deploy|snapshot|cache:fetch> [--json]\n\ncheck         Rust workspace tests.\nbuild         Release desktop build.\nlocal:deploy  Build/install leet and 1337 commands, desktop entry/icon; verify version and links.\nsnapshot      Public-only SQLite refresh; use ./ops snapshot --help.\ncache:fetch   Cache one Codeforces statement: --slug cf:CONTEST:INDEX.\n\nLocal environment. Preserves settings, credentials, cache, and Solutions. Running windows offer restart.");return Ok(());
+        println!("./ops <check|build|local:deploy|snapshot|cache:fetch|release:package> [--json]\n\ncheck         Rust workspace tests.\nbuild         Release desktop build.\nlocal:deploy  Build/install leet and 1337 commands, desktop entry/icon; verify version and links.\nsnapshot      Public-only SQLite refresh; use ./ops snapshot --help.\ncache:fetch   Cache one Codeforces statement: --slug cf:CONTEST:INDEX.\nrelease:package  Package a native CI build; use ./ops release:package --help.\n\nLocal environment. Preserves settings, credentials, cache, and Solutions. Running windows offer restart.");return Ok(());
     }
     if command == "cache:fetch" {
         if args.len() < 3 || args.len() > 4 || args[1] != "--slug" || args.get(3).is_some_and(|arg| arg != "--json") {
@@ -29,7 +31,7 @@ fn execute()->Result<()> {
     }
     if args.iter().skip(1).any(|arg|arg!="--json"){bail!("Unexpected argument; use ./ops --help");}
     match command {
-        "check"=>run("cargo",&["test","--workspace"])? ,
+        "check"=>{run("cargo",&["test","--workspace"])?;run("python3",&["tests/install.py"])?;},
         "build"=>run("nice",&["-n","10","cargo","build","--release","-p","gui"])? ,
         "local:deploy"=>{
             run("nice",&["-n","10","cargo","build","--release","-p","gui"])?;
@@ -83,4 +85,14 @@ fn prune(dir:&Path,current:&Path)->Result<()> {
     let mut files:Vec<PathBuf>=std::fs::read_dir(dir)?.filter_map(|entry|entry.ok().map(|entry|entry.path())).filter(|path|path.file_name().is_some_and(|name|name.to_string_lossy().starts_with("leet-"))).collect();
     files.sort();let remove=files.len().saturating_sub(3);
     for path in files.into_iter().take(remove){if path!=current{std::fs::remove_file(path)?;}}Ok(())
+}
+}
+
+#[cfg(unix)]
+fn main() { unix::main(); }
+
+#[cfg(not(unix))]
+fn main() {
+    eprintln!("Local desktop deployment uses Unix. For Windows releases use cargo run -p practice --example release -- --help.");
+    std::process::exit(1);
 }

@@ -4,6 +4,16 @@ A minimal native coding-practice IDE, built with Rust and GPUI Kit. NeetCode roa
 
 The default is NeetCode 150, Python, Liberation Sans, and Vesper. The embedded public SQLite is about 11.2 MB: full NeetCode 150 content and metadata-only catalogs elsewhere. Statements opened outside that list fetch on demand and remain cached. See [bundle coverage and sources](docs/bundle.md).
 
+Get leet from [the download page](https://noelithub77.github.io/leet/). Linux and macOS install and launch with one command:
+
+```sh
+curl -fsSL https://noelithub77.github.io/leet/install.sh | sh
+```
+
+Windows: [download the portable x64 executable](https://github.com/Noelithub77/leet/releases/latest/download/leet-windows-x86_64.exe) and open it. The first releases are unsigned and may show OS security prompts. See [platform requirements and releases](docs/releases.md), including separate Python/compiler requirements for running local solutions.
+
+For source development:
+
 ```sh
 ./ops --help
 ./ops check --json

@@ -1,13 +1,14 @@
-//! Account sessions shared with the Go `verd` command: the same Secret Service entries
-//! (service `verd`) and the same 0600 fallback files, so one sign-in serves both apps.
+//! Compatible `verd` account identity: Linux Secret Service/private files, and native
+//! Keychain/Credential Manager on macOS/Windows.
 
+#[cfg(target_os = "linux")]
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow};
-use secret_service::EncryptionType;
-use secret_service::blocking::SecretService;
+#[cfg(target_os = "linux")]
+use secret_service::{EncryptionType, blocking::SecretService};
 use serde::{Deserialize, Serialize};
 
 const SERVICE: &str = "verd";
@@ -75,10 +76,12 @@ impl Creds {
     }
 }
 
+#[cfg(target_os = "linux")]
 fn attributes(account: Account) -> HashMap<&'static str, &'static str> {
     HashMap::from([("service", SERVICE), ("username", account.name())])
 }
 
+#[cfg(target_os = "linux")]
 fn keyring_load(account: Account) -> Result<Option<Creds>> {
     let ss = SecretService::connect(EncryptionType::Dh)?;
     let found = ss.search_items(attributes(account))?;
@@ -87,6 +90,18 @@ fn keyring_load(account: Account) -> Result<Option<Creds>> {
     };
     item.ensure_unlocked()?;
     let creds: Creds = serde_json::from_slice(&item.get_secret()?)?;
+    Ok(creds.valid().then_some(creds))
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn keyring_load(account: Account) -> Result<Option<Creds>> {
+    let entry = keyring::Entry::new(SERVICE, account.name())?;
+    let secret = match entry.get_secret() {
+        Ok(secret) => secret,
+        Err(keyring::Error::NoEntry) => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    let creds: Creds = serde_json::from_slice(&secret)?;
     Ok(creds.valid().then_some(creds))
 }
 
@@ -109,12 +124,7 @@ pub fn load(account: Account) -> Result<Creds> {
 /// Removes the shared local session; never changes browser cookies or remote accounts.
 pub fn remove(account: Account) -> Result<()> {
     // A keyring failure must not be reported as a successful sign-out.
-    let ss = SecretService::connect(EncryptionType::Dh).context("Credential store unavailable; retry sign-out")?;
-    let found = ss.search_items(attributes(account))?;
-    for item in found.unlocked.iter().chain(found.locked.iter()) {
-        item.ensure_unlocked()?;
-        item.delete()?;
-    }
+    keyring_remove(account).context("Credential store unavailable; retry sign-out")?;
     match std::fs::remove_file(account.file()) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -122,29 +132,65 @@ pub fn remove(account: Account) -> Result<()> {
     }
 }
 
-/// Saves to the keyring, falling back to a 0600 file. Returns where it was stored.
+#[cfg(target_os = "linux")]
+fn keyring_remove(account: Account) -> Result<()> {
+    let ss = SecretService::connect(EncryptionType::Dh).context("Credential store unavailable; retry sign-out")?;
+    let found = ss.search_items(attributes(account))?;
+    for item in found.unlocked.iter().chain(found.locked.iter()) {
+        item.ensure_unlocked()?;
+        item.delete()?;
+    }
+    Ok(())
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn keyring_remove(account: Account) -> Result<()> {
+    match keyring::Entry::new(SERVICE, account.name())?.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
+
+/// Saves to the native keyring, with the existing 0600 file fallback on Linux only.
 pub fn save(account: Account, mut creds: Creds) -> Result<&'static str> {
     creds.saved_at = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos() as i64;
     let json = serde_json::to_vec(&creds)?;
-    let keyed = (|| -> Result<()> {
-        let ss = SecretService::connect(EncryptionType::Dh)?;
-        let collection = ss.get_default_collection()?;
-        collection.ensure_unlocked()?;
-        let label = format!("Password for '{}' on '{SERVICE}'", account.name());
-        collection.create_item(&label, attributes(account), &json, true, "text/plain")?;
-        Ok(())
-    })();
+    let keyed = keyring_save(account, &json);
     if keyed.is_ok() {
         let _ = std::fs::remove_file(account.file());
         return Ok("OS keyring");
     }
-    let path = account.file();
-    std::fs::create_dir_all(path.parent().context("credential dir")?)?;
-    write_private(&path, &json)?;
-    Ok("private file")
+    #[cfg(target_os = "linux")]
+    {
+        let path = account.file();
+        std::fs::create_dir_all(path.parent().context("credential dir")?)?;
+        write_private(&path, &json)?;
+        Ok("private file")
+    }
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    {
+        keyed.context("OS credential store unavailable; account was not saved")?;
+        Ok("OS keyring")
+    }
 }
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
+fn keyring_save(account: Account, json: &[u8]) -> Result<()> {
+    let ss = SecretService::connect(EncryptionType::Dh)?;
+    let collection = ss.get_default_collection()?;
+    collection.ensure_unlocked()?;
+    let label = format!("Password for '{}' on '{SERVICE}'", account.name());
+    collection.create_item(&label, attributes(account), json, true, "text/plain")?;
+    Ok(())
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn keyring_save(account: Account, json: &[u8]) -> Result<()> {
+    keyring::Entry::new(SERVICE, account.name())?.set_secret(json)?;
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
 fn write_private(path: &std::path::Path, bytes: &[u8]) -> Result<()> {
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
@@ -157,12 +203,6 @@ fn write_private(path: &std::path::Path, bytes: &[u8]) -> Result<()> {
         .open(&tmp)?;
     file.write_all(bytes)?;
     std::fs::rename(tmp, path)?;
-    Ok(())
-}
-
-#[cfg(not(unix))]
-fn write_private(path: &std::path::Path, bytes: &[u8]) -> Result<()> {
-    std::fs::write(path, bytes)?;
     Ok(())
 }
 

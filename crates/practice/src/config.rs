@@ -40,7 +40,7 @@ impl Default for Config {
             workspace: home().join("leet"),
             theme: "Vesper".into(),
             font_family: "Liberation Sans".into(),
-            python: "python3".into(),
+            python: if cfg!(windows) { "python" } else { "python3" }.into(),
             preferred_language: Language::Python,
             source: Source::NeetCode,
             codeforces_handle: String::new(),

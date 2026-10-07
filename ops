@@ -2,6 +2,10 @@
 set -eu
 leet_repo_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 cd "$leet_repo_dir"
+if [ "${1:-}" = "release:package" ]; then
+    shift
+    exec cargo run --quiet -p practice --example release -- "$@"
+fi
 if [ "${1:-}" = "snapshot" ]; then
     shift
     exec cargo run --quiet -p practice --example snapshot -- "$@"

@@ -1,0 +1,132 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing version tag to build (vX.Y.Z)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+          - os: macos-15
+            target: aarch64-apple-darwin
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      MACOSX_DEPLOYMENT_TARGET: '13.0'
+      CARGO_INCREMENTAL: '0'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+      - name: Validate version tag
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$(git rev-parse HEAD)"
+      - name: Install Linux build libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake pkg-config libssl-dev libxcb1-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libegl1-mesa-dev libfontconfig1-dev libasound2-dev libvulkan-dev
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add '${{ matrix.target }}'
+      - name: Use the static Windows C runtime
+        if: runner.os == 'Windows'
+        run: echo 'RUSTFLAGS=-C target-feature=+crt-static' >> "$GITHUB_ENV"
+      - name: Test Linux workspace
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        run: ./ops check --json
+      - name: Check platform code and examples
+        run: cargo check --locked --workspace --all-targets --target '${{ matrix.target }}'
+      - name: Build release executable
+        run: cargo build --locked --release -p gui --bin leet --target '${{ matrix.target }}'
+      - name: Verify Unix executable
+        if: runner.os != 'Windows'
+        run: target/${{ matrix.target }}/release/leet --version
+      - name: Verify Windows executable
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $app = Start-Process -FilePath 'target/${{ matrix.target }}/release/leet.exe' -ArgumentList '--version' -Wait -PassThru -RedirectStandardOutput version.txt -RedirectStandardError version-error.txt
+          if ($app.ExitCode -ne 0) { Get-Content version-error.txt; exit 1 }
+          $version = Get-Content version.txt -Raw
+          if ($version -notmatch '^leet ' -or $version -notmatch [regex]::Escape($env:RELEASE_TAG)) { throw "Unexpected version: $version" }
+          Write-Output $version
+      - name: Package native release
+        run: cargo run --locked -p practice --example release --target '${{ matrix.target }}' -- --target '${{ matrix.target }}' --tag "$RELEASE_TAG" --output dist
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: ${{ matrix.target }}
+          path: dist/leet-*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Generate checksums and release notes
+        run: |
+          cp site/public/install.sh dist/install.sh
+          (cd dist && sha256sum leet-* install.sh > SHA256SUMS)
+          cat > release-notes.md <<'EOF'
+          Native leet builds for Linux (x86_64 and ARM64), macOS (Intel and Apple Silicon), and Windows x64.
+
+          Linux/macOS: `curl -fsSL https://noelithub77.github.io/leet/install.sh | sh`
+
+          Windows: download `leet-windows-x86_64.exe` and open it. No installer is needed.
+
+          These first builds are unsigned (macOS uses an ad-hoc signature, without notarization). OS security prompts may appear. Linux needs a graphical desktop and Vulkan GPU drivers; x86_64 requires glibc 2.35+, ARM64 requires glibc 2.39+. macOS requires version 13+. Install Python or your preferred compiler to run solutions locally. Settings, accounts, and solutions are stored separately from the executable.
+
+          See `docs/releases.md` for requirements, verification, and release operation.
+          EOF
+      - name: Publish only after all platforms succeed
+        run: |
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --verify-tag --draft --title "leet $RELEASE_TAG" --notes-file release-notes.md
+          fi
+          gh release upload "$RELEASE_TAG" dist/* --clobber
+          gh release edit "$RELEASE_TAG" --draft=false --latest --notes-file release-notes.md

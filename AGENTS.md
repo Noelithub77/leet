@@ -23,4 +23,8 @@ Use `./ops snapshot --help` for public bundle refreshes. Data operations must id
 
 New installs use `~/.config/leet`, `~/.local/share/leet`, and `~/leet`. Existing vg paths remain supported so an upgrade does not lose saved state. Keyring identity remains compatible with verd. Do not relocate or overwrite personal data as a side effect of a build.
 
-Update `docs/changelog.md` for user-visible milestones. Verify source checks, rendered native UI/keyboard behavior, and installed commands separately, and report any unverified layer. Commit only task changes with a clear title and useful body. Creating/pushing repositories requires explicit user authorization; this private repository's creation was requested by the user.
+Update `docs/changelog.md` for user-visible milestones. Verify source checks, rendered native UI/keyboard behavior, and installed commands separately, and report any unverified layer. Commit only task changes with a clear title and useful body. The user authorized public distribution of this repository. Creating unrelated repositories requires explicit authorization.
+
+## Public distribution
+
+`site/` is a minimal Vite landing page deployed by GitHub Pages. Discover `pnpm ops --help` there; use `pnpm ops check --json` after site changes. `./ops check --json` also exercises isolated Unix installer regressions. `./ops release:package --help` packages native CI builds without accessing user data. Version tags and the manual Release workflow build all native targets and publish complete GitHub releases; see `docs/releases.md` for requirements and operation. Linux account storage stays compatible; macOS/Windows use native OS stores through `keyring`.

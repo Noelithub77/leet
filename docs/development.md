@@ -1,6 +1,6 @@
 # leet (GPUI desktop app)
 
-`leet` is the standalone native desktop app in this repository: the NeetCode roadmap, a Python editor, local tests, the LeetCode judge, Solution history, and AI learning prompts in one keyboard-driven window. It runs beside the Go `verd` TUI and shares its LeetCode session.
+`leet` is the standalone native desktop app in this repository: the NeetCode roadmap, a Python editor, local tests, the LeetCode judge, Solution history, and AI learning prompts in one keyboard-driven window. On Linux it runs beside the Go `verd` TUI and shares its LeetCode session. For downloadable cross-platform builds, see [installation and releases](releases.md).
 
 ```sh
 ./ops local:deploy --json   # release build, link ~/.local/bin/leet, desktop entry + icon
@@ -93,10 +93,12 @@ A prompt includes the statement, your current code unless it is still the starte
 
 | Path | Contents |
 | --- | --- |
-| `~/.config/vg/config.toml` | Workspace, theme, Python, external editor, list, AI provider/style, timeout |
-| `~/.local/share/vg/vg.db` | SQLite cache: catalog, questions, solved marks, custom tests, layout |
-| `~/vg/leetcode/<id>-<slug>.py` | Solutions (the workspace is a git repository; commits only on Accepted) |
+| `~/.config/leet/config.toml` | New Linux installs: workspace, theme, Python, external editor, list, AI provider/style, timeout |
+| `~/.local/share/leet/leet.db` | New Linux installs: catalog, questions, solved marks, custom tests, layout |
+| `~/leet/leetcode/<id>-<slug>.py` | New solutions (the workspace is a git repository; commits only on Accepted) |
 | `crates/gui/themes/` | Bundled themes; Vesper is the default |
+
+Existing `vg` configuration/database paths are detected and retained. macOS and Windows use their OS configuration/data directories through `dirs`; credential storage uses the native OS keyring. User data is separate from release binaries on every platform.
 
 ## Settings and keyboard customization
 

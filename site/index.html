@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#101010" />
+    <meta name="description" content="A quiet, native workspace for coding practice. Get leet for Linux, macOS, or Windows." />
+    <link rel="icon" href="/leet/leet.svg" type="image/svg+xml" />
+    <title>leet — coding practice, at home</title>
+  </head>
+  <body>
+    <main>
+      <span class="brand">leet</span>
+      <div class="intro">
+        <p class="eyebrow">A native coding practice IDE</p>
+        <h1>A little less noise.<br />A little more practice.</h1>
+        <p class="description">NeetCode, LeetCode, and Codeforces.<br />One quiet place to work through it.</p>
+      </div>
+      <section class="install" aria-label="Get leet">
+        <div class="install-heading">
+          <h2>Get leet</h2>
+          <label class="platform-label">Platform
+            <select id="platform" aria-label="Platform">
+              <option value="linux">Linux</option>
+              <option value="macos">macOS</option>
+              <option value="windows">Windows</option>
+            </select>
+          </label>
+        </div>
+        <div id="unix-install">
+          <p class="hint">Paste in your terminal. It installs and opens leet.</p>
+          <div class="command-row"><code id="command"></code><button id="copy" type="button">Copy</button></div>
+        </div>
+        <div id="windows-install" hidden>
+          <p class="hint">Download, then open. No installer.</p>
+          <a id="download" class="download" href="https://github.com/Noelithub77/leet/releases/latest/download/leet-windows-x86_64.exe">Download for Windows <span aria-hidden="true">↓</span></a>
+        </div>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+        <details><summary>Requirements &amp; release notes</summary>
+          <p id="requirements"></p>
+          <p>First releases are unsigned. Your OS may ask you to approve opening the app.</p>
+          <p>Install Python or your preferred compiler to run solutions locally.</p>
+          <a href="https://github.com/Noelithub77/leet/releases">All releases ↗</a>
+        </details>
+      </section>
+      <footer><span>Built with Rust · keyboard first</span><a href="https://github.com/Noelithub77/leet">Source ↗</a></footer>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

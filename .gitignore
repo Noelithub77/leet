@@ -3,3 +3,6 @@
 *.sqlite-shm
 *.db-wal
 *.db-shm
+/site/node_modules/
+/site/dist/
+/dist/
