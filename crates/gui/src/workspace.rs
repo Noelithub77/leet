@@ -172,7 +172,6 @@ impl Render for EditorPane {
 
 pub struct Workspace {
     pub companion_task: Option<Task<()>>,
-    pub companion_status: String,
     pub intelligence: crate::language_server::Intelligence,
     pub onboarding: Option<Entity<crate::onboarding::Setup>>,
     pub home: crate::home::HomeState,
@@ -257,7 +256,6 @@ impl Workspace {
         cx.set_global(crate::statement::Sections(db.statement_sections().unwrap_or([true, false, false])));
         let mut this = Self {
             companion_task: None,
-            companion_status: String::new(),
             onboarding: None,
             home: crate::home::HomeState::default(),
             recent_slugs,

@@ -17,8 +17,6 @@ pub fn bind_keys(cx: &mut App) {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Setting {
-    Companion,
-    CompanionPort,
     Onboarding,
     Language,
     LanguageServer,
@@ -47,9 +45,7 @@ pub enum Kind {
 }
 
 impl Setting {
-    pub const ALL: [Setting; 23] = [
-        Setting::Companion,
-        Setting::CompanionPort,
+    pub const ALL: [Setting; 21] = [
         Setting::Onboarding,
         Setting::Language,
         Setting::LanguageServer,
@@ -75,8 +71,6 @@ impl Setting {
 
     pub fn label(self) -> &'static str {
         match self {
-            Setting::Companion => "Competitive Companion",
-            Setting::CompanionPort => "Browser import port",
             Setting::Onboarding => "Run onboarding again",
             Setting::Language => "Preferred language",
             Setting::LanguageServer => "Restart language server",
@@ -102,7 +96,6 @@ impl Setting {
     /// Extra words universal search matches.
     pub fn keywords(self) -> &'static str {
         match self {
-            Setting::Companion | Setting::CompanionPort => "cph browser companion import tests localhost",
             Setting::Onboarding => "setup onboarding welcome language account sign in",
             Setting::Language => "language python cpp c++ go c preferred",
             Setting::LanguageServer => "lsp intellisense completion diagnostics hover definitions restart",
@@ -125,8 +118,6 @@ impl Setting {
 
     pub fn kind(self) -> Kind {
         match self {
-            Setting::Companion => Kind::Choice,
-            Setting::CompanionPort => Kind::Text,
             Setting::Language | Setting::Theme | Setting::List | Setting::Provider | Setting::PromptStyle | Setting::TestTimeout => Kind::Choice,
             Setting::Python | Setting::ExternalEditor | Setting::Workspace | Setting::Keybinding(_) | Setting::Prompt(_) => Kind::Text,
             Setting::Onboarding | Setting::LanguageServer | Setting::Codeforces | Setting::OpenFile | Setting::Font | Setting::Keybindings | Setting::LeetCode | Setting::NeetCode => Kind::Action,
@@ -136,8 +127,6 @@ impl Setting {
     pub fn value(self, ws: &Workspace, cx: &App) -> String {
         let c = &ws.config;
         match self {
-            Setting::Companion => ws.companion_status.clone(),
-            Setting::CompanionPort => c.companion_port.to_string(),
             Setting::Onboarding => String::new(),
             Setting::Language => c.preferred_language.label().into(),
             Setting::LanguageServer => ws.intelligence.label(ws.session.as_ref().map_or(c.preferred_language, |session| session.language)),
@@ -226,7 +215,6 @@ impl Workspace {
         let setting = self.selected_setting();
         let step = |len: usize, i: usize| (i as isize + delta).rem_euclid(len as isize) as usize;
         match setting {
-            Setting::Companion => { self.config.companion_enabled = !self.config.companion_enabled; self.start_companion(window, cx); }
             Setting::Theme => {
                 let names = crate::theme::names(cx);
                 let current = names.iter().position(|n| n == cx.theme().theme_name()).unwrap_or(0);
@@ -304,12 +292,6 @@ impl Workspace {
 
     fn apply_text_setting(&mut self, setting: Setting, value: String, window: &mut Window, cx: &mut Context<Self>) {
         match setting {
-            Setting::CompanionPort => {
-                let Some(port) = value.parse::<u16>().ok().filter(|port| *port >= 1024) else {
-                    self.toast(gpui_kit::component::notification::Notification::error("Use a port between 1024 and 65535"), window, cx); return;
-                };
-                self.config.companion_port = port; self.start_companion(window, cx);
-            }
             Setting::Keybinding(i) => {
                 let command = &crate::actions::COMMANDS[i];
                 let key = if value.is_empty() { command.key } else if value == "none" { "" } else { &value };

@@ -7,12 +7,11 @@ use crate::workspace::Workspace;
 impl Workspace {
     pub fn start_companion(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.companion_task = None;
-        if !self.config.companion_enabled { self.companion_status = "Disabled".into(); return; }
+        if !self.config.companion_enabled { return; }
         let (mut events, stop) = match practice::companion::start(self.config.companion_port) {
             Ok(receiver) => receiver,
-            Err(error) => { self.companion_status = error.to_string(); return; }
+            Err(error) => { eprintln!("leet: browser import unavailable: {error}"); return; }
         };
-        self.companion_status = format!("Listening on 127.0.0.1:{}", self.config.companion_port);
         self.companion_task = Some(cx.spawn_in(window, async move |this, cx| {
             let _stop = stop;
             while let Some(import) = events.next().await {
