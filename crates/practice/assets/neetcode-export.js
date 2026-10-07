@@ -16,6 +16,6 @@
     const user = rows.map(row => row.value).find(user => user?.apiKey === "AIzaSyD4emZpWF1MIsu6Z8O6yaMMcPxJ2Z38L8g" && user?.uid && user?.stsTokenManager?.refreshToken);
     if (!user) throw new Error("Sign in to NeetCode first.");
     copy(JSON.stringify({refreshToken: user.stsTokenManager.refreshToken, userID: user.uid}));
-    console.info("Session copied. Paste it into verd's hidden NeetCode sign-in field.");
+    console.info("Session copied. Paste it into leet's NeetCode sign-in field.");
   } finally { database.close(); }
 })();

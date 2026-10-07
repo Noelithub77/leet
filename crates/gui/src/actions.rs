@@ -5,7 +5,7 @@ use gpui_kit::component::input::{GoToDefinition, ToggleCodeActions};
 use crate::language_server::Complete;
 
 gpui_kit::actions!(
-    vg,
+    workspace_commands,
     [
         ShowHome,
         CloseProblem,

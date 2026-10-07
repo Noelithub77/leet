@@ -498,7 +498,7 @@ impl Workspace {
     }
 }
 
-gpui_kit::actions!(vg, [OmniUp, OmniDown, OmniPageUp, OmniPageDown, OmniConfirm, OmniClose]);
+gpui_kit::actions!(omnibar, [OmniUp, OmniDown, OmniPageUp, OmniPageDown, OmniConfirm, OmniClose]);
 
 pub fn bind_keys(cx: &mut App) {
     let ctx = Some("Omnibar > Input");

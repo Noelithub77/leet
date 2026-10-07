@@ -21,7 +21,7 @@ pub fn ensure_repo(workspace: &Path) -> Result<Repository> {
     let repo = Repository::init(workspace)?;
     let ignore = workspace.join(".gitignore");
     if !ignore.exists() {
-        std::fs::write(ignore, "__pycache__/\n*.pyc\n.vg/\n")?;
+        std::fs::write(ignore, "__pycache__/\n*.pyc\n.leet/\n.vg/\n")?;
     }
     Ok(repo)
 }

@@ -177,7 +177,7 @@ impl Render for AccountForm {
             .child(Input::new(&self.secret))
             .when(matches!(account, Account::LeetCode), |form| form.child(Input::new(&self.user_agent)))
             .when_some(self.error.clone(), |form, error| form.child(div().text_sm().text_color(cx.theme().danger).child(error)))
-            .when(self.has_session, |form| form.child(Button::new("sign-out").label("Sign out of leet and verd")
+            .when(self.has_session, |form| form.child(Button::new("sign-out").label("Sign out")
                 .on_click(cx.listener(|this, _, window, cx| this.sign_out(window, cx)))))
             .child(Button::new("save-account").primary().label(if self.busy { "Verifying…" } else { "Verify and save" })
                 .on_click(cx.listener(|this, _, window, cx| this.save(window, cx))))

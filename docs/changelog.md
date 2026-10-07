@@ -16,6 +16,9 @@
 <details>
 <summary>Fix</summary>
 
+- Remove old app names from account controls, export instructions, and internal action namespaces.
+- New users use ~/leet for their solutions.
+
 - Keep Settings tabs horizontal on one row.
 - Show the solutions folder using its home-relative path.
 

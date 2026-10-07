@@ -1,7 +1,7 @@
 {
   "$schema": "https://github.com/longbridge/gpui-kit/raw/refs/heads/main/.theme-schema.json",
   "name": "Vesper",
-  "author": "Rauno Freiberg (palette); adapted for vg",
+  "author": "Rauno Freiberg (palette); adapted for leet",
   "url": "https://github.com/raunofreiberg/vesper",
   "themes": [
     {

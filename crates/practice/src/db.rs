@@ -308,7 +308,7 @@ mod tests {
 
     #[test]
     fn bundle_seeding_is_offline_idempotent_and_keeps_personal_state() {
-        let dir = tempfile::tempdir().unwrap(); let path = dir.path().join("vg.db");
+        let dir = tempfile::tempdir().unwrap(); let path = dir.path().join("leet.db");
         {
             let db = Db::open_unseeded(&path).unwrap(); db.set("last", "my-question").unwrap(); db.set_solved("my-question", true).unwrap();
             db.add_custom_test("my-question", "1", "2").unwrap();
@@ -335,7 +335,7 @@ mod tests {
     #[test]
     fn catalog_replace_keeps_order_and_merges_solved() {
         let dir = tempfile::tempdir().unwrap();
-        let db = Db::open(&dir.path().join("vg.db")).unwrap();
+        let db = Db::open(&dir.path().join("leet.db")).unwrap();
         db.set_solved("old", true).unwrap();
         db.replace_catalog(&[item("b", 2, Some("ac")), item("a", 1, None)]).unwrap();
         let slugs: Vec<_> = db.catalog().unwrap().into_iter().map(|i| i.slug).collect();
@@ -388,7 +388,7 @@ mod tests {
     #[test]
     fn custom_tests_and_kv_round_trip() {
         let dir = tempfile::tempdir().unwrap();
-        let db = Db::open(&dir.path().join("vg.db")).unwrap();
+        let db = Db::open(&dir.path().join("leet.db")).unwrap();
         db.add_custom_test("two-sum", "[1,2]\n3", "[0,1]").unwrap();
         let tests = db.custom_tests("two-sum").unwrap();
         assert_eq!(tests.len(), 1);

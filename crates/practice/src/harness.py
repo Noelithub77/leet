@@ -1,4 +1,4 @@
-"""vg local LeetCode runner: python3 harness.py <solution.py> < spec.json.
+"""leet local LeetCode runner: python3 harness.py <solution.py> < spec.json.
 
 The spec carries LeetCode's metaData and test cases; one JSON result line per case is printed.
 """

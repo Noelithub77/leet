@@ -123,6 +123,7 @@ mod tests {
         let path = dir.path().join("config.toml");
         let mut config = Config::load_from(&path).unwrap();
         assert_eq!(config.theme, "Vesper");
+        assert_eq!(config.workspace, home().join("leet"));
         assert_eq!(config.font_family, "Liberation Sans");
         assert!(!config.show_tags);
         config.show_tags = true;
@@ -154,6 +155,7 @@ mod tests {
         std::fs::write(&path, "python = \"pypy3\"\nchatgpt_model = \"legacy-model\"\n").unwrap();
         let config = Config::load_from(&path).unwrap();
         assert_eq!(config.python, "pypy3");
+        assert_eq!(config.workspace, home().join("leet"));
         assert_eq!(config.preferred_language, Language::Python);
         assert!(!config.onboarding_completed);
         assert_eq!(config.font_family, "Liberation Sans");
