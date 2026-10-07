@@ -1,6 +1,6 @@
 # Alternative logos
 
-Unused logo concepts in Vesper peach (`#ffc799`) and mint (`#99ffe4`) on the `#101010` tile. The shipped logo is `../leet.svg`; nothing here is bundled into the app.
+Logo concepts in Vesper peach (`#ffc799`) and mint (`#99ffe4`) on the `#101010` tile. The live logo is `../leet.svg`, the only logo file the app, installers, and site read. Nothing in this folder is bundled.
 
 | File | Idea |
 | --- | --- |
@@ -36,5 +36,5 @@ Unused logo concepts in Vesper peach (`#ffc799`) and mint (`#99ffe4`) on the `#1
 | `30-streak.svg` | Practice heatmap whose filled cells form an L; today in mint |
 | `31-leet-trail.svg` | 1337: a peach dot (1) and two mint dots (3, 3) lead into a peach `>`, which is a 7 turned 45° |
 | `32-leet-nest.svg` | 1337: the same smaller dots held inside the `>` |
-| `33-leet-arrows.svg` | 1337: a peach dot (1), two equal mint arrows (3, 3), and a peach `>` (7); the current icon mirrored reads 731 |
+| `../leet.svg` (33) | Current logo. 1337: a peach dot (1), two mint arrows (3, 3), and a peach `>` (7); concept 11 mirrored, which reads 731 |
 | `34-leet-nest-arrows.svg` | 1337 with the mint arrows nested inside the `>`, each smaller than the last |

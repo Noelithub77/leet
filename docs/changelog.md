@@ -8,7 +8,7 @@
 - Collapsible Feat and Fix release notes with one Update/Restart action.
 - Native updates and Linux AppImages that preserve settings and solutions.
 - Replace the bottom-left leet label with the bundled app logo.
-- New app and site logo: nested Vesper peach and mint brackets that point to a base case.
+- New app and site logo: a peach dot, two mint arrows, and a peach bracket that read 1337.
 
 </details>
 
