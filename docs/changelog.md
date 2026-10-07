@@ -1,7 +1,8 @@
 <details open>
 <summary>Feat</summary>
 
-- Organize Settings into General, Editor, Appearance, Accounts, and Keybindings tabs.
+- Keep Competitive Companion under Provider settings when Codeforces is configured.
+- Organize Settings into General, Editor, Appearance, Provider, Accounts, and Keybindings tabs.
 - Show current shortcuts with keycaps.
 - Animated panel toggles beside Settings with current shortcut tooltips.
 - Compact status-bar popups for updates, AI preferences, and language switching.
@@ -19,7 +20,6 @@
 - Local deployments restart into the newly installed build.
 - The update icon stays visible without a network connection.
 - Language changes keep each language's saved solution.
-- Remove the Competitive Companion and browser import port settings.
 - Keep AI options in their popup and remove duplicate Settings controls and basic navigation hints.
 - Move Contests toward the right edge with a wider gap from Recent and an Open in web button on every contest row.
 - Remove the upcoming-contest explanatory text.
