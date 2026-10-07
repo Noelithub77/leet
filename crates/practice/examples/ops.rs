@@ -16,7 +16,29 @@ fn execute()->Result<()> {
     let args:Vec<_>=std::env::args().skip(1).collect();
     let command=args.first().map(String::as_str).unwrap_or("--help");
     if matches!(command,"--help"|"-h"|"help"){
-        println!("./ops <check|build|local:deploy|snapshot|cache:fetch|contests:refresh|release:package> [--json]\n\ncheck         Rust workspace tests.\nbuild         Release desktop build.\nlocal:deploy  Build/install leet and 1337 commands, desktop entry/icon; verify version and links.\nsnapshot      Public-only SQLite refresh; use ./ops snapshot --help.\ncache:fetch   Cache one Codeforces statement: --slug cf:CONTEST:INDEX.\ncontests:refresh  Refresh cached Codeforces contests; optional --contest ID.\nrelease:package  Package a native CI build; use ./ops release:package --help.\n\nLocal environment. Preserves settings, credentials, cache, and Solutions. Running windows offer restart.");return Ok(());
+        println!("./ops <check|build|local:deploy|snapshot|cache:fetch|contests:refresh|workspace:move|release:package> [--json]\n\ncheck         Rust workspace tests.\nbuild         Release desktop build.\nlocal:deploy  Build/install leet and 1337 commands, desktop entry/icon; verify version and links.\nsnapshot      Public-only SQLite refresh; use ./ops snapshot --help.\ncache:fetch   Cache one Codeforces statement: --slug cf:CONTEST:INDEX.\ncontests:refresh  Refresh cached Codeforces contests; optional --contest ID.\nworkspace:move Move solutions and Git history: --path /absolute/path; preserve a compatibility link.\nrelease:package  Package a native CI build; use ./ops release:package --help.\n\nLocal environment. Preserves settings, credentials, cache, and Solutions. Running windows offer restart.");return Ok(());
+    }
+    if command == "workspace:move" {
+        if args.len() < 3 || args.len() > 4 || args[1] != "--path" || args.get(3).is_some_and(|arg| arg != "--json") { bail!("Use ./ops workspace:move --path /absolute/path [--json]"); }
+        let destination = PathBuf::from(&args[2]);
+        if !destination.is_absolute() { bail!("Workspace path must be absolute"); }
+        let mut config = practice::config::Config::load()?;
+        let source = config.workspace.clone();
+        let moved = if source == destination { false } else {
+            if destination.symlink_metadata().is_ok() { bail!("Destination already exists; refusing to overwrite solutions"); }
+            if destination.starts_with(&source) || source.symlink_metadata()?.file_type().is_symlink() || !source.is_dir() { bail!("Workspace must be a directory and destination must be outside it"); }
+            std::fs::rename(&source, &destination).context("Move workspace on the same filesystem")?;
+            if let Err(error) = std::os::unix::fs::symlink(&destination, &source) {
+                std::fs::rename(&destination, &source)?; return Err(error.into());
+            }
+            config.workspace = destination.clone();
+            if let Err(error) = config.save() {
+                std::fs::remove_file(&source)?; std::fs::rename(&destination, &source)?; return Err(error);
+            }
+            true
+        };
+        println!("{}", json!({"command":command,"environment":"local-user-workspace","source":source,"destination":destination,"moved":moved,"compatibility_link":moved,"config":practice::config::Config::path()}));
+        return Ok(());
     }
     if command == "cache:fetch" {
         if args.len() < 3 || args.len() > 4 || args[1] != "--slug" || args.get(3).is_some_and(|arg| arg != "--json") {

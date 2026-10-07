@@ -228,3 +228,5 @@ Ctrl+/ opens shortcut help. It reads the shared command configuration and live G
 Onboarding checks only the selected language's interpreter/compiler and language server in the background. Missing requirements show **Set up** links to official instructions and **Recheck**; Continue waits until the selected setup passes. Python uses the configured interpreter, including custom executable paths. JDK versions below 21 are reported for Java setup. Checking does not launch or download a language server.
 
 The app keeps one active language server. Changing languages stops the old server, clears parked editor adapters and diagnostics, and invalidates pending attachments. Returning to a different-language tab starts its server on demand; background problem loads do not start servers.
+
+`./ops workspace:move --path /absolute/path --json` moves the configured solutions folder and Git history on the same filesystem, updates the local configuration, and keeps a compatibility symlink for running instances. It refuses an existing destination and rolls the move back if the configuration cannot be saved. Repeating it after success reports no move.

@@ -16,6 +16,9 @@
 <details>
 <summary>Fix</summary>
 
+- Keep Settings tabs horizontal on one row.
+- Show the solutions folder using its home-relative path.
+
 - Popups stay above the status line.
 - Local deployments restart into the newly installed build.
 - The update icon stays visible without a network connection.

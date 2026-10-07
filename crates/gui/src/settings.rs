@@ -130,7 +130,7 @@ impl Setting {
             Setting::Python => c.python.clone(),
             Setting::ExternalEditor => c.external_editor.clone(),
             Setting::TestTimeout => c.test_timeout_secs.to_string(),
-            Setting::Workspace => c.workspace.display().to_string(),
+            Setting::Workspace => dirs::home_dir().and_then(|home| c.workspace.strip_prefix(home).ok().map(|path| format!("~/{}", path.display()))).unwrap_or_else(|| c.workspace.display().to_string()),
             Setting::OpenFile | Setting::Keybindings => String::new(),
             Setting::Keybinding(i) => crate::actions::COMMANDS[i].effective_key(c).into(),
         }
@@ -366,7 +366,7 @@ impl Workspace {
         v_flex().size_full().items_center()
             .child(v_flex().w_full().max_w(px(780.)).h_full().min_h_0().px_4().pt_10().gap_4()
                 .child(div().flex_shrink_0().text_xl().font_weight(FontWeight::SEMIBOLD).child("Settings"))
-                .child(Tabs::new("settings-tabs").flex_shrink_0().gap_1()
+                .child(Tabs::new("settings-tabs").flex().flex_row().flex_nowrap().flex_shrink_0().gap_1()
                     .children(SettingsTab::ALL.into_iter().enumerate().map(|(index, tab)| {
                         Tab::new(("settings-tab", index)).selected(self.settings.tab == tab).set_position(index + 1, SettingsTab::ALL.len())
                             .h_9().px_3().rounded_lg().child(div().line_height(relative(1.4)).py_1().child(tab.label()))
