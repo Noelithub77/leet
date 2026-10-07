@@ -666,10 +666,11 @@ impl Workspace {
                     let code = std::fs::read_to_string(&path)?;
                     let mtime = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
                     let custom = db.custom_tests(&q.slug)?;
+                    let saved_cases = db.test_cases(&q.slug)?;
                     let history = crate::history::local_versions(&workspace, q.frontend_id.parse().unwrap_or(0), &q.slug);
                     let statement = if q.meta["statementMarkdown"].as_bool() == Some(true) { vec![practice::description::Block::Markdown(q.content.clone())] } else { practice::description::parse(&q.content) };
                     let hints: Vec<String> = q.hints.iter().map(|h| prompts::statement_markdown(h)).collect();
-                    anyhow::Ok(Loaded { q, rel, path, code, mtime, custom, history, statement, hints })
+                    anyhow::Ok(Loaded { q, rel, path, code, mtime, custom, saved_cases, history, statement, hints })
                 })
                 .await;
             let _ = this.update_in(cx, |this, window, cx| {
@@ -695,6 +696,7 @@ impl Workspace {
             expected: (!t.expected.trim().is_empty()).then_some(t.expected),
             custom: true,
         }));
+        if let Some(saved) = l.saved_cases { cases = saved; }
         s.results = vec![None; cases.len()];
         s.cases = cases;
         s.frontend_id = q.frontend_id.parse().unwrap_or(0);
@@ -941,15 +943,42 @@ impl Workspace {
         self.open_problem(ENTRIES[list[next]].slug.clone(), window, cx);
     }
 
-    pub fn add_custom_test(&mut self, input: String, expected: String, cx: &mut Context<Self>) {
-        let Some(s) = self.session.as_mut() else { return };
-        if self.db.add_custom_test(&s.slug, &input, &expected).is_err() {
-            return;
+    pub fn save_test_case(&mut self, index: Option<usize>, input: String, expected: String, cx: &mut Context<Self>) {
+        let Some(session) = self.session.as_ref() else { return; };
+        if session.running || matches!(session.judge, Some(Judge::Running { .. })) {
+            self.flash("Wait for the current run to finish", cx); return;
         }
-        let id = s.cases.iter().map(|c| c.id).max().map_or(0, |m| m + 1);
-        s.cases.push(Case { id, input, expected: (!expected.trim().is_empty()).then_some(expected), custom: true });
-        s.results.push(None);
-        s.selected_case = s.cases.len() - 1;
+        let mut cases = session.cases.clone();
+        let selected = index.unwrap_or(cases.len());
+        let expected = (!expected.trim().is_empty()).then_some(expected);
+        if let Some(index) = index {
+            let Some(case) = cases.get_mut(index) else { return; };
+            case.input = input; case.expected = expected;
+        } else { cases.push(Case { id: selected, input, expected, custom: true }); }
+        self.replace_test_cases(cases, selected, cx);
+    }
+
+    pub fn reset_test_cases(&mut self, cx: &mut Context<Self>) {
+        let Some(question) = self.session.as_ref().and_then(|s| s.question.as_ref()) else { return; };
+        let cases = question.examples.iter().enumerate().map(|(id, input)| Case {
+            id, input: input.clone(), expected: question.outputs.get(id).cloned(), custom: false,
+        }).collect();
+        self.replace_test_cases(cases, 0, cx);
+    }
+
+    fn replace_test_cases(&mut self, mut cases: Vec<Case>, selected: usize, cx: &mut Context<Self>) {
+        let Some(session) = self.session.as_ref() else { return; };
+        if session.running || matches!(session.judge, Some(Judge::Running { .. })) {
+            self.flash("Wait for the current run to finish", cx); return;
+        }
+        for (id, case) in cases.iter_mut().enumerate() { case.id = id; }
+        if let Err(error) = self.db.save_test_cases(&session.slug, &cases) {
+            self.flash(format!("Could not save test cases: {error}"), cx); return;
+        }
+        let Some(session) = self.session.as_mut() else { return; };
+        session.selected_case = selected.min(cases.len().saturating_sub(1));
+        session.results = vec![None; cases.len()]; session.cases = cases;
+        session.compile_error = None; session.judge = None;
         self.bottom = true;
         cx.notify();
     }
@@ -1054,6 +1083,7 @@ pub(crate) struct Loaded {
     code: String,
     mtime: Option<SystemTime>,
     custom: Vec<practice::db::CustomTest>,
+    saved_cases: Option<Vec<Case>>,
     history: Vec<crate::history::LocalVersion>,
     statement: Vec<practice::description::Block>,
     hints: Vec<String>,

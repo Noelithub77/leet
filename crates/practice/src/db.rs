@@ -262,6 +262,14 @@ impl Db {
         Ok(())
     }
 
+    pub fn test_cases(&self, slug: &str) -> Result<Option<Vec<crate::runner::Case>>> {
+        self.get(&format!("test-cases:v1:{slug}"))?.map(|value| Ok(serde_json::from_str(&value)?)).transpose()
+    }
+
+    pub fn save_test_cases(&self, slug: &str, cases: &[crate::runner::Case]) -> Result<()> {
+        self.set(&format!("test-cases:v1:{slug}"), &serde_json::to_string(cases)?)
+    }
+
     pub fn get(&self, key: &str) -> Result<Option<String>> {
         Ok(kv::table.find(key).select(kv::value).first(&mut *self.conn()).optional()?)
     }
@@ -327,6 +335,29 @@ mod tests {
         let mut solved = db.solved().unwrap();
         solved.sort();
         assert_eq!(solved, ["b", "old"]);
+    }
+
+    #[test]
+    fn edited_added_and_reset_cases_persist_without_changing_question_data() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("cases.db");
+        let original = crate::runner::Case { id: 0, input: "[2,7]\n9".into(), expected: Some("[0,1]".into()), custom: false };
+        let db = Db::open(&path).unwrap();
+        assert!(db.test_cases("two-sum").unwrap().is_none());
+        let mut edited = original.clone(); edited.input = "[3,2,4]\n6".into(); edited.expected = Some("[1,2]".into());
+        let added = crate::runner::Case { id: 1, input: "[1,3]\n4".into(), expected: None, custom: true };
+        db.save_test_cases("two-sum", &[edited, added]).unwrap();
+        drop(db);
+        let db = Db::open(&path).unwrap();
+        let saved = db.test_cases("two-sum").unwrap().unwrap();
+        assert_eq!(saved.len(), 2); assert_eq!(saved[0].expected.as_deref(), Some("[1,2]"));
+        assert_eq!(saved[1].input, "[1,3]\n4"); assert!(saved[1].custom); assert!(saved[1].expected.is_none());
+        assert!(db.test_cases("valid-anagram").unwrap().is_none());
+        db.save_test_cases("two-sum", &[original]).unwrap(); drop(db);
+        let db = Db::open(&path).unwrap();
+        let reset = db.test_cases("two-sum").unwrap().unwrap();
+        assert_eq!(reset.len(), 1); assert_eq!(reset[0].input, "[2,7]\n9"); assert!(!reset[0].custom);
+        assert_eq!(db.question("two-sum").unwrap().unwrap().examples[0], "[2,7,11,15]\n9");
     }
 
     #[test]

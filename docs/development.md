@@ -51,6 +51,7 @@ Modifier shortcuts follow the user's VS Code bindings. Bare arrows, `enter` and 
 | `alt+n` / `alt+p` | Next / previous roadmap problem |
 | `alt+.` / `alt+,` | Next / previous test case |
 | `ctrl+alt+t` | Add a custom test (`ctrl+enter` saves) |
+| `ctrl+alt+shift+t` | Edit the selected test case |
 | `ctrl+alt+1`…`4` | AI prompt: hints only, guided learning, full explanation, solution only |
 | `alt+e` | AI assist with the default style |
 | `ctrl+shift+e` | Configure AI in an editor overlay |
@@ -204,3 +205,9 @@ Problem tags start hidden. Click the tag icon beside Question/Solution or press 
 New installations use `~/.config/leet/config.toml`, `~/.local/share/leet/leet.db`, and `~/leet`. Upgrades retain existing vg paths, saved workspace choice, and shared keyring sessions. `vg` remains a compatibility alias; the desktop entry is `leet.desktop`.
 
 `leet --1337` and a triple-click on Home reveal the two small Easter eggs.
+
+## Test case editing
+
+The results header offers Add, Edit, and Restore icons with tooltips. Add/Edit open the existing input/expected-output dialog; Save or Ctrl+Enter persists the case. Expected output may be empty for an unjudged run. LeetCode uses one argument per line; Codeforces uses stdin.
+
+For original examples, Use original example restores just that case in the dialog before saving. Restore in the results header restores all examples from the question, removing edited/custom cases from the active set. Per-question overrides live in the user SQLite cache, outside the bundled public database, and survive restarts. Changes clear old results and are blocked while a run or judge request is active.

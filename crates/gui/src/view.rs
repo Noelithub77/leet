@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use gpui_kit::base::{Spring, Transition, spring, transition};
+use gpui_kit::base::{Disableable as _, Spring, Transition, spring, transition};
 use gpui_kit::component::kbd::Kbd;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::{ActiveTheme as _, Sizable as _, h_flex, v_flex};
@@ -284,7 +284,7 @@ impl Workspace {
                 .into_any_element();
         }
         let judge = self.render_judge(cx);
-        let chips = h_flex().gap_1p5().children(s.cases.iter().enumerate().map(|(i, case)| {
+        let chips = h_flex().id("test-case-tabs").min_w_0().flex_1().overflow_x_scroll().gap_1p5().children(s.cases.iter().enumerate().map(|(i, case)| {
             let result = s.results.get(i).and_then(|r| r.as_ref());
             let (glyph, color) = match result.map(|r| r.verdict) {
                 Some(Verdict::Pass) => ("✓", theme.success),
@@ -297,6 +297,7 @@ impl Workspace {
             let active = i == s.selected_case;
             let chip = h_flex()
                 .id(("case", i))
+                .flex_shrink_0()
                 .h_7()
                 .px_2p5()
                 .gap_1p5()
@@ -362,7 +363,19 @@ impl Workspace {
             .child(
                 h_flex()
                     .justify_between()
-                    .child(chips)
+                    .child(h_flex().min_w_0().flex_1().gap_2().child(chips)
+                        .child(Button::new("add-test-case").ghost().xsmall().icon(IconName::Plus)
+                            .accessibility_label("Add test case").tooltip_with_action("Add test case", &crate::actions::AddCustomTest, Some(crate::actions::WORKSPACE))
+                            .disabled(s.running || matches!(s.judge, Some(Judge::Running { .. })))
+                            .on_click(cx.listener(|this, _, window, cx| crate::dialogs::open_custom_test(this, window, cx))))
+                        .child(Button::new("edit-test-case").ghost().xsmall().icon(IconName::Pencil)
+                            .accessibility_label("Edit selected test case").tooltip_with_action("Edit selected test case", &crate::actions::EditTestCase, Some(crate::actions::WORKSPACE))
+                            .disabled(s.cases.is_empty() || s.running || matches!(s.judge, Some(Judge::Running { .. })))
+                            .on_click(cx.listener(|this, _, window, cx| crate::dialogs::edit_test_case(this, window, cx))))
+                        .child(Button::new("reset-test-cases").ghost().xsmall().icon(IconName::RefreshCw)
+                            .accessibility_label("Restore question examples").tooltip("Restore question examples; remove edits and custom cases")
+                            .disabled(s.running || matches!(s.judge, Some(Judge::Running { .. })))
+                            .on_click(cx.listener(|this, _, _, cx| this.reset_test_cases(cx)))))
                     .child(h_flex().gap_3().text_xs().text_color(theme.muted_foreground).child(h_flex().gap_1().child(key(crate::actions::key_for("RunTests", &self.config))).child("run")).child(h_flex().gap_1().child(key(crate::actions::key_for("Submit", &self.config))).child("submit"))),
             )
             .children(judge)
@@ -530,8 +543,6 @@ impl Workspace {
             .bg(theme.title_bar)
             .text_xs()
             .text_color(theme.muted_foreground)
-            .child(div().text_color(theme.primary).font_weight(FontWeight::BOLD).child("leet"))
-            .child(format!("{} · {} solved", self.config.roadmap_list.label(), self.solved.len()))
             .when(self.syncing, |el| el.child(h_flex().gap_1().child(Spinner::new().xsmall()).child("syncing")))
             .child(div().flex_1())
             .when_some(flash, |el, (label, _)| {

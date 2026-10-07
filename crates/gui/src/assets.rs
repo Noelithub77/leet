@@ -1,6 +1,6 @@
 use gpui_kit::*;
 
-gpui_kit::assets::icon_assets!(HomeIcons, [House, Map, X, Star, ExternalLink, Play, ArrowLeft, ChevronDown, Brackets, ArrowLeftRight, Layers, Search, PanelTop, Link, Network, GitBranch, ListOrdered, Undo2, CalendarRange, Zap, Share2, Workflow, ChartColumn, Grid2x2, Binary, Calculator, FileText, Lightbulb, Copy, Info, RefreshCw, Tags, ArrowDownAZ]);
+gpui_kit::assets::icon_assets!(HomeIcons, [House, Map, X, Star, ExternalLink, Play, ArrowLeft, ChevronDown, Brackets, ArrowLeftRight, Layers, Search, PanelTop, Link, Network, GitBranch, ListOrdered, Undo2, CalendarRange, Zap, Share2, Workflow, ChartColumn, Grid2x2, Binary, Calculator, FileText, Lightbulb, Copy, Info, RefreshCw, Plus, Pencil, Tags, ArrowDownAZ]);
 
 pub struct Assets;
 

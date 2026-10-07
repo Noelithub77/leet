@@ -124,6 +124,8 @@ impl Workspace {
             .on_action(cx.listener(|this, _: &FindProblem, window, cx| this.omni_open(Scope::Problems, window, cx)))
             .on_action(cx.listener(|this, _: &PickTheme, window, cx| this.omni_open(Scope::Themes, window, cx)))
             .on_action(cx.listener(|this, _: &AddCustomTest, window, cx| crate::dialogs::open_custom_test(this, window, cx)))
+            .on_action(cx.listener(|this, _: &EditTestCase, window, cx| crate::dialogs::edit_test_case(this, window, cx)))
+            .on_action(cx.listener(|this, _: &ResetTestCases, _, cx| this.reset_test_cases(cx)))
             .on_action(cx.listener(|this, _: &CycleList, window, cx| {
                 this.config.roadmap_list = this.config.roadmap_list.next();
                 this.save_config(window, cx);

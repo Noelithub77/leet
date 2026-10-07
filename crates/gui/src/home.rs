@@ -1,9 +1,9 @@
 //! The pinned landing view uses the shared, in-memory recent-problem list.
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::tab::{Tab, TabBar};
+use gpui_kit::base::{Tab, Tabs};
 use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::{ActiveTheme as _, Sizable as _, h_flex, v_flex};
+use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
@@ -191,10 +191,17 @@ impl Workspace {
         self.show_home(window, cx);
     }
 
-    pub fn render_tabs(&self, cx: &mut Context<Self>) -> TabBar {
+    pub fn render_tabs(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let selected = match self.center { Center::Home => 0, Center::Editor => self.active_tab.map_or(0, |i| i + 1), _ => usize::MAX };
-        let mut tabs = TabBar::new("workspace-tabs").m_2().selected_index(selected).max_width(px(240.)).track_scroll(&self.home.tabs_scroll)
-            .child(Tab::new().rounded_lg().icon(IconName::House).aria_label("Home")
+        let theme = cx.theme().clone();
+        let make_tab = |index| Tab::new(("workspace-tab", index)).selected(selected == index)
+            .set_position(index + 1, self.tabs.len() + 1).h_8().px_2p5().gap_2().rounded(px(12.)).flex_shrink_0()
+            .text_sm().text_color(theme.tab_foreground).cursor_pointer()
+            .styles(|styles| styles.selected(|style| style.bg(theme.tab_active).text_color(rgb(0xffffff))))
+            .hover(|tab| tab.bg(if selected == index { theme.tab_active } else { theme.secondary }));
+        let mut tabs = Tabs::new("workspace-tabs").flex().gap_1().min_w_0().flex_1().overflow_x_scroll()
+            .track_scroll(&self.home.tabs_scroll)
+            .child(make_tab(0).accessibility_label("Home").child(Icon::new(IconName::House).small())
                 .tooltip(|window, cx| Tooltip::new("Home").action(&ShowHome, Some(actions::WORKSPACE)).build(window, cx))
                 .on_click(cx.listener(|this, event: &ClickEvent, window, cx| {
                     this.show_home(window, cx);
@@ -207,9 +214,10 @@ impl Workspace {
             let Some(session) = session else { continue; };
             let title = if session.frontend_id == 0 { session.title.clone() } else { format!("{}. {}", session.frontend_id, session.title) };
             let tooltip = title.clone();
-            tabs = tabs.child(Tab::new().rounded_lg().label(title)
+            tabs = tabs.child(make_tab(index + 1).max_w(px(240.)).accessibility_label(title.clone())
                 .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
-                .suffix(Button::new(("close-problem-tab", index)).ghost().xsmall().icon(IconName::X)
+                .child(div().min_w_0().flex_1().truncate().child(title))
+                .child(Button::new(("close-problem-tab", index)).ghost().xsmall().icon(IconName::X)
                     .accessibility_label("Close problem").tooltip("Close problem")
                     .on_click(cx.listener(move |this, _, window, cx| {
                         cx.stop_propagation();
@@ -218,7 +226,7 @@ impl Workspace {
                     })))
                 .on_click(cx.listener(move |this, _, window, cx| this.select_tab(index, window, cx))));
         }
-        tabs.suffix(Button::new("open-settings-icon").ghost().small().icon(IconName::Settings)
+        h_flex().m_2().gap_2().child(tabs).child(Button::new("open-settings-icon").ghost().small().icon(IconName::Settings)
             .accessibility_label("Settings").tooltip_with_action("Settings", &actions::OpenSettings, Some(actions::WORKSPACE))
             .on_click(cx.listener(|this, _, window, cx| this.open_settings(None, window, cx))))
     }

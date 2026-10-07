@@ -1,3 +1,12 @@
+## 2026-10-07 · Editable cases and calmer chrome
+
+- Active problem tabs have white labels on a cyan-tinted background with 12 px rounded corners. Existing scrolling, Home, close actions, and tab shortcuts remain available.
+- Removed persistent app-name and practice-progress text from the status bar.
+- Results offer compact Add, Edit, and Restore icons. Input and expected output are editable through the existing textarea dialog; Ctrl+Enter or Save commits changes.
+- Editing an original case offers Use original example, restoring only that case before saving.
+- Ctrl+Alt+T adds a case; Ctrl+Alt+Shift+T edits the selected case. Restore question examples removes edits/custom cases from the active set.
+- Per-question case overrides persist in the private Diesel/SQLite cache. Case mutations are blocked during runs and clear stale results; the original question remains intact.
+
 ## 2026-10-07 · leet
 
 - Crates are named by responsibility: `gui` and `practice`; the executable is `leet`.

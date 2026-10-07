@@ -74,7 +74,7 @@ pub fn apply(name: &str, cx: &mut App) -> bool {
         theme.mode = config.mode;
         let cyan = rgb(0x8be9fd);
         theme.tab_active = cyan.opacity(0.14).into();
-        theme.tab_active_foreground = cyan.into();
+        theme.tab_active_foreground = rgb(0xffffff).into();
         theme.tokens.tab_active = theme.tab_active.into();
         theme.radius = px(10.);
         theme.radius_lg = px(16.);
