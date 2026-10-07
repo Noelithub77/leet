@@ -13,6 +13,7 @@
   font-synthesis: none;
   color-scheme: dark;
   --teal: #99ffe4;
+  --peach: #ffc799;
   --muted: #1c1c1c;
   --muted-foreground: #b3b3b3;
 }
@@ -22,10 +23,12 @@ body { margin: 0; }
 main { max-width: 52rem; margin: auto; padding: 2rem 2rem 1.4rem; }
 a { color: inherit; text-decoration: none; }
 a:hover { color: var(--teal); }
+header { display: flex; align-items: center; justify-content: space-between; }
+.github-link { display: inline-flex; align-items: center; justify-content: center; width: 2.2rem; height: 2.2rem; color: var(--peach); border-radius: .4rem; }
 .brand { display: inline-flex; align-items: center; gap: .7rem; font-size: 1.5rem; font-weight: 650; letter-spacing: -.06rem; }
 .brand img { width: 2rem; height: 2rem; }
 .intro { margin: 4rem 0 2.3rem; }
-.eyebrow { font-size: .6rem; color: var(--teal); letter-spacing: .1em; text-transform: uppercase; }
+.eyebrow { font-size: .6rem; color: var(--peach); letter-spacing: .1em; text-transform: uppercase; }
 h1 { font-size: clamp(2.35rem, 6vw, 3.6rem); font-weight: 500; letter-spacing: -.14rem; line-height: 1.1; margin: .9rem 0 1.2rem; }
 h1 span { color: var(--teal); }
 .description { font-size: 1rem; color: #d1d1d1; line-height: 1.6; margin: 0; }
@@ -43,12 +46,7 @@ button, .download { border: 0; border-radius: .4rem; padding: .6rem .85rem; back
 .download { display: flex; align-items: center; justify-content: space-between; font-size: .8rem; padding: .9rem 1.1rem; margin-top: 1.3rem; }
 button:hover, .download:hover { background: #b3ffed; color: #10231d; }
 .copy-error { margin: .6rem 0; color: var(--teal); font-size: .65rem; }
-details { color: #8f8f8f; font-size: .65rem; line-height: 1.6; margin-top: 1.1rem; }
-summary { cursor: pointer; display: list-item; width: fit-content; }
-details p { max-width: 38rem; }
-details a { color: #c6c6c6; }
-footer { display: flex; justify-content: space-between; gap: 1.2rem; margin-top: 1.6rem; color: #7e7e7e; font-size: .65rem; }
-button:focus-visible, a:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--teal); outline-offset: 4px; }
+button:focus-visible, a:focus-visible, select:focus-visible { outline: 2px solid var(--teal); outline-offset: 4px; }
 ::selection { background: #99ffe440; }
 [hidden] { display: none !important; }
 @media (max-width: 600px) {
@@ -59,5 +57,4 @@ button:focus-visible, a:focus-visible, select:focus-visible, summary:focus-visib
   .install { padding: 1.1rem; }
   .command-row { flex-direction: column; align-items: stretch; }
   .copy-button { justify-content: center; }
-  footer { font-size: .6rem; }
 }

@@ -73,4 +73,6 @@ pnpm dev
 
 The Pages workflow caches pnpm's package store using `site/pnpm-lock.yaml`; installation still uses the frozen lockfile, and checks/builds run on every deployment. Release uploads skip redundant ZIP compression and expire after three days; the published GitHub Release assets are retained independently.
 
+The landing page keeps requirements in this document and release notes. Its only repository link is the header's GitHub icon, adapted from Primer Octicons with its MIT license in `site/src/icons/LICENSE`.
+
 `./ops check --json` covers Rust and isolated installer regressions; `pnpm ops check --json` in `site/` covers platform detection and the production page build. A successful build/version probe does not establish native window rendering, account-store behavior, or OS download-policy behavior on another computer. Validate those on the corresponding desktop before claiming device-level support.

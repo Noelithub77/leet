@@ -8,8 +8,3 @@ export function detectPlatform(platform, userAgent) {
   if (/Linux/i.test(value)) return 'linux';
   return null;
 }
-
-export const requirements = {
-  unix: 'Linux x86_64/ARM64: graphical desktop and Vulkan drivers. macOS 13+: Intel or Apple Silicon. The installer selects your build; Linux runtime libraries may need sudo.',
-  windows: 'Windows 10 or later, x64. The portable executable saves settings and solutions in your user folders.',
-};

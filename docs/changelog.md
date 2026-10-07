@@ -31,6 +31,7 @@
 - Larger Vesper teal landing page with the app logo, “leet for the eleet” tagline, and brief Rust/native performance copy.
 - Linux and macOS share one install command. Ctrl+C or Cmd+C copies it, with shadcn keyboard badges in the Copy button; selected text and form controls retain normal copy behavior.
 - Removed instructional filler and persistent copy-status text. Feedback appears briefly in the button.
+- Removed the requirements section and footer; the GitHub link is a single header icon. Vesper peach accents complement the teal headline and primary action.
 - Logo splash displays while the page loads and disappears when the page is ready, without a forced delay.
 
 ## 2026-10-07 · Public desktop releases
