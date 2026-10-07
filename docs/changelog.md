@@ -1,3 +1,10 @@
+## 2026-10-07 · Launch updates and portable Linux releases
+
+- Check the latest stable release once per launch. The bottom-right update button has a badge when an update is available; hover for the release changelog and click to download, verify, install, and restart.
+- Save editor state before restarting and preserve settings, accounts, progress, caches, and solutions. Failed verification leaves the installed app intact.
+- Move the changelog out of Settings. When release notes are unavailable, show the bundled changelog on hover.
+- Build Linux archives and AppImages in the same native jobs, using the same executable. Cache and verify pinned AppImage packaging tools, and retain compiler flags in native build cache keys.
+
 ## 2026-10-07 · Contest explorer status
 
 - The selected contest explorer has browser and refresh actions beside its heading, plus visible loading and unavailable status.

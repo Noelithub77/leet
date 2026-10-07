@@ -567,9 +567,6 @@ impl Workspace {
             .when_some(flash, |el, (label, _)| {
                 el.child(div().opacity(flash_opacity).text_color(theme.foreground).child(label))
             })
-            .when(self.update_ready, |el| {
-                el.child(h_flex().gap_1().text_color(theme.primary).child("Update ready").child(key(crate::actions::key_for("Restart", &self.config))))
-            })
             .when_some(self.session.as_ref(), |row, session| {
                 let detail = self.intelligence.detail(session.language);
                 row.child(div().id("status-lsp").child(gpui_kit::component::Icon::default()
@@ -582,6 +579,7 @@ impl Workspace {
                     move |window, cx| gpui_kit::component::tooltip::Tooltip::new(label.clone()).action(&crate::actions::ConfigureAi, Some(crate::actions::WORKSPACE)).build(window, cx) }))
             .child(if self.client.signed_in() { "LeetCode ✓" } else { "LeetCode signed out" })
             .child(h_flex().gap_1().child(key(crate::actions::key_for("Search", &self.config))).child("commands"))
+            .child(crate::update::button(self, cx))
     }
 }
 

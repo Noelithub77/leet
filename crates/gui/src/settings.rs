@@ -2,8 +2,7 @@
 //! text values edit inline. Every setting is also reachable from universal search.
 
 use gpui_kit::component::input::{Input, InputState};
-use gpui_kit::component::{ActiveTheme as _, Selectable as _, Sizable as _, WindowExt as _, h_flex, v_flex};
-use gpui_kit::component::text::TextView;
+use gpui_kit::component::{ActiveTheme as _, Selectable as _, Sizable as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use practice::prompts::Style;
@@ -36,7 +35,6 @@ pub enum Setting {
     TestTimeout,
     Workspace,
     OpenFile,
-    Changelog,
     Keybindings,
     Keybinding(usize),
     Prompt(Style),
@@ -49,7 +47,7 @@ pub enum Kind {
 }
 
 impl Setting {
-    pub const ALL: [Setting; 24] = [
+    pub const ALL: [Setting; 23] = [
         Setting::Companion,
         Setting::CompanionPort,
         Setting::Onboarding,
@@ -73,7 +71,6 @@ impl Setting {
         Setting::Prompt(Style::Full),
         Setting::Prompt(Style::SolutionOnly),
         Setting::OpenFile,
-        Setting::Changelog,
     ];
 
     pub fn label(self) -> &'static str {
@@ -96,7 +93,6 @@ impl Setting {
             Setting::TestTimeout => "Test timeout (seconds)",
             Setting::Workspace => "Solutions folder",
             Setting::OpenFile => "Open config.toml",
-            Setting::Changelog => "Changelog",
             Setting::Keybindings => "Keyboard shortcuts",
             Setting::Keybinding(i) => crate::actions::COMMANDS[i].label,
             Setting::Prompt(style) => style.label(),
@@ -122,7 +118,6 @@ impl Setting {
             Setting::TestTimeout => "limit time",
             Setting::Workspace => "workspace directory path git",
             Setting::OpenFile => "toml config file",
-            Setting::Changelog => "version release notes update changes build",
             Setting::Keybindings | Setting::Keybinding(_) => "keyboard shortcut binding keys",
             Setting::Prompt(_) => "ai instructions custom prompt",
         }
@@ -134,7 +129,7 @@ impl Setting {
             Setting::CompanionPort => Kind::Text,
             Setting::Language | Setting::Theme | Setting::List | Setting::Provider | Setting::PromptStyle | Setting::TestTimeout => Kind::Choice,
             Setting::Python | Setting::ExternalEditor | Setting::Workspace | Setting::Keybinding(_) | Setting::Prompt(_) => Kind::Text,
-            Setting::Onboarding | Setting::LanguageServer | Setting::Codeforces | Setting::OpenFile | Setting::Changelog | Setting::Font | Setting::Keybindings | Setting::LeetCode | Setting::NeetCode => Kind::Action,
+            Setting::Onboarding | Setting::LanguageServer | Setting::Codeforces | Setting::OpenFile | Setting::Font | Setting::Keybindings | Setting::LeetCode | Setting::NeetCode => Kind::Action,
         }
     }
 
@@ -159,7 +154,6 @@ impl Setting {
             Setting::TestTimeout => c.test_timeout_secs.to_string(),
             Setting::Workspace => c.workspace.display().to_string(),
             Setting::OpenFile | Setting::Keybindings => String::new(),
-            Setting::Changelog => env!("LEET_VERSION").into(),
             Setting::Keybinding(i) => crate::actions::COMMANDS[i].effective_key(c).into(),
             Setting::Prompt(style) => c.prompt_instructions.get(style.id()).cloned().unwrap_or_else(|| style.instructions().into()),
         }
@@ -278,16 +272,6 @@ impl Workspace {
             Kind::Action if setting == Setting::Codeforces => self.begin_onboarding(true, window, cx),
             Kind::Action if setting == Setting::Font => {
                 self.omni_open(crate::omnibar::Scope::Fonts, window, cx);
-            }
-            Kind::Action if setting == Setting::Changelog => {
-                window.open_dialog(cx, |dialog, _, cx| {
-                    dialog.title("Changelog").w(px(640.)).child(
-                        v_flex().gap_3()
-                            .child(div().text_xs().text_color(cx.theme().muted_foreground).child(format!("leet {}", env!("LEET_VERSION"))))
-                            .child(div().id("changelog-scroll").h(px(360.)).overflow_y_scroll()
-                                .child(TextView::markdown("leet-changelog", include_str!("../../../docs/changelog.md")).selectable(true)))
-                    )
-                });
             }
             Kind::Action if matches!(setting, Setting::LeetCode | Setting::NeetCode) => {
                 let account = if setting == Setting::LeetCode { practice::creds::Account::LeetCode } else { practice::creds::Account::NeetCode };

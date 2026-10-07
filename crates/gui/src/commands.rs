@@ -225,8 +225,7 @@ impl Workspace {
                 this.zoom(0.0, window, cx);
             }))
             .on_action(cx.listener(|this, _: &Restart, _, cx| {
-                this.save_now(cx);
-                crate::update::restart(cx);
+                crate::update::restart(this, cx);
             }))
             .on_action(cx.listener(|this, _: &Quit, _, cx| {
                 this.save_now(cx);

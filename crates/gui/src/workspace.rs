@@ -216,6 +216,7 @@ pub struct Workspace {
     pub settings: SettingsState,
     pub syncing: bool,
     pub update_ready: bool,
+    pub release_update: crate::update::State,
     /// Last shortcut, shown briefly in the status bar.
     pub flash: Option<(SharedString, u64)>,
     flash_seq: u64,
@@ -298,6 +299,7 @@ impl Workspace {
             settings: SettingsState::new(),
             syncing: false,
             update_ready: false,
+            release_update: crate::update::State::default(),
             flash: None,
             flash_seq: 0,
             save_task: Task::ready(()),
@@ -320,6 +322,7 @@ impl Workspace {
         if accounts[1].is_some() { this.refresh_neetcode(window, cx); }
         this._tasks.push(this.watch_disk(window, cx));
         this._tasks.push(crate::update::watch(window, cx));
+        this._tasks.push(crate::update::check(window, cx));
         this.start_companion(window, cx);
         if !this.config.onboarding_completed { this.begin_onboarding(false, window, cx); }
         else if this.config.codeforces_handle.is_empty() { this.begin_onboarding(true, window, cx); }

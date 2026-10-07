@@ -114,7 +114,7 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: ${{ matrix.os }}-${{ matrix.target }}-release
-          env-vars: MACOSX_DEPLOYMENT_TARGET
+          env-vars: CARGO CC CFLAGS CXX CMAKE RUST MACOSX_DEPLOYMENT_TARGET
           cache-bin: false
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Build executable and packaging tool together
@@ -134,8 +134,45 @@ jobs:
           if ($version -notmatch '^leet ' -or $version -notmatch [regex]::Escape($env:RELEASE_TAG)) { throw "Unexpected version: $version" }
           Write-Output $version
       - name: Package native release
-        if: env.RELEASE_TAG != ''
+        if: runner.os != 'Linux' && env.RELEASE_TAG != ''
         run: target/${{ matrix.target }}/release/examples/release${{ runner.os == 'Windows' && '.exe' || '' }} --target '${{ matrix.target }}' --tag "$RELEASE_TAG" --output dist
+      - name: Cache pinned AppImage packaging tools
+        if: runner.os == 'Linux' && env.RELEASE_TAG != ''
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/leet-appimage-tools
+          key: appimage-tools-${{ matrix.target }}-602438599-610035789-596078161-602438213-610035595-596077442
+      - name: Package Linux archive and AppImage from the same executable
+        if: runner.os == 'Linux' && env.RELEASE_TAG != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          case '${{ matrix.target }}' in
+            x86_64-*)
+              deploy_id=602438599; deploy_sha=8aea8da0f7f7039d2a2cecb14657d752a222a5e1d3825caeef186c82f751cdd1
+              tool_id=610035789; tool_sha=95cbe7cce9717fce90c484e34052ee7c7f1d7635b33c12525b4776826a7d29b6
+              runtime_id=596078161; runtime_sha=156f4bdbde9c52d01814600013e0a273f0118dc2de98975f3c8c63427ec79074 ;;
+            aarch64-*)
+              deploy_id=602438213; deploy_sha=5c1fddf96066891e829831cac0d84424690f3b22846c7f8f1bb9990a5c6c73f4
+              tool_id=610035595; tool_sha=a595ea34cd6136c7f595e9dcbb16f3e9725d7610efb9e43b38c3c6e86cafc270
+              runtime_id=596077442; runtime_sha=b4ff0030242d0c3bb12ce40541828303cf167493f4793456f0436edd6255c39d ;;
+          esac
+          mkdir -p "$RUNNER_TEMP/leet-appimage-tools"
+          export LEET_LINUXDEPLOY="$RUNNER_TEMP/leet-appimage-tools/linuxdeploy.AppImage"
+          export LEET_APPIMAGETOOL="$RUNNER_TEMP/leet-appimage-tools/appimagetool.AppImage"
+          export LEET_APPIMAGE_RUNTIME="$RUNNER_TEMP/leet-appimage-tools/appimage-runtime"
+          if [ ! -s "$LEET_LINUXDEPLOY" ]; then
+            gh api "repos/linuxdeploy/linuxdeploy/releases/assets/$deploy_id" -H 'Accept: application/octet-stream' > "$LEET_LINUXDEPLOY"
+          fi
+          if [ ! -s "$LEET_APPIMAGETOOL" ]; then
+            gh api "repos/AppImage/appimagetool/releases/assets/$tool_id" -H 'Accept: application/octet-stream' > "$LEET_APPIMAGETOOL"
+          fi
+          if [ ! -s "$LEET_APPIMAGE_RUNTIME" ]; then
+            gh api "repos/AppImage/type2-runtime/releases/assets/$runtime_id" -H 'Accept: application/octet-stream' > "$LEET_APPIMAGE_RUNTIME"
+          fi
+          printf '%s  %s\n' "$deploy_sha" "$LEET_LINUXDEPLOY" "$tool_sha" "$LEET_APPIMAGETOOL" "$runtime_sha" "$LEET_APPIMAGE_RUNTIME" | sha256sum --check --strict
+          chmod +x "$LEET_LINUXDEPLOY" "$LEET_APPIMAGETOOL"
+          target/${{ matrix.target }}/release/examples/release --target '${{ matrix.target }}' --tag "$RELEASE_TAG" --output dist
       - uses: actions/upload-artifact@v7.0.2
         if: env.RELEASE_TAG != ''
         with:
@@ -167,12 +204,16 @@ jobs:
         run: |
           cp site/public/install.sh dist/install.sh
           (cd dist && sha256sum leet-* install.sh > SHA256SUMS)
-          cat > release-notes.md <<'EOF'
+          cat docs/changelog.md > release-notes.md
+          printf '\n## Downloads\n\n' >> release-notes.md
+          cat >> release-notes.md <<'EOF'
           Native leet builds for Linux (x86_64 and ARM64), macOS (Intel and Apple Silicon), and Windows x64.
 
           Linux/macOS: `curl -fsSL https://noelithub77.github.io/leet/install.sh | sh`
 
           Windows: download `leet-windows-x86_64.exe` and open it. No installer is needed.
+
+          Linux portable: download `leet-linux-x86_64.AppImage` or `leet-linux-aarch64.AppImage`, make it executable, and open it. AppImages include shared application libraries; graphical desktop, compatible glibc, and GPU drivers are still required.
 
           These first builds are unsigned (macOS uses an ad-hoc signature, without notarization). OS security prompts may appear. Linux needs a graphical desktop and Vulkan GPU drivers; x86_64 requires glibc 2.35+, ARM64 requires glibc 2.39+. macOS requires version 13+. Install Python or your preferred compiler to run solutions locally. Settings, accounts, and solutions are stored separately from the executable.
 

@@ -25,3 +25,5 @@ pub mod companion;
 pub mod python;
 
 pub mod contests;
+
+pub mod updates;
