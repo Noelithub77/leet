@@ -121,6 +121,14 @@ impl Workspace {
                 this.flash("Editor", cx);
             }))
             .on_action(cx.listener(|this, _: &Search, window, cx| this.omni_open(Scope::All, window, cx)))
+            .on_action(cx.listener(|this, _: &ShortcutHelp, window, cx| this.omni_open(Scope::Shortcuts, window, cx)))
+            .on_action(cx.listener(|this, _: &ShowContests, window, cx| {
+                this.show_home(window, cx); this.home.selected = this.recent_slugs.len();
+                this.home.scroll.scroll_to_item(this.home.selected.min(this.recent_slugs.len())); cx.notify();
+            }))
+            .on_action(cx.listener(|this, _: &TogglePastContests, window, cx| {
+                this.show_home(window, cx); this.contests.past_open = !this.contests.past_open; cx.notify();
+            }))
             .on_action(cx.listener(|this, _: &FindProblem, window, cx| this.omni_open(Scope::Problems, window, cx)))
             .on_action(cx.listener(|this, _: &PickTheme, window, cx| this.omni_open(Scope::Themes, window, cx)))
             .on_action(cx.listener(|this, _: &AddCustomTest, window, cx| crate::dialogs::open_custom_test(this, window, cx)))
@@ -199,6 +207,7 @@ impl Workspace {
             }))
             .on_action(cx.listener(|this, _: &MarkNeetCode, window, cx| this.mark_neetcode(window, cx)))
             .on_action(cx.listener(|this, _: &RevealHint, _, cx| this.reveal_hint(cx)))
+            .on_action(cx.listener(|this, _: &HideHints, _, cx| this.hide_hints(cx)))
             .on_action(cx.listener(|this, _: &ResetSolution, window, cx| {
                 let Some(q) = this.session.as_ref().and_then(|s| s.question.as_ref()) else { return };
                 let language = this.session.as_ref().map_or(practice::language::Language::Python, |session| session.language);

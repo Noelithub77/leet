@@ -1,3 +1,14 @@
+## 2026-10-07 · Shortcut help, pinned Home, and contests
+
+- Ctrl+F1 opens searchable shortcut help with native keycaps, all active alternatives, custom overrides, and contextual editor/form shortcuts. Select an application shortcut to edit it.
+- Ctrl+K searches commands and current key combinations, including contextual bindings. Saving a shortcut refreshes the search index immediately.
+- The clickable hint footer cycles through hints and hides them after the last. A close icon hides partial hints immediately; the displayed shortcut follows custom bindings.
+- Home stays pinned outside the scrolling problem tabs. Tab labels have extra vertical room and line height for letters such as g and y.
+- Home lists three upcoming/live Codeforces contests and a collapsed past-contest section. Ctrl+Alt+C focuses contests; arrows and Enter open the selected contest. Contests are also searchable through Ctrl+K.
+- Opening a contest scopes the explorer to its problems. Saved contest data appears immediately; every Home/contest visit revalidates in the background, with one pending request per key and cached data retained on errors.
+- Ctrl+Alt+Enter copies Codeforces solutions and opens that problem’s web submission page. Use the contest browser action for registration and contests whose problems are not published yet.
+- `./ops contests:refresh [--contest ID] --json` refreshes and reports the private contest cache.
+
 ## 2026-10-07 · Codeforces snapshot compatibility
 
 - Historical Codeforces statements load when the snapshot has null or omitted samples/tags, including contest 1001 quantum problems. No sample tests are fabricated.

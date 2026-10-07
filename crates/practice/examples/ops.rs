@@ -16,7 +16,7 @@ fn execute()->Result<()> {
     let args:Vec<_>=std::env::args().skip(1).collect();
     let command=args.first().map(String::as_str).unwrap_or("--help");
     if matches!(command,"--help"|"-h"|"help"){
-        println!("./ops <check|build|local:deploy|snapshot|cache:fetch|release:package> [--json]\n\ncheck         Rust workspace tests.\nbuild         Release desktop build.\nlocal:deploy  Build/install leet and 1337 commands, desktop entry/icon; verify version and links.\nsnapshot      Public-only SQLite refresh; use ./ops snapshot --help.\ncache:fetch   Cache one Codeforces statement: --slug cf:CONTEST:INDEX.\nrelease:package  Package a native CI build; use ./ops release:package --help.\n\nLocal environment. Preserves settings, credentials, cache, and Solutions. Running windows offer restart.");return Ok(());
+        println!("./ops <check|build|local:deploy|snapshot|cache:fetch|contests:refresh|release:package> [--json]\n\ncheck         Rust workspace tests.\nbuild         Release desktop build.\nlocal:deploy  Build/install leet and 1337 commands, desktop entry/icon; verify version and links.\nsnapshot      Public-only SQLite refresh; use ./ops snapshot --help.\ncache:fetch   Cache one Codeforces statement: --slug cf:CONTEST:INDEX.\ncontests:refresh  Refresh cached Codeforces contests; optional --contest ID.\nrelease:package  Package a native CI build; use ./ops release:package --help.\n\nLocal environment. Preserves settings, credentials, cache, and Solutions. Running windows offer restart.");return Ok(());
     }
     if command == "cache:fetch" {
         if args.len() < 3 || args.len() > 4 || args[1] != "--slug" || args.get(3).is_some_and(|arg| arg != "--json") {
@@ -27,6 +27,24 @@ fn execute()->Result<()> {
         let cached = db.question(&args[2])?.is_some();
         let q = practice::codeforces::cached_question(&db, &args[2])?;
         println!("{}", json!({"command":command,"environment":"local-user-cache","database":path,"slug":q.slug,"cache_hit":cached,"statement_source":q.meta["statementSource"],"samples":q.examples.len(),"statement_bytes":q.content.len()}));
+        return Ok(());
+    }
+    if command == "contests:refresh" {
+        let mut id = None; let mut index = 1;
+        while index < args.len() {
+            match args[index].as_str() {
+                "--json" => index += 1,
+                "--contest" if id.is_none() => {
+                    index += 1; let parsed: u32 = args.get(index).context("--contest requires an ID")?.parse()?;
+                    if parsed == 0 { bail!("Contest ID must be positive"); } id = Some(parsed); index += 1;
+                }
+                _ => bail!("Use ./ops contests:refresh [--contest ID] [--json]"),
+            }
+        }
+        let path = practice::config::database_path(); let db = practice::db::Db::open(&path)?;
+        let contests = practice::contests::refresh_list(&db)?;
+        let problems = id.map(|id| practice::contests::refresh_problems(&db, id)).transpose()?;
+        println!("{}", json!({"command":command,"environment":"local-user-cache","database":path,"contests":contests.len(),"upcoming":contests.iter().filter(|contest| !contest.past()).take(3).collect::<Vec<_>>(),"contest_id":id,"problems":problems.map(|problems|problems.len())}));
         return Ok(());
     }
     if args.iter().skip(1).any(|arg|arg!="--json"){bail!("Unexpected argument; use ./ops --help");}

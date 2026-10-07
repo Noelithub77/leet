@@ -23,3 +23,5 @@ pub mod solutions;
 pub mod codeforces_snapshot;
 pub mod companion;
 pub mod python;
+
+pub mod contests;

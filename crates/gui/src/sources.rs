@@ -29,6 +29,17 @@ impl SourcesState {
         state.solved = db.get(&format!("cf-progress:{handle}")).ok().flatten().map(|raw| raw.lines().map(str::to_owned).collect()).unwrap_or_default();
         state
     }
+    pub fn upsert_problems(&mut self, problems: Vec<practice::codeforces::Problem>) {
+        for problem in problems {
+            let Some(slug) = problem.slug() else { continue; };
+            if let Some(rating) = problem.rating { self.ratings.insert(slug.clone(), rating); }
+            let item = CatalogItem { slug: slug.clone(), frontend_id: problem.contest_id.unwrap_or(0), title: problem.name,
+                level: match problem.rating { Some(rating) if rating < 1200 => 1, Some(rating) if rating >= 2000 => 3, _ => 2 },
+                paid_only: false, ac_rate: 0., status: None };
+            if let Some(&index) = self.by_slug.get(&slug) { self.catalog[index] = item; }
+            else { self.by_slug.insert(slug, self.catalog.len()); self.catalog.push(item); }
+        }
+    }
     fn set_catalog(&mut self, problems: Vec<practice::codeforces::Problem>) {
         self.ratings.clear();
         self.catalog = problems.into_iter().filter_map(|problem| {
@@ -71,6 +82,7 @@ impl Workspace {
         if self.config.source == Source::Codeforces { &self.sources.catalog } else { &self.catalog }
     }
     pub fn choose_source(&mut self, source: Source, window: &mut Window, cx: &mut Context<Self>) {
+        self.contests.selected = None;
         self.config.source = source;
         self.save_config(window, cx);
         self.rebuild_rows();
@@ -110,7 +122,10 @@ impl Workspace {
                 this.sources.loading = false;
                 match result {
                     Ok((catalog, progress)) => {
-                        if let Some(catalog) = catalog { this.sources.set_catalog(catalog); }
+                        if let Some(catalog) = catalog {
+                            this.sources.set_catalog(catalog);
+                            if let Some(id) = this.contests.selected { this.sources.upsert_problems(practice::contests::cached_problems(&this.db, id).unwrap_or_default()); }
+                        }
                         if this.config.codeforces_handle == account {
                             match progress {
                                 Ok(Some(progress)) => this.sources.solved = progress,
@@ -135,7 +150,7 @@ impl Workspace {
     }
     pub fn render_source_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let weak = cx.weak_entity();
-        let label = if self.config.source == Source::NeetCode { self.config.roadmap_list.label() } else { self.config.source.label() };
+        let label = if self.config.source == Source::NeetCode { self.config.roadmap_list.label().to_owned() } else if let Some(id) = self.contests.selected.filter(|_| self.config.source == Source::Codeforces) { format!("Contest {id}") } else { self.config.source.label().to_owned() };
         let current = self.config.source;
         let current_list = self.config.roadmap_list;
         Button::new("practice-source").ghost().small().label(label).icon(IconName::ChevronDown)

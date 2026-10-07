@@ -29,6 +29,12 @@ pub fn key(k: &str) -> impl IntoElement + use<> {
     h_flex().gap_0p5().children(first.split_whitespace().filter_map(|k| Keystroke::parse(k).ok()).map(Kbd::new))
 }
 
+/// All active alternatives, using the same native keycap component as tooltips.
+pub fn shortcut_keys(keys: &str) -> impl IntoElement + use<> {
+    h_flex().gap_2().when(keys.is_empty(), |row| row.child(div().text_xs().child("Unassigned")))
+        .children(keys.split('|').filter(|keys| !keys.is_empty()).map(|keys| key(keys).into_any_element()))
+}
+
 pub fn difficulty(level: u8, cx: &App) -> (&'static str, Hsla) {
     match level {
         1 => ("E", cx.theme().success),
@@ -127,7 +133,9 @@ impl Workspace {
         let (solved, total) = if self.config.source == practice::language::Source::NeetCode {
             (self.library.solved, self.library.total)
         } else if self.config.source == practice::language::Source::Codeforces {
-            (self.sources.solved.len(), self.sources.catalog.len())
+            if self.contests.selected.is_some() {
+                (self.rows.iter().filter(|row| matches!(row, Row::Catalog(index) if self.sources.solved.contains(&self.sources.catalog[*index].slug))).count(), self.rows.len())
+            } else { (self.sources.solved.len(), self.sources.catalog.len()) }
         } else { (self.solved.len(), self.catalog.len()) };
         v_flex().size_full().gap_2()
             .child(h_flex().h_9().px_2().gap_2().items_center()

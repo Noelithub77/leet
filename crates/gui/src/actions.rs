@@ -24,6 +24,9 @@ gpui_kit::actions!(
         FocusStatement,
         FindProblem,
         Search,
+        ShortcutHelp,
+        ShowContests,
+        TogglePastContests,
         OpenSettings,
         PickTheme,
         CycleList,
@@ -51,6 +54,7 @@ gpui_kit::actions!(
         RefreshCatalog,
         MarkNeetCode,
         RevealHint,
+        HideHints,
         ResetSolution,
         Restart,
         ZoomIn,
@@ -92,6 +96,9 @@ pub const COMMANDS: &[Command] = &[
     cmd!("Previous tab", "ctrl-shift-tab", PreviousTab),
     cmd!("Search everything", "ctrl-k|ctrl-shift-p", Search),
     cmd!("Go to problem", "ctrl-p", FindProblem),
+    cmd!("Keyboard shortcut help", "ctrl-f1", ShortcutHelp),
+    cmd!("Codeforces contests", "ctrl-alt-c", ShowContests),
+    cmd!("Show/hide past Codeforces contests", "", TogglePastContests),
     cmd!("Settings", "ctrl-,", OpenSettings),
     cmd!("Run tests", "ctrl-enter", RunTests),
     cmd!("Run on LeetCode", "ctrl-shift-enter", JudgeRun),
@@ -128,7 +135,8 @@ pub const COMMANDS: &[Command] = &[
     cmd!("Cycle NeetCode list", "ctrl-alt-l", CycleList),
     cmd!("Switch practice source", "ctrl-alt-o", CycleSource),
     cmd!("Toggle NeetCode completion", "ctrl-alt-m", MarkNeetCode),
-    cmd!("Reveal next hint", "ctrl-alt-h", RevealHint),
+    cmd!("Cycle hints", "ctrl-alt-h", RevealHint),
+    cmd!("Hide hints", "", HideHints),
     cmd!("Open in external editor", "ctrl-e", OpenExternal),
     cmd!("Open problem in browser", "ctrl-o", OpenInBrowser),
     cmd!("Change theme", "", PickTheme),
@@ -143,6 +151,36 @@ pub const COMMANDS: &[Command] = &[
 
 pub struct ComponentBindings(pub Vec<KeyBinding>);
 impl Global for ComponentBindings {}
+
+pub fn shortcut_search_text(label: &str, keys: &str) -> String {
+    format!("{label} keyboard shortcut keybinding command {keys} {} {}", keys.replace('-', "+"), keys.replace('-', " "))
+}
+
+pub struct ContextShortcut { pub label: String, pub keys: String, pub context: String }
+
+pub fn contextual_shortcuts(bindings: &[KeyBinding], config: &practice::config::Config) -> Vec<ContextShortcut> {
+    let command_names: Vec<_> = COMMANDS.iter().map(|command| (command.action)().name()).collect();
+    let overridden: Vec<_> = COMMANDS.iter().flat_map(|command| command.effective_key(config).split('|'))
+        .filter_map(|keys| keys.split_whitespace().map(Keystroke::parse).collect::<Result<Vec<_>, _>>().ok())
+        .map(|keys| keys.iter().map(ToString::to_string).collect::<Vec<_>>().join(" ")).collect();
+    let mut groups = std::collections::BTreeMap::<(String, String), Vec<String>>::new();
+    for binding in bindings {
+        let name = binding.action().name();
+        if command_names.contains(&name) || name.ends_with("NoAction") || name.ends_with("Unbind") { continue; }
+        let context = binding.predicate().map_or("Global".into(), |predicate| predicate.to_string());
+        let keys = binding.keystrokes().iter().map(ToString::to_string).collect::<Vec<_>>().join(" ");
+        if keys.is_empty() || (context.contains("Input") && overridden.contains(&keys)) { continue; }
+        let name = name.rsplit("::").next().unwrap_or(name);
+        let mut label = String::new();
+        for (index, ch) in name.chars().enumerate() {
+            if index > 0 && ch.is_uppercase() { label.push(' '); }
+            label.push(ch);
+        }
+        let group = groups.entry((label, context)).or_default();
+        if !group.contains(&keys) { group.push(keys); }
+    }
+    groups.into_iter().map(|((label, context), keys)| ContextShortcut { label, context, keys: keys.join("|") }).collect()
+}
 
 impl Command {
     pub fn effective_key<'a>(&'a self, config: &'a practice::config::Config) -> &'a str {
@@ -163,6 +201,8 @@ pub fn reload_keys(config: &practice::config::Config, cx: &mut App) {
     crate::accounts::bind_keys(cx);
     crate::settings::bind_keys(cx);
     crate::ai::bind_keys(cx);
+    crate::onboarding::bind_keys(cx);
+    crate::statement::bind_keys(cx);
 }
 
 pub fn bind_keys(config: &practice::config::Config, cx: &mut App) {
@@ -230,6 +270,22 @@ pub fn validate_key(index: usize, value: &str, config: &practice::config::Config
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[::core::prelude::v1::test]
+    fn shortcut_catalog_uses_overrides_and_preserves_context_without_duplicates() {
+        let mut config = practice::config::Config::default();
+        let bindings = [KeyBinding::new("ctrl-k", Down, Some("Input")), KeyBinding::new("down", Down, Some("Statement")), KeyBinding::new("down", Down, Some("Statement")), KeyBinding::new("pagedown", Down, Some("Statement"))];
+        let shortcuts = contextual_shortcuts(&bindings, &config);
+        assert_eq!(shortcuts.len(), 1);
+        assert_eq!(shortcuts[0].keys, "down|pagedown");
+        config.keybindings.insert("Search".into(), "ctrl-alt-j".into());
+        assert_eq!(contextual_shortcuts(&bindings, &config).len(), 2);
+        let command = COMMANDS.iter().find(|command| command.id == "Search").unwrap();
+        let text = shortcut_search_text(command.label, command.effective_key(&config));
+        assert!(text.contains("ctrl+alt+j")); assert!(!text.contains("ctrl-k"));
+        let index = practice::search::Index::new([text]);
+        assert_eq!(practice::search::Searcher::default().rank(&index, "ctrl+alt+j", 10, |_| true).len(), 1);
+    }
 
     #[::core::prelude::v1::test]
     fn rejects_conflicts_and_bare_keys() {

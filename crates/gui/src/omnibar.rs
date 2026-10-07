@@ -8,9 +8,10 @@ use std::time::Duration;
 
 use gpui_kit::base::{Presence, Transition};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
-use gpui_kit::component::{ActiveTheme as _, Icon, IconName, Sizable as _, h_flex, v_flex};
+use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
+use gpui_kit::assets::IconName;
 use practice::roadmap::{self, List, TOPICS};
 use practice::search::{Index, Searcher};
 
@@ -27,6 +28,8 @@ const VISIBLE_ROWS: f32 = 11.;
 pub enum Target {
     Roadmap,
     Command(usize),
+    ContextShortcut(usize),
+    Contest(u32),
     Setting(Setting),
     List(List),
     Topic(&'static str),
@@ -56,6 +59,7 @@ pub enum Scope {
     Problems,
     Themes,
     Fonts,
+    Shortcuts,
 }
 
 pub struct Omnibar {
@@ -66,6 +70,7 @@ pub struct Omnibar {
     index: Rc<Index>,
     problem_item: HashMap<String, usize>,
     pub stale: bool,
+    shortcuts: Vec<crate::actions::ContextShortcut>,
     pub hits: Vec<usize>,
     pub selected: usize,
     pub scroll: UniformListScrollHandle,
@@ -90,6 +95,7 @@ impl Omnibar {
             index: Rc::new(Index::new(Vec::<String>::new())),
             problem_item: HashMap::new(),
             stale: true,
+            shortcuts: vec![],
             hits: vec![],
             selected: 0,
             scroll: UniformListScrollHandle::new(),
@@ -108,9 +114,15 @@ impl Workspace {
         let mut text = vec!["Open roadmap neetcode graph map".to_string()];
         for (i, c) in COMMANDS.iter().enumerate() {
             items.push(Item { target: Target::Command(i), title: c.label.into() });
-            text.push(format!("{} command", c.label));
+            text.push(crate::actions::shortcut_search_text(c.label, c.effective_key(&self.config)));
             items.push(Item { target: Target::Setting(Setting::Keybinding(i)), title: format!("Shortcut: {}", c.label).into() });
-            text.push(format!("Keyboard shortcut keybinding {}", c.label));
+            text.push(crate::actions::shortcut_search_text(c.label, c.effective_key(&self.config)));
+        }
+        let bindings: Vec<_> = cx.key_bindings().borrow().bindings().cloned().collect();
+        self.omni.shortcuts = crate::actions::contextual_shortcuts(&bindings, &self.config);
+        for (index, shortcut) in self.omni.shortcuts.iter().enumerate() {
+            items.push(Item { target: Target::ContextShortcut(index), title: shortcut.label.clone().into() });
+            text.push(format!("{} {}", crate::actions::shortcut_search_text(&shortcut.label, &shortcut.keys), shortcut.context));
         }
         for s in Setting::ALL {
             items.push(Item { target: Target::Setting(s), title: format!("Settings: {}", s.label()).into() });
@@ -131,6 +143,10 @@ impl Workspace {
         for name in crate::theme::fonts(cx) {
             text.push(format!("Font fonts family {name}"));
             items.push(Item { target: Target::Font(name.clone().into()), title: name.into() });
+        }
+        for contest in &self.contests.list {
+            items.push(Item { target: Target::Contest(contest.id), title: contest.name.clone().into() });
+            text.push(format!("Codeforces contest {} {}", contest.id, contest.name));
         }
         let mut problem_item = HashMap::new();
         for p in self.catalog.iter().chain(self.sources.catalog.iter()) {
@@ -161,6 +177,7 @@ impl Workspace {
             Scope::Problems => "Go to problem by name, number or topic",
             Scope::Themes => "Theme · arrows preview, enter keeps",
             Scope::Fonts => "Search installed fonts…",
+            Scope::Shortcuts => "Search shortcuts by action or key…",
         };
         self.omni.input.update(cx, |input, cx| {
             input.set_value("", window, cx);
@@ -195,17 +212,18 @@ impl Workspace {
     fn omni_query_changed(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         let raw = self.omni.input.read(cx).value().to_string();
         let (query, only): (&str, Option<fn(&Target) -> bool>) = match (self.omni.scope, raw.chars().next()) {
-            (Scope::All, Some('>')) => (&raw[1..], Some(|t| matches!(t, Target::Command(_) | Target::Setting(_)))),
+            (Scope::All, Some('>')) => (&raw[1..], Some(|t| matches!(t, Target::Command(_) | Target::Setting(_) | Target::ContextShortcut(_)))),
             (Scope::All, Some('#')) => (&raw[1..], Some(|t| matches!(t, Target::Topic(_) | Target::List(_) | Target::Roadmap))),
             (Scope::All, _) => (&raw, None),
             (Scope::Problems, _) => (&raw, Some(|t| matches!(t, Target::Problem(_)))),
             (Scope::Themes, _) => (&raw, Some(|t| matches!(t, Target::Theme(_)))),
             (Scope::Fonts, _) => (&raw, Some(|t| matches!(t, Target::Font(_)))),
+            (Scope::Shortcuts, _) => (&raw, Some(|t| matches!(t, Target::Setting(Setting::Keybinding(_)) | Target::ContextShortcut(_)))),
         };
         let items = self.omni.items.clone();
         let keep = |i: usize| only.is_none_or(|f| f(&items[i].target));
-        let limit = if self.omni.scope == Scope::Fonts { items.len() } else { LIMIT };
-        self.omni.hits = if query.trim().is_empty() && self.omni.scope == Scope::Fonts {
+        let limit = if matches!(self.omni.scope, Scope::Fonts | Scope::Shortcuts) { items.len() } else { LIMIT };
+        self.omni.hits = if query.trim().is_empty() && matches!(self.omni.scope, Scope::Fonts | Scope::Shortcuts) {
             (0..items.len()).filter(|&i| keep(i)).collect()
         } else if query.trim().is_empty() && self.omni.scope != Scope::Themes {
             self.omni_defaults(&keep)
@@ -270,6 +288,10 @@ impl Workspace {
     pub fn omni_confirm(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(&i) = self.omni.hits.get(self.omni.selected) else { return };
         let target = self.omni.items[i].target.clone();
+        if let Target::ContextShortcut(index) = target {
+            self.flash(format!("Available in {}", self.omni.shortcuts[index].context), cx);
+            return;
+        }
         // Keep a previewed theme; every other choice restores the original look.
         let keep_theme = matches!(target, Target::Theme(_));
         if keep_theme {
@@ -277,6 +299,8 @@ impl Workspace {
         }
         self.omni_close(!keep_theme, window, cx);
         match target {
+            Target::ContextShortcut(_) => {},
+            Target::Contest(id) => self.open_contest(id, window, cx),
             Target::Roadmap => self.show_roadmap(window, cx),
             Target::Command(c) => window.dispatch_action((COMMANDS[c].action)(), cx),
             Target::Setting(s) => self.open_settings(Some(s), window, cx),
@@ -365,6 +389,9 @@ impl Workspace {
                         .on_action(cx.listener(|this, _: &OmniPageDown, _, cx| this.omni_step(8, cx)))
                         .on_action(cx.listener(|this, _: &OmniConfirm, window, cx| this.omni_confirm(window, cx)))
                         .on_action(cx.listener(|this, _: &OmniClose, window, cx| this.omni_close(true, window, cx)))
+                        .when(self.omni.scope == Scope::Shortcuts, |view| view.child(h_flex().px_4().pt_3().gap_2()
+                            .child(Icon::new(IconName::Keyboard).small().text_color(theme.primary))
+                            .child(div().font_weight(FontWeight::SEMIBOLD).child("Keyboard shortcuts"))))
                         .child(
                             h_flex()
                                 .px_4()
@@ -402,8 +429,16 @@ impl Workspace {
         let selected = pos == self.omni.selected;
         let muted = theme.muted_foreground;
         let (icon, kind, detail): (IconName, &str, AnyElement) = match &item.target {
+            Target::Contest(_) => (IconName::CalendarRange, "Contest", div().child("Codeforces").into_any_element()),
             Target::Roadmap => (IconName::Map, "View", key(crate::actions::key_for("ToggleRoadmap", &self.config)).into_any_element()),
-            Target::Command(c) => (IconName::SquareTerminal, "Command", key(COMMANDS[*c].effective_key(&self.config)).into_any_element()),
+            Target::Command(c) => (IconName::SquareTerminal, "Command", crate::view::shortcut_keys(COMMANDS[*c].effective_key(&self.config)).into_any_element()),
+            Target::ContextShortcut(index) => {
+                let shortcut = &self.omni.shortcuts[*index];
+                (IconName::Keyboard, "Shortcut", h_flex().gap_2()
+                    .child(div().max_w(px(140.)).truncate().child(shortcut.context.clone()))
+                    .child(crate::view::shortcut_keys(&shortcut.keys)).into_any_element())
+            }
+            Target::Setting(Setting::Keybinding(index)) => (IconName::Keyboard, "Shortcut", crate::view::shortcut_keys(COMMANDS[*index].effective_key(&self.config)).into_any_element()),
             Target::Setting(s) => (IconName::Settings, "Setting", div().max_w(px(220.)).truncate().child(s.value(self, cx)).into_any_element()),
             Target::List(l) => (
                 IconName::BookOpen,

@@ -201,6 +201,7 @@ pub struct Workspace {
     pub roadmap: crate::roadmap::RoadmapState,
     pub explorer_topic: usize,
     pub sources: crate::sources::SourcesState,
+    pub contests: crate::contests::ContestsState,
     pub rows: Vec<Row>,
     pub sidebar_sel: usize,
     pub sidebar_scroll: UniformListScrollHandle,
@@ -282,6 +283,7 @@ impl Workspace {
             explorer_topic: 0,
             intelligence: Default::default(),
             sources: crate::sources::SourcesState::load(&db, &config.codeforces_handle),
+            contests: crate::contests::ContestsState::load(&db),
             rows: vec![],
             sidebar_sel: 0,
             sidebar_scroll: UniformListScrollHandle::new(),
@@ -479,7 +481,7 @@ impl Workspace {
                 self.rows.extend(topic.entries.iter().map(|&entry| Row::Problem(entry)));
             }
         } else {
-            self.rows = self.active_catalog().iter().enumerate().filter(|(_, item)| !item.paid_only).map(|(index, _)| Row::Catalog(index)).collect();
+            self.rows = self.active_catalog().iter().enumerate().filter(|(_, item)| !item.paid_only && (self.config.source != Source::Codeforces || self.contests.selected.is_none_or(|id| practice::codeforces::problem_id(&item.slug).is_ok_and(|(contest, _)| contest == id)))).map(|(index, _)| Row::Catalog(index)).collect();
         }
         if let Some(i) = selected.and_then(|sel| self.rows.iter().position(|r| *r == sel)) {
             self.sidebar_sel = i;
@@ -1008,17 +1010,21 @@ impl Workspace {
         self.right = true;
         let Some(s) = &mut self.session else { return };
         let total = s.question.as_ref().map_or(0, |q| q.hints.len());
-        if s.hints_shown >= total {
-            self.flash(if total == 0 { "No hints" } else { "All hints shown" }, cx);
-            return;
-        }
-        s.hints_shown += 1;
+        if total == 0 { self.flash("No hints", cx); return; }
+        s.hints_shown = if s.hints_shown >= total { 0 } else { s.hints_shown + 1 };
         let shown = s.hints_shown;
         self.statement.update(cx, |st, cx| {
             st.hints_shown = shown;
+            st.reference_open = false;
             cx.notify();
         });
-        self.flash(format!("Hint {shown}/{total}"), cx);
+        self.flash(if shown == 0 { "Hints hidden".into() } else { format!("Hint {shown}/{total}") }, cx);
+    }
+
+    pub fn hide_hints(&mut self, cx: &mut Context<Self>) {
+        if let Some(session) = &mut self.session { session.hints_shown = 0; }
+        self.statement.update(cx, |statement, cx| { statement.hints_shown = 0; cx.notify(); });
+        cx.notify();
     }
 
     // ---- prompts -----------------------------------------------------------------------

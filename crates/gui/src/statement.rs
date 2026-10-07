@@ -189,8 +189,10 @@ impl Statement {
     }
 }
 impl Render for Statement {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme().clone();
+        let hint_key = window.highest_precedence_binding_for_action_in_context(&crate::actions::RevealHint, KeyContext::parse(crate::actions::WORKSPACE).expect("workspace context"))
+            .map(|binding| binding.keystrokes().iter().map(ToString::to_string).collect::<Vec<_>>().join(" ")).unwrap_or_default();
         let show_tags = cx.try_global::<TagsVisible>().is_some_and(|visible| visible.0);
         let focus = self.focus.get_or_insert_with(|| cx.focus_handle()).clone();
         let body = v_flex().id("statement").key_context("Statement").track_focus(&focus).size_full().min_h_0()
@@ -228,8 +230,15 @@ impl Render for Statement {
                     }))
                     .into_any_element()
             }))
-            .when(!self.reference_open && self.hints_shown < self.hints.len(), |view| view.child(
-                h_flex().flex_shrink_0().px_4().py_2().border_t_1().border_color(theme.border).text_xs().text_color(theme.muted_foreground)
-                    .child(h_flex().gap_1().child(key("ctrl-alt-h")).child("hint"))))
+            .when(!self.reference_open && !self.hints.is_empty(), |view| view.child(
+                h_flex().flex_shrink_0().gap_2().px_4().py_2().border_t_1().border_color(theme.border).text_xs().text_color(theme.muted_foreground)
+                    .child(key(&hint_key))
+                    .child(Button::new("cycle-hint").ghost().xsmall()
+                        .label(if self.hints_shown == self.hints.len() { "Hide hints".into() } else if self.hints_shown == 0 { "Hint".into() } else { format!("Hint {}/{}", self.hints_shown, self.hints.len()) })
+                        .tooltip_with_action("Next hint, then hide after the last", &crate::actions::RevealHint, Some(crate::actions::WORKSPACE))
+                        .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::actions::RevealHint), cx)))
+                    .when(self.hints_shown > 0 && self.hints_shown < self.hints.len(), |row| row.child(
+                        Button::new("hide-hints").ghost().xsmall().icon(IconName::X).accessibility_label("Hide hints").tooltip("Hide hints")
+                            .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::actions::HideHints), cx))))))
     }
 }

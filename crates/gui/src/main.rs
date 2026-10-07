@@ -15,6 +15,7 @@ mod onboarding;
 mod language_server;
 mod sources;
 mod home;
+mod contests;
 mod history;
 mod omnibar;
 mod settings;

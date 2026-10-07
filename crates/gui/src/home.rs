@@ -77,7 +77,7 @@ impl Workspace {
         }
         self.back_to_editor(window, cx);
         cx.on_next_frame(window, move |this, _, cx| {
-            this.home.tabs_scroll.scroll_to_item(index + 1);
+            this.home.tabs_scroll.scroll_to_item(index);
             cx.notify();
         });
     }
@@ -123,6 +123,8 @@ impl Workspace {
 
     pub fn show_home(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.save_now(cx);
+        self.refresh_contests(window, cx);
+        if let Some(id) = self.contests.selected { self.refresh_contest_problems(id, window, cx); }
         self.center = Center::Home;
         self.history_mode = false;
         self.settings.editing = None;
@@ -131,7 +133,7 @@ impl Workspace {
         cx.on_next_frame(window, |this, window, cx| {
             if this.center == Center::Home && !this.omni.open && this.focus_area == Focus::Home {
                 this.focus_nav(Focus::Home, window, cx);
-                this.home.scroll.scroll_to_item(this.home.selected);
+                this.home.scroll.scroll_to_item(this.home.selected.min(this.recent_slugs.len()));
                 this.home.tabs_scroll.scroll_to_item(0);
                 cx.notify();
             }
@@ -139,10 +141,11 @@ impl Workspace {
     }
 
     pub fn home_move(&mut self, delta: isize, cx: &mut Context<Self>) {
-        if !self.recent_slugs.is_empty() {
+        let count = self.recent_slugs.len() + self.contests.visible().len();
+        if count > 0 {
             self.home.selected = (self.home.selected as isize + delta)
-                .clamp(0, self.recent_slugs.len() as isize - 1) as usize;
-            self.home.scroll.scroll_to_item(self.home.selected);
+                .clamp(0, count as isize - 1) as usize;
+            self.home.scroll.scroll_to_item(self.home.selected.min(self.recent_slugs.len()));
             cx.notify();
         }
     }
@@ -150,6 +153,8 @@ impl Workspace {
     pub fn home_open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(slug) = self.recent_slugs.get(self.home.selected).cloned() {
             self.open_problem(slug, window, cx);
+        } else if let Some(contest) = self.contests.visible().get(self.home.selected.saturating_sub(self.recent_slugs.len())) {
+            self.open_contest(contest.id, window, cx);
         }
     }
 
@@ -196,18 +201,18 @@ impl Workspace {
         let selected = match self.center { Center::Home => 0, Center::Editor => self.active_tab.map_or(0, |i| i + 1), _ => usize::MAX };
         let theme = cx.theme().clone();
         let make_tab = |index| Tab::new(("workspace-tab", index)).selected(selected == index)
-            .set_position(index + 1, self.tabs.len() + 1).h_8().px_2p5().gap_2().rounded(px(12.)).flex_shrink_0()
+            .set_position(index + 1, self.tabs.len() + 1).h_10().px_2p5().gap_2().rounded(px(12.)).flex_shrink_0()
             .text_sm().text_color(theme.tab_foreground).cursor_pointer()
             .styles(|styles| styles.selected(|style| style.bg(theme.tab_active).text_color(rgb(0xffffff))))
             .hover(|tab| tab.bg(if selected == index { theme.tab_active } else { theme.secondary }));
+        let home = make_tab(0).accessibility_label("Home").child(Icon::new(IconName::House).small())
+            .tooltip(|window, cx| Tooltip::new("Home").action(&ShowHome, Some(actions::WORKSPACE)).build(window, cx))
+            .on_click(cx.listener(|this, event: &ClickEvent, window, cx| {
+                this.show_home(window, cx);
+                if event.click_count() >= 3 { this.flash("1337 · Achievement unlocked: home sweet home", cx); }
+            }));
         let mut tabs = Tabs::new("workspace-tabs").flex().gap_1().min_w_0().flex_1().overflow_x_scroll()
-            .track_scroll(&self.home.tabs_scroll)
-            .child(make_tab(0).accessibility_label("Home").child(Icon::new(IconName::House).small())
-                .tooltip(|window, cx| Tooltip::new("Home").action(&ShowHome, Some(actions::WORKSPACE)).build(window, cx))
-                .on_click(cx.listener(|this, event: &ClickEvent, window, cx| {
-                    this.show_home(window, cx);
-                    if event.click_count() >= 3 { this.flash("1337 · Achievement unlocked: home sweet home", cx); }
-                })));
+            .track_scroll(&self.home.tabs_scroll);
         for (index, tab) in self.tabs.iter().enumerate() {
             let session = tab.as_ref().map(|tab| &tab.session).or_else(|| {
                 (self.active_tab == Some(index)).then_some(self.session.as_ref()).flatten()
@@ -217,7 +222,7 @@ impl Workspace {
             let tooltip = title.clone();
             tabs = tabs.child(make_tab(index + 1).max_w(px(240.)).accessibility_label(title.clone())
                 .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
-                .child(div().min_w_0().flex_1().truncate().child(title))
+                .child(div().min_w_0().flex_1().line_height(relative(1.4)).py_1().truncate().child(title))
                 .child(Button::new(("close-problem-tab", index)).ghost().xsmall().icon(IconName::X)
                     .accessibility_label("Close problem").tooltip("Close problem")
                     .on_click(cx.listener(move |this, _, window, cx| {
@@ -227,7 +232,7 @@ impl Workspace {
                     })))
                 .on_click(cx.listener(move |this, _, window, cx| this.select_tab(index, window, cx))));
         }
-        h_flex().m_2().gap_2().child(tabs).child(Button::new("open-settings-icon").ghost().small().icon(IconName::Settings)
+        h_flex().m_2().gap_2().min_w_0().child(home).child(tabs).child(Button::new("open-settings-icon").ghost().small().icon(IconName::Settings)
             .accessibility_label("Settings").tooltip_with_action("Settings", &actions::OpenSettings, Some(actions::WORKSPACE))
             .on_click(cx.listener(|this, _, window, cx| this.open_settings(None, window, cx))))
     }
@@ -266,7 +271,7 @@ impl Workspace {
                             this.home.selected = i;
                             this.open_problem(slug.clone(), window, cx);
                         }))
-                    }))))
+                    })).child(self.render_contests(cx))))
     }
 }
 

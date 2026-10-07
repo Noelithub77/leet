@@ -342,6 +342,7 @@ impl Workspace {
                 }
                 self.config = config;
                 crate::actions::reload_keys(&self.config, cx);
+                self.omni.stale = true;
             }
             Setting::Prompt(style) => {
                 if value.is_empty() { self.config.prompt_instructions.remove(style.id()); }
