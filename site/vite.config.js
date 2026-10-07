@@ -1,3 +1,4 @@
 import { defineConfig } from 'vite';
+import tailwindcss from '@tailwindcss/vite';
 
-export default defineConfig({ base: '/leet/' });
+export default defineConfig({ base: '/leet/', plugins: [tailwindcss()] });

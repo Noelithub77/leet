@@ -10,7 +10,6 @@ export function detectPlatform(platform, userAgent) {
 }
 
 export const requirements = {
-  linux: 'Linux x86_64 or ARM64 with a graphical desktop and Vulkan drivers. The installer can install runtime libraries on Ubuntu/Debian, Fedora, Arch, and openSUSE; sudo may ask for your password.',
-  macos: 'macOS 13 or later. Apple Silicon and Intel builds are selected automatically. Installs in your Applications folder.',
+  unix: 'Linux x86_64/ARM64: graphical desktop and Vulkan drivers. macOS 13+: Intel or Apple Silicon. The installer selects your build; Linux runtime libraries may need sudo.',
   windows: 'Windows 10 or later, x64. The portable executable saves settings and solutions in your user folders.',
 };

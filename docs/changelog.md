@@ -4,6 +4,13 @@
 - Description, Examples, and Constraints expansion states are shared across every question and tab and saved in the private SQLite cache for future launches. New installs expand only Description.
 - Ctrl+Up / Ctrl+Down open the previous / next question in the current explorer list for NeetCode, LeetCode, and Codeforces. Alt+P / Alt+N remain available; shortcuts are editable in Settings.
 
+## 2026-10-07 · leet for eleet landing page
+
+- Larger Vesper teal landing page with the app logo, “leet for eleet” tagline, and brief Rust/native performance copy.
+- Linux and macOS share one install command. Ctrl+C or Cmd+C copies it, with shadcn keyboard badges in the Copy button; selected text and form controls retain normal copy behavior.
+- Removed instructional filler and persistent copy-status text. Feedback appears briefly in the button.
+- Logo splash displays while the page loads and disappears when the page is ready, without a forced delay.
+
 ## 2026-10-07 · Public desktop releases
 
 - Minimal platform-aware download page, with one command to install and open leet on Linux/macOS and a portable Windows x64 executable.

@@ -1,6 +1,6 @@
 # Installing leet
 
-Visit [the download page](https://noelithub77.github.io/leet/). It detects your desktop platform; its selector also lets you get the command for another computer.
+Visit [the landing page](https://noelithub77.github.io/leet/). It detects Windows or the combined Linux/macOS option. Ctrl+C (or Cmd+C) copies the Unix install command when no text or form control is selected; ordinary text copying keeps its normal behavior.
 
 On Linux or macOS, paste this single command into your terminal:
 
@@ -55,7 +55,7 @@ git push origin v0.1.0
 
 Use the GitHub Actions **Release → Run workflow** button with an existing `vX.Y.Z` tag to retry/rebuild that release. The selected tag must exist; every build checks out that tag. Publishing waits for every target, uploads archives, the executable, installer, and SHA-256 manifest to a draft, and then publishes it. Failed builds do not publish an incomplete release. Workflow tokens need `contents: write` only in the publishing job. Never put personal credentials or data into build artifacts.
 
-The Vite page lives in `site/`. Its only frontend dependency is Vite; platform detection and the copy button use browser APIs. Its GitHub Pages workflow publishes changes pushed to main. GitHub Pages must use **GitHub Actions** as its source.
+The Vite landing page lives in `site/`, with React and Tailwind for the requested shadcn `Kbd`/`KbdGroup` components. The adapted upstream component and its MIT license live in `site/src/components/ui/`. Platform detection and copying use browser APIs. The page uses Vesper's `#99FFE4` accent and a 130% desktop type scale, with responsive sizing on mobile. Its logo splash is initial HTML and disappears when React is ready, with no timed delay. The GitHub Pages workflow publishes changes pushed to main; Pages must use **GitHub Actions** as its source.
 
 ```sh
 cd site

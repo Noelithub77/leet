@@ -8,5 +8,13 @@
     "test": "node --test",
     "ops": "node ops.mjs"
   },
-  "devDependencies": { "vite": "^8.0.10" }
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.0.10"
+  },
+  "dependencies": {
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  }
 }
