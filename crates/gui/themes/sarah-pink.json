@@ -1,10 +1,10 @@
 {
   "$schema": "https://github.com/longbridge/gpui-kit/raw/refs/heads/main/.theme-schema.json",
-  "name": "Sarah Pink",
+  "name": "Sarah's Pink",
   "author": "leet",
   "themes": [
     {
-      "name": "Sarah Pink",
+      "name": "Sarah's Pink",
       "mode": "light",
       "colors": {
         "accent.background": "#FBD8E8",

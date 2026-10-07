@@ -13,7 +13,7 @@ const THEMES: &[&str] = themes!(
     "catppuccin.json", "everforest.json", "fahrenheit.json", "flexoki.json", "gruvbox.json",
     "harper.json", "hybrid.json", "jellybeans.json", "kibble.json", "macos-classic.json",
     "mellifluous.json", "molokai.json", "solarized.json", "spaceduck.json", "tokyonight.json",
-    "twilight.json", "sarah-pink.json",
+    "twilight.json", "sarah-pink.json", "sarah-pink-dark.json",
 );
 
 pub const DEFAULT: &str = "Vesper";
@@ -66,6 +66,7 @@ pub fn set_zoom(level: f32, cx: &mut App) -> f32 {
 
 /// Applies a registered theme by name; false when it doesn't exist.
 pub fn apply(name: &str, cx: &mut App) -> bool {
+    let name = if name == "Sarah Pink" { "Sarah's Pink" } else { name };
     let Some(config) = ThemeRegistry::global(cx).themes().get(name).cloned() else {
         return false;
     };
