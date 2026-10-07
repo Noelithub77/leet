@@ -20,3 +20,6 @@ pub mod lsp;
 
 pub mod description;
 pub mod solutions;
+pub mod codeforces_snapshot;
+pub mod companion;
+pub mod python;

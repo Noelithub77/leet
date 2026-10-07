@@ -202,7 +202,7 @@ The right panel's Git icon opens History (the existing configurable history shor
 
 Problem tags start hidden. Click the tag icon beside Question/Solution or press Ctrl+Shift+T to toggle them; the preference is saved across questions and restarts. Each revealed chip includes a topic icon.
 
-New installations use `~/.config/leet/config.toml`, `~/.local/share/leet/leet.db`, and `~/leet`. Upgrades retain existing vg paths, saved workspace choice, and shared keyring sessions. `vg` remains a compatibility alias; the desktop entry is `leet.desktop`.
+New installations use `~/.config/leet/config.toml`, `~/.local/share/leet/leet.db`, and `~/leet`. Upgrades retain existing vg paths, saved workspace choice, and shared keyring sessions. The `vg` launcher is removed; the desktop entry is `leet.desktop`.
 
 `leet --1337` and a triple-click on Home reveal the two small Easter eggs.
 
@@ -211,3 +211,10 @@ New installations use `~/.config/leet/config.toml`, `~/.local/share/leet/leet.db
 The results header offers Add, Edit, and Restore icons with tooltips. Add/Edit open the existing input/expected-output dialog; Save or Ctrl+Enter persists the case. Expected output may be empty for an unjudged run. LeetCode uses one argument per line; Codeforces uses stdin.
 
 For original examples, Use original example restores just that case in the dialog before saving. Restore in the results header restores all examples from the question, removing edited/custom cases from the active set. Per-question overrides live in the user SQLite cache, outside the bundled public database, and survive restarts. Changes clear old results and are blocked while a run or judge request is active.
+# Current browser imports and contest defaults
+
+Competitive Companion imports Codeforces samples through a native loopback receiver. Add **13337** to the browser extension's custom ports, then use its plus button on a Codeforces problem page while leet is running. Settings → Competitive Companion enables/disables the receiver; Browser import port changes its port. The receiver accepts bounded JSON POSTs, rejects unsupported/interactive problems, and reports an occupied port in Settings. It queues imports without blocking GPUI. This imports samples and limits, not full browser HTML. Complete existing statements and solution files are preserved.
+
+Python LSP documents include hidden contest imports and judge node declarations after user text, retaining user positions. Syntax errors stay visible; Python type-rule diagnostics and warnings are filtered. Common helpers include Counter/defaultdict/deque, bisect, heap operations, cache/lru_cache, itertools, math, typing, and standard module names. Local stdin and function runners provide these helpers. External Codeforces submission still requires explicit imports; generated AI prompts require them.
+
+`./ops cache:fetch --slug cf:4:A --json` fetches/cache-checks a single Codeforces statement in the **local user cache**, reports its database path, cache hit, source, sample count, and statement size. It preserves personal solutions and sample overrides. `./ops local:deploy --json` installs `leet` and `1337`, removes the former app-owned `vg` symlink, and preserves all legacy user data.

@@ -225,6 +225,15 @@ mod tests {
     }
 
     #[test]
+    fn wrong_question_method_is_reported_before_cases_run() {
+        let meta = json!({"name":"insert", "params":[], "return":{"type":"integer[][]"}});
+        let (error, results) = run_cases("class Solution:\n    def minWindow(self, s, t):\n        return s\n", meta, &[case(0, "", "[]")], Compare::Exact);
+        let error = error.expect("interface mismatch");
+        assert!(error.contains("Solution.insert")); assert!(error.contains("minWindow"));
+        assert!(results.is_empty());
+    }
+
+    #[test]
     fn function_problem_passes_and_fails() {
         let code = "class Solution:\n    def twoSum(self, nums: List[int], target: int) -> List[int]:\n        seen = {}\n        for i, n in enumerate(nums):\n            if target - n in seen:\n                return [seen[target - n], i]\n            seen[n] = i\n";
         let meta = json!({"name": "twoSum", "params": [{"name": "nums", "type": "integer[]"}, {"name": "target", "type": "integer"}], "return": {"type": "integer[]"}});

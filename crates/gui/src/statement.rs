@@ -12,6 +12,8 @@ use crate::view::key;
 
 pub struct TagsVisible(pub bool);
 impl Global for TagsVisible {}
+pub struct Sections(pub [bool; 3]);
+impl Default for Sections { fn default() -> Self { Self([true, false, false]) } }
 fn tag_icon(topic: &str) -> IconName {
     match topic {
         "Array" | "Hash Table" | "String" => IconName::Brackets,
@@ -41,6 +43,7 @@ pub struct Statement {
     pub slug: SharedString,
     pub title: SharedString,
     pub blocks: Vec<Block>,
+    pub sections: Sections,
     pub language: Language,
     pub db: Option<Arc<Db>>,
     pub topics: Vec<SharedString>,
@@ -93,21 +96,24 @@ impl Statement {
         TextView::markdown(SharedString::from(id), content).selectable(true)
             .style(TextViewStyle::default().paragraph_gap(rems(0.65)).inline_code(HighlightStyle { color: Some(color), ..Default::default() }))
     }
-    fn render_blocks(&self, cx: &Context<Self>) -> impl IntoElement {
+    fn render_blocks(&self, section: usize, cx: &Context<Self>) -> impl IntoElement {
         let theme = cx.theme().clone();
-        v_flex().gap_5().children(self.blocks.iter().enumerate().map(|(index, block)| {
+        let lavender = rgb(if theme.mode.is_dark() { 0xd8b4fe } else { 0x9561b7 });
+        v_flex().gap_5().children(self.blocks.iter().enumerate().filter(|(_, block)| match block {
+            Block::Markdown(_) => section == 0, Block::Example { .. } => section == 1, Block::Constraints(_) => section == 2,
+        }).map(|(index, block)| {
             let id = format!("statement-{}-{index}", self.slug);
             match block {
                 Block::Markdown(markdown) => self.markdown(id, markdown.clone(), theme.primary).into_any_element(),
-                Block::Constraints(markdown) => v_flex().gap_2().p_3().rounded_lg().border_1().border_color(rgb(0xd8b4fe).opacity(0.35)).bg(rgb(0xd8b4fe).opacity(0.06)).child(div().text_color(rgb(0xd8b4fe)).font_weight(FontWeight::SEMIBOLD).child("Constraints"))
-                    .child(self.markdown(id, markdown.clone(), rgb(0xd8b4fe).into())).into_any_element(),
+                Block::Constraints(markdown) => v_flex().gap_2().p_3().rounded_lg().border_1().border_color(lavender.opacity(0.35)).bg(lavender.opacity(0.06)).child(div().text_color(lavender).font_weight(FontWeight::SEMIBOLD).child("Constraints"))
+                    .child(self.markdown(id, markdown.clone(), lavender.into())).into_any_element(),
                 Block::Example { title, parts } => v_flex().gap_2().child(div().font_weight(FontWeight::SEMIBOLD).child(title.clone()))
                     .child(v_flex().p_3().gap_3().rounded_lg().bg(theme.muted).children(parts.iter().enumerate().map(|(part_index, part)| {
                         let id = format!("{id}-{part_index}");
                         match part {
                             Part::Markdown(markdown) => self.markdown(id, markdown.clone(), theme.primary).into_any_element(),
                             Part::Field { label, value } => {
-                                let color = match label.as_str() { "Input" => rgb(0xa0c4ff).into(), "Output" => rgb(0x99ffe4).into(), _ => theme.muted_foreground };
+                                let color = match label.as_str() { "Input" => rgb(if theme.mode.is_dark() { 0xa0c4ff } else { 0x536aae }).into(), "Output" => rgb(if theme.mode.is_dark() { 0x99ffe4 } else { 0x26786b }).into(), _ => theme.muted_foreground };
                                 let content = if label == "Explanation" { value.clone() } else { format!("```python\n{value}\n```") };
                                 v_flex().gap_1().child(div().text_xs().font_weight(FontWeight::SEMIBOLD).text_color(color).child(label.clone()))
                                     .child(self.markdown(id, content, color)).into_any_element()
@@ -115,6 +121,18 @@ impl Statement {
                         }
                     }))).into_any_element(),
             }
+        }))
+    }
+    fn render_sections(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        v_flex().gap_3().children(["Description", "Examples", "Constraints"].into_iter().enumerate().filter_map(|(section, label)| {
+            let exists = self.blocks.iter().any(|block| match block {
+                Block::Markdown(_) => section == 0, Block::Example { .. } => section == 1, Block::Constraints(_) => section == 2,
+            });
+            exists.then(|| v_flex().gap_3()
+                .child(Button::new(("statement-section", section)).ghost().small().label(label)
+                    .icon(IconName::ChevronDown).selected(self.sections.0[section])
+                    .on_click(cx.listener(move |this, _, _, cx| { this.sections.0[section] = !this.sections.0[section]; cx.notify(); })))
+                .when(self.sections.0[section], |view| view.child(self.render_blocks(section, cx))))
         }))
     }
     fn render_reference(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -165,10 +183,14 @@ impl Render for Statement {
         let show_tags = cx.try_global::<TagsVisible>().is_some_and(|visible| visible.0);
         let focus = self.focus.get_or_insert_with(|| cx.focus_handle()).clone();
         let body = v_flex().id("statement").key_context("Statement").track_focus(&focus).track_scroll(&self.scroll).size_full().overflow_y_scroll().p_4().gap_4()
-            .on_action(cx.listener(|this, _: &crate::actions::Up, _, cx| this.scroll_by(40., cx)))
-            .on_action(cx.listener(|this, _: &crate::actions::Down, _, cx| this.scroll_by(-40., cx)))
-            .on_action(cx.listener(|this, _: &PageUp, _, cx| this.scroll_by(320., cx)))
-            .on_action(cx.listener(|this, _: &PageDown, _, cx| this.scroll_by(-320., cx)));
+            .on_scroll_wheel(cx.listener(|this, event: &ScrollWheelEvent, window, cx| {
+                this.scroll_by(f32::from(event.delta.pixel_delta(window.line_height()).y) * 2.5, cx);
+                cx.stop_propagation();
+            }))
+            .on_action(cx.listener(|this, _: &crate::actions::Up, _, cx| this.scroll_by(90., cx)))
+            .on_action(cx.listener(|this, _: &crate::actions::Down, _, cx| this.scroll_by(-90., cx)))
+            .on_action(cx.listener(|this, _: &PageUp, _, cx| this.scroll_by(520., cx)))
+            .on_action(cx.listener(|this, _: &PageDown, _, cx| this.scroll_by(-520., cx)));
         if self.slug.is_empty() { return body.child(div().text_color(theme.muted_foreground).child("Open a problem from the roadmap or search.")); }
         if let Some(status) = &self.status { return body.child(div().text_color(theme.muted_foreground).child(status.clone())); }
         body.child(div().text_size(px(24.)).font_weight(FontWeight::BOLD).child(self.title.clone()))
@@ -183,7 +205,7 @@ impl Render for Statement {
                 v_flex().gap_4().when(show_tags, |view| view.child(h_flex().flex_wrap().gap_1().children(self.topics.iter().map(|topic| {
                     h_flex().gap_1().px_1p5().py_0p5().rounded_md().bg(theme.muted).text_xs().text_color(theme.muted_foreground)
                         .child(Icon::new(tag_icon(topic)).size_3().text_color(rgb(0xa0c4ff))).child(topic.clone())
-                })))).child(self.render_blocks(cx))
+                })))).child(self.render_sections(cx))
                     .children(self.hints.iter().take(self.hints_shown).enumerate().map(|(index, hint)| {
                         v_flex().p_3().gap_1().rounded_md().bg(theme.muted)
                             .child(div().text_xs().font_weight(FontWeight::SEMIBOLD).text_color(theme.primary).child(format!("Hint {}", index + 1)))

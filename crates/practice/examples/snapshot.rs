@@ -12,9 +12,13 @@ fn main() -> Result<()> {
         "--source" => source = args.next().ok_or_else(|| anyhow::anyhow!("--source needs neetcode150, leetcode, or codeforces"))?,
         "--import" => import = Some(PathBuf::from(args.next().ok_or_else(|| anyhow::anyhow!("--import needs Open-R1 JSONL"))?)),
         "--json" => {},
-        "--help" => { println!("snapshot --source <neetcode150|leetcode|codeforces> [--output PATH] [--import OPEN_R1_JSONL] [--json]\nBundles full NeetCode 150 and metadata-only LeetCode/Codeforces catalogs; no accounts, progress, or credentials. Codeforces downloads only Open-R1 catalog metadata with DuckDB, or imports JSONL; statements load on demand. See docs/bundle.md."); return Ok(()); },
+        "--help" => { println!("snapshot --source <neetcode150|leetcode|codeforces|codeforces-index> [--output PATH] [--import OPEN_R1_JSONL] [--json]\nBundles full NeetCode 150 and metadata-only LeetCode/Codeforces catalogs; no accounts, progress, or credentials. Codeforces downloads only Open-R1 catalog metadata with DuckDB, or imports JSONL; statements load on demand. codeforces-index requires --output PATH.json and projects only lookup metadata. See docs/bundle.md."); return Ok(()); },
         _ => bail!("Unknown argument {arg}"),
     }}
+    if source == "codeforces-index" {
+        if output.extension().and_then(|value| value.to_str()) != Some("json") { bail!("codeforces-index requires --output PATH.json; SQLite bundles are never overwritten"); }
+        return download_codeforces_index(&output);
+    }
     let db = Arc::new(Db::open_unseeded(&output)?); let omissions = Arc::new(std::sync::Mutex::new(BTreeMap::<String,String>::new())); let failures = Arc::new(std::sync::Mutex::new(BTreeMap::<String,String>::new()));
     match source.as_str() {
         "neetcode150" | "leetcode" => {
@@ -92,6 +96,39 @@ fn main() -> Result<()> {
     std::fs::write(output.with_extension(format!("{source}.json")),serde_json::to_vec_pretty(&report)?)?;
     println!("{report}");
     if !failures.is_empty() { bail!("{} records unavailable; bundle preserved for retry",failures.len()); }
+    Ok(())
+}
+
+fn download_codeforces_index(output: &std::path::Path) -> Result<()> {
+    let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(Duration::from_secs(60))).build().into();
+    let files: Value = agent.get("https://datasets-server.huggingface.co/parquet?dataset=open-r1/codeforces").call()?.body_mut().read_json()?;
+    let quote = |value: &str| format!("'{}'", value.replace('\'', "''"));
+    let mut index = BTreeMap::new();
+    for split in ["train", "test"] {
+        let mut urls: Vec<String> = files["parquet_files"].as_array().into_iter().flatten()
+            .filter(|file| file["config"] == "default" && file["split"] == split)
+            .filter_map(|file| file["url"].as_str().map(str::to_owned)).collect();
+        urls.sort();
+        if urls.is_empty() { bail!("No snapshot files for {split}"); }
+        let rows = std::env::temp_dir().join(format!("leet-snapshot-index-{split}.jsonl"));
+        let script = rows.with_extension("sql");
+        std::fs::write(&script, format!("INSTALL httpfs; LOAD httpfs; SET threads=1; COPY (SELECT row_number() OVER () - 1 AS row_idx, id, aliases FROM read_parquet([{}])) TO {} (FORMAT JSON);",
+            urls.iter().map(|url| quote(url)).collect::<Vec<_>>().join(","), quote(&rows.to_string_lossy())))?;
+        let status = std::process::Command::new("duckdb").args(["-bail", ":memory:", "-init"]).arg(script).stdin(std::process::Stdio::null()).status()?;
+        if !status.success() { bail!("Snapshot index projection failed; output preserved"); }
+        for line in std::fs::read_to_string(rows)?.lines() {
+            let row: Value = serde_json::from_str(line)?;
+            let location = json!([split, row["row_idx"], row["id"]]);
+            if let Some(id) = row["id"].as_str() { index.insert(id.to_owned(), location.clone()); }
+            for alias in row["aliases"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+                index.insert(alias.to_owned(), location.clone());
+            }
+        }
+    }
+    let temporary = output.with_extension("json.tmp");
+    std::fs::write(&temporary, serde_json::to_vec(&index)?)?;
+    std::fs::rename(temporary, output)?;
+    println!("{}", json!({"environment":"local-public-index", "output":output, "identities":index.len(), "bytes":std::fs::metadata(output)?.len()}));
     Ok(())
 }
 

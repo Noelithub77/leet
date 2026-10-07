@@ -106,3 +106,13 @@
 
 - Topic panels open and close with a 280 ms eased reveal and content fade. The graph uses the same animated width, avoiding a sudden layout jump.
 - Panel contents retain their final width during the reveal; rapid opening/closing reverses the current transition. The toolkit respects reduced-motion preferences.
+## 2026-10-07 · Contest Python and reliable Codeforces loading
+
+- Codeforces falls back to the approved historical Open-R1 snapshot when live statements fail. A 381 KB public identity index locates one row on demand; downloaded statements and examples persist in the private SQLite cache.
+- Native Axum/Tokio receiver accepts Competitive Companion Codeforces samples on `127.0.0.1:13337`. Settings expose enable/disable and the port. Imported samples persist without replacing complete statements or solution files.
+- Python IntelliSense recognises preloaded contest helpers and judge node types. Python diagnostics show syntax/indentation errors and suppress development type-checking noise; completion and documentation remain available.
+- Local Python runners preload common contest modules/helpers. Solution only includes the active judge interface and language; a wrong method is caught before test execution.
+- Description scrolling is faster. Description opens expanded; Examples and Constraints are separate expandable sections, initially collapsed.
+- Sarah Pink is a bundled light theme with blush surfaces, rose accents, and pastel lavender details. Vesper remains the default.
+- Restored the bottom-left leet label. The language uses its logo with a tooltip; clicking the AI mode opens its prompt configuration.
+- Removed the obsolete `vg` launcher. Deployments maintain `leet` and `1337` and preserve legacy user-data paths.

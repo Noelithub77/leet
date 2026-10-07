@@ -17,7 +17,7 @@ Use responsibility-based names, never generic catch-all names or product-name pr
 
 ## Operator commands
 
-Discover `./ops --help`. Run `./ops check --json` after changes, then `./ops local:deploy --json` after each completed milestone. Deployment builds the release app, installs versioned binaries and `leet.desktop`, points `~/.local/bin/leet` at the new build, and keeps `vg` as a compatibility alias and `1337` as an Easter egg launch alias. Running windows offer a restart. It preserves existing configuration, cache, credentials, and solution repositories; never run account setup during a rebuild.
+Discover `./ops --help`. Run `./ops check --json` after changes, then `./ops local:deploy --json` after each completed milestone. Deployment builds the release app, installs versioned binaries and `leet.desktop`, points `~/.local/bin/leet` at the new build, and keeps `1337` as an Easter egg launch alias and removes the obsolete `vg` launcher. Running windows offer a restart. It preserves existing configuration, cache, credentials, and solution repositories; never run account setup during a rebuild.
 
 Use `./ops snapshot --help` for public bundle refreshes. Data operations must identify their environment and report real outcomes. Snapshot tooling may use the approved DuckDB CLI only for Codeforces metadata; the app uses Diesel/SQLite. Inspect the SQLite bundle for private records and checkpoint/compact it before committing.
 

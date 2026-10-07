@@ -169,6 +169,21 @@ pub fn parse_statement(slug: &str, html: &str) -> Result<crate::leetcode::Questi
 }
 
 pub fn question(slug: &str) -> Result<crate::leetcode::Question> {
+    match live_question(slug) {
+        Ok(question) => Ok(question),
+        Err(live) => crate::codeforces_snapshot::question(slug)
+            .map_err(|snapshot| anyhow::anyhow!("Codeforces statement unavailable ({live}). Snapshot fallback: {snapshot}")),
+    }
+}
+
+pub fn cached_question(db: &crate::db::Db, slug: &str) -> Result<crate::leetcode::Question> {
+    if let Some(question) = db.question(slug)? { return Ok(question); }
+    let question = question(slug)?;
+    db.save_question(&question)?;
+    Ok(question)
+}
+
+fn live_question(slug: &str) -> Result<crate::leetcode::Question> {
     let url = problem_url(slug)?;
     let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(Duration::from_secs(30))).build().into();
     let mut response = agent.get(&url).header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36").call()?;

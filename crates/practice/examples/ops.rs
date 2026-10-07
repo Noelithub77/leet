@@ -14,7 +14,18 @@ fn execute()->Result<()> {
     let args:Vec<_>=std::env::args().skip(1).collect();
     let command=args.first().map(String::as_str).unwrap_or("--help");
     if matches!(command,"--help"|"-h"|"help"){
-        println!("./ops <check|build|local:deploy|snapshot> [--json]\n\ncheck         Rust workspace tests.\nbuild         Release desktop build.\nlocal:deploy  Build/install leet, vg and 1337 aliases, desktop entry/icon; verify version and links.\nsnapshot      Public-only SQLite refresh; use ./ops snapshot --help.\n\nLocal environment. Preserves settings, credentials, cache, and Solutions. Running windows offer restart.");return Ok(());
+        println!("./ops <check|build|local:deploy|snapshot|cache:fetch> [--json]\n\ncheck         Rust workspace tests.\nbuild         Release desktop build.\nlocal:deploy  Build/install leet and 1337 commands, desktop entry/icon; verify version and links.\nsnapshot      Public-only SQLite refresh; use ./ops snapshot --help.\ncache:fetch   Cache one Codeforces statement: --slug cf:CONTEST:INDEX.\n\nLocal environment. Preserves settings, credentials, cache, and Solutions. Running windows offer restart.");return Ok(());
+    }
+    if command == "cache:fetch" {
+        if args.len() < 3 || args.len() > 4 || args[1] != "--slug" || args.get(3).is_some_and(|arg| arg != "--json") {
+            bail!("Use ./ops cache:fetch --slug cf:CONTEST:INDEX [--json]");
+        }
+        practice::codeforces::problem_id(&args[2])?;
+        let path = practice::config::database_path(); let db = practice::db::Db::open(&path)?;
+        let cached = db.question(&args[2])?.is_some();
+        let q = practice::codeforces::cached_question(&db, &args[2])?;
+        println!("{}", json!({"command":command,"environment":"local-user-cache","database":path,"slug":q.slug,"cache_hit":cached,"statement_source":q.meta["statementSource"],"samples":q.examples.len(),"statement_bytes":q.content.len()}));
+        return Ok(());
     }
     if args.iter().skip(1).any(|arg|arg!="--json"){bail!("Unexpected argument; use ./ops --help");}
     match command {
@@ -31,14 +42,20 @@ fn execute()->Result<()> {
             let stamp=SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
             let installed=builds.join(format!("leet-{stamp}-{revision}"));
             std::fs::copy("target/release/leet",&installed)?;
-            for name in ["leet", "vg", "1337"] { link(&installed, &bin.join(name))?; }
+            for name in ["leet", "1337"] { link(&installed, &bin.join(name))?; }
+            let legacy = bin.join("vg");
+            if legacy.symlink_metadata().is_ok() {
+                let target = std::fs::canonicalize(&legacy)?;
+                if !target.starts_with(&builds) { bail!("vg points to an unrelated executable; it was preserved"); }
+                std::fs::remove_file(&legacy)?;
+            }
             desktop(&home,&bin.join("leet"))?;
-            for name in ["leet","vg","1337"]{if std::fs::canonicalize(bin.join(name))?!=installed{bail!("{name} command verification failed");}}
+            for name in ["leet","1337"]{if std::fs::canonicalize(bin.join(name))?!=installed{bail!("{name} command verification failed");}}
             let version=Command::new(bin.join("leet")).arg("--version").output()?;
             if !version.status.success(){bail!("Installed leet could not report its version");}
             let version=String::from_utf8(version.stdout)?.trim().to_owned();
             prune(&builds,&installed)?;
-            println!("{}",json!({"command":command,"environment":"local","revision":revision,"binary":installed,"installed":bin.join("leet"),"compatibility_alias":bin.join("vg"),"easter_egg_alias":bin.join("1337"),"desktop":home.join(".local/share/applications/leet.desktop"),"version":version}));return Ok(());
+            println!("{}",json!({"command":command,"environment":"local","revision":revision,"binary":installed,"installed":bin.join("leet"),"removed_alias":legacy,"easter_egg_alias":bin.join("1337"),"desktop":home.join(".local/share/applications/leet.desktop"),"version":version}));return Ok(());
         },
         _=>bail!("Unknown command {command}; use ./ops --help"),
     }

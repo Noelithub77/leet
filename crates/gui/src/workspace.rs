@@ -171,6 +171,8 @@ impl Render for EditorPane {
 }
 
 pub struct Workspace {
+    pub companion_task: Option<Task<()>>,
+    pub companion_status: String,
     pub intelligence: crate::language_server::Intelligence,
     pub onboarding: Option<Entity<crate::onboarding::Setup>>,
     pub home: crate::home::HomeState,
@@ -249,6 +251,8 @@ impl Workspace {
         let (omni, omni_sub) = Omnibar::new(window, cx);
         cx.set_global(crate::statement::TagsVisible(config.show_tags));
         let mut this = Self {
+            companion_task: None,
+            companion_status: String::new(),
             onboarding: None,
             home: crate::home::HomeState::default(),
             recent_slugs,
@@ -313,6 +317,7 @@ impl Workspace {
         if accounts[1].is_some() { this.refresh_neetcode(window, cx); }
         this._tasks.push(this.watch_disk(window, cx));
         this._tasks.push(crate::update::watch(window, cx));
+        this.start_companion(window, cx);
         if !this.config.onboarding_completed { this.begin_onboarding(false, window, cx); }
         else if this.config.codeforces_handle.is_empty() { this.begin_onboarding(true, window, cx); }
         if this.config.source == Source::Codeforces { this.refresh_codeforces(false, window, cx); }
@@ -650,7 +655,7 @@ impl Workspace {
                     let mut q = match db.question(&fetch_slug)? {
                         Some(q) => q,
                         None => {
-                            let q = if fetch_slug.starts_with("cf:") { practice::codeforces::question(&fetch_slug)? } else { client.question(&fetch_slug)? };
+                            let q = if fetch_slug.starts_with("cf:") { practice::codeforces::cached_question(&db, &fetch_slug)? } else { client.question(&fetch_slug)? };
                             db.save_question(&q)?;
                             q
                         }
@@ -729,6 +734,20 @@ impl Workspace {
         if self.focus_area == Focus::Editor {
             self.focus_editor(window, cx);
         }
+    }
+
+    pub(crate) fn apply_imported_question(&mut self, q: Question, window: &mut Window, cx: &mut Context<Self>) -> anyhow::Result<()> {
+        let Some(session) = self.session.as_ref().filter(|session| session.slug == q.slug && session.question.is_none()) else { return Ok(()); };
+        let rel = session.rel.clone();
+        let starter = q.starter(session.language).ok_or_else(|| anyhow::anyhow!("Imported question has no starter"))?;
+        let path = ws::ensure_solution(&self.config.workspace, &rel, starter)?;
+        let code = std::fs::read_to_string(&path)?;
+        let mtime = std::fs::metadata(&path).and_then(|meta| meta.modified()).ok();
+        let statement = practice::description::parse(&q.content);
+        let saved_cases = self.db.test_cases(&q.slug)?;
+        self.apply_loaded(Loaded { q, rel, path, code, mtime, custom: vec![], saved_cases,
+            history: vec![], statement, hints: vec![] }, window, cx);
+        Ok(())
     }
 
     pub(crate) fn schedule_save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1016,6 +1035,7 @@ impl Workspace {
                 url: &url,
                 statement_html: &q.content,
                 code: &code,
+                starter: q.starter(s.language).unwrap_or_default(),
                 language: s.language,
                 failures: &failures,
             },

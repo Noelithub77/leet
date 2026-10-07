@@ -69,8 +69,8 @@ impl Style {
         match self {
             Style::Hints => "Give me hints only, never code or the full approach. Start with the smallest nudge (what to notice in the problem). Give one hint, then stop and wait for me to ask for the next. Escalate gradually: observation, then useful data structure or pattern, then the key insight. If my attempt is below, point at the first thing to reconsider without fixing it.",
             Style::Guided => "Teach me to solve this like a patient tutor using the Socratic method. Do not give the solution or code up front. Ask me one question at a time that leads me toward the key insight, wait for my answer, and adapt to it. Build intuition from brute force to the optimal approach, and make me state the time and space complexity myself. If my attempt is below, start from where I am.",
-            Style::Full => "Explain this problem completely: 1) the intuition and the pattern it belongs to, 2) brute force, then the optimal approach and why it works, 3) clean, idiomatic Python 3 code, 4) time and space complexity, 5) edge cases and common pitfalls. If my attempt and failing tests are below, explain exactly why each fails and how to fix my code with minimal changes.",
-            Style::SolutionOnly => "Give only the optimal, clean Python 3 solution in LeetCode's class format, then one line with time and space complexity. No explanation.",
+            Style::Full => "Explain this problem completely: 1) the intuition and the pattern it belongs to, 2) brute force, then the optimal approach and why it works, 3) clean, idiomatic code in the requested language, 4) time and space complexity, 5) edge cases and common pitfalls. If my attempt and failing tests are below, explain exactly why each fails and how to fix my code with minimal changes.",
+            Style::SolutionOnly => "Return only the complete, optimal solution for the active problem in the requested language. Preserve the required entry point exactly. Include necessary imports. Output one code block, without prose, pseudocode, placeholders, or a solution to a different problem. Check the examples and edge cases before answering.",
         }
     }
 }
@@ -82,6 +82,7 @@ pub struct Context<'a> {
     pub url: &'a str,
     pub statement_html: &'a str,
     pub code: &'a str,
+    pub starter: &'a str,
     pub language: crate::language::Language,
     /// Human-readable failing cases (input, expected, actual), already formatted.
     pub failures: &'a [String],
@@ -107,6 +108,13 @@ pub fn build_custom(style: Style, ctx: &Context, instructions: &str) -> String {
         statement.trim()
     );
     let code = ctx.code.trim();
+    out.push_str(&format!("\nRequired language: {}. Solve the problem named above; an existing attempt may belong to another question.\n", ctx.language.label()));
+    if !ctx.starter.trim().is_empty() {
+        out.push_str(&format!("\nRequired judge interface (preserve class, method names, parameters, and return type):\n```{}\n{}\n```\n", ctx.language.id(), ctx.starter.trim()));
+    }
+    if ctx.url.contains("codeforces.com") {
+        out.push_str("Use stdin/stdout and the provided program entry point. Do not return a LeetCode Solution class.\n");
+    }
     if style != Style::SolutionOnly && !code.is_empty() && !is_starter(code) {
         let mut code = code.to_owned();
         truncate(&mut code, CODE_LIMIT);
@@ -172,6 +180,19 @@ pub fn statement_markdown(html: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn solution_only_preserves_the_active_judge_interface_in_all_languages() {
+        let mut context = ctx("class Solution:\n    def minWindow(self, s, t): pass", &[]);
+        context.title = "Insert Interval";
+        context.starter = "class Solution:\n    def insert(self, intervals: list[list[int]], newInterval: list[int]) -> list[list[int]]:";
+        let prompt = build(Style::SolutionOnly, &context);
+        assert!(prompt.contains("def insert(")); assert!(!prompt.contains("def minWindow("));
+        context.language = crate::language::Language::Cpp;
+        context.starter = "int main() { }"; context.url = "https://codeforces.com/contest/4/problem/A";
+        let prompt = build_custom(Style::SolutionOnly, &context, "Custom instruction");
+        assert!(prompt.contains("Required language: C++")); assert!(prompt.contains("Use stdin/stdout"));
+        assert!(!prompt.contains("Python 3 solution"));
+    }
 
     fn ctx<'a>(code: &'a str, failures: &'a [String]) -> Context<'a> {
         Context {
@@ -181,6 +202,7 @@ mod tests {
             statement_html: "<p>Given <code>nums</code>, 10<sup>4</sup>&nbsp;max.</p><ul><li>one</li></ul>",
             code,
             language: crate::language::Language::Python,
+            starter: "class Solution:\n    def twoSum(self, nums: list[int], target: int) -> list[int]:",
             failures,
         }
     }

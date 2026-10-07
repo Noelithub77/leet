@@ -13,7 +13,7 @@ const THEMES: &[&str] = themes!(
     "catppuccin.json", "everforest.json", "fahrenheit.json", "flexoki.json", "gruvbox.json",
     "harper.json", "hybrid.json", "jellybeans.json", "kibble.json", "macos-classic.json",
     "mellifluous.json", "molokai.json", "solarized.json", "spaceduck.json", "tokyonight.json",
-    "twilight.json",
+    "twilight.json", "sarah-pink.json",
 );
 
 pub const DEFAULT: &str = "Vesper";
@@ -73,7 +73,7 @@ pub fn apply(name: &str, cx: &mut App) -> bool {
         theme.apply_config(&config);
         theme.mode = config.mode;
         let cyan = rgb(0x8be9fd);
-        theme.tab_active = cyan.opacity(0.14).into();
+        theme.tab_active = if theme.mode.is_dark() { cyan.opacity(0.14).into() } else { rgb(0x167385).into() };
         theme.tab_active_foreground = rgb(0xffffff).into();
         theme.tokens.tab_active = theme.tab_active.into();
         theme.radius = px(10.);
@@ -116,7 +116,7 @@ pub fn names(cx: &App) -> Vec<SharedString> {
 pub fn selected_choice(button: Button, selected: bool, cx: &App) -> Button {
     let button = button.selected(selected);
     if !selected { return button; }
-    let accent: Hsla = rgb(0x99ffe4).into();
+    let accent: Hsla = rgb(if Theme::global(cx).mode.is_dark() { 0x99ffe4 } else { 0x26786b }).into();
     button.custom(ButtonCustomVariant::new(cx)
         .foreground(accent)
         .color(accent.opacity(0.16))

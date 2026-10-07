@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod accounts;
+mod companion;
 mod ai;
 mod brand;
 mod assets;

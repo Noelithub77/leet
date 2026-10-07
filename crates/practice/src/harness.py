@@ -11,6 +11,7 @@ from heapq import *
 from itertools import *
 from math import *
 from typing import *
+from bisect import *
 
 sys.setrecursionlimit(1_000_000)
 
@@ -152,6 +153,17 @@ def main():
         return
     meta = spec["meta"]
     design = bool(meta.get("systemdesign")) or "classname" in meta
+    if not design:
+        expected = meta.get("name", "")
+        solution_class = module.get("Solution")
+        if not callable(solution_class) or not callable(getattr(solution_class, expected, None)):
+            available = [name for name in vars(solution_class or {}).keys() if not name.startswith("_")] if isinstance(solution_class, type) else []
+            message = f"Wrong solution interface: this question requires Solution.{expected}(...)."
+            if available:
+                message += " Found: " + ", ".join(available) + "."
+            message += " Check that the code belongs to the active question, or request a new Solution only answer."
+            print(json.dumps({"compile_error": message}), flush=True)
+            return
     for case in spec["cases"]:
         stdout = io.StringIO()
         start = time.perf_counter()

@@ -60,7 +60,10 @@ pub fn run(language: Language, python: &str, path: &Path, cases: &[Case], timeou
         if !output.success { return Ok(Some(if output.timeout { "Compilation timed out".into() } else { output.stderr })); }
     }
     for case in cases {
-        let mut command = if language == Language::Python { let mut cmd = Command::new(python); cmd.arg("-u").arg(path); cmd } else { Command::new(&binary) };
+        let mut command = if language == Language::Python {
+            let mut cmd = Command::new(python);
+            cmd.args(["-u", "-c"]).arg(format!("{}\nimport runpy\nrunpy.run_path(sys.argv[1], run_name='__main__', init_globals=globals())", crate::python::PRELUDE)).arg(path); cmd
+        } else { Command::new(&binary) };
         command.current_dir(path.parent().unwrap_or(Path::new(".")));
         let output = execute(command, format!("{}\n", case.input.trim_end_matches('\n')), timeout, &scratch.0)?;
         let verdict = if output.timeout { Verdict::Timeout } else if !output.success { Verdict::Error }
@@ -96,5 +99,15 @@ pub fn run(language: Language, python: &str, path: &Path, cases: &[Case], timeou
         fs::write(&path, "while True: pass").unwrap(); results.clear();
         run(Language::Python, "python3", &path, &[case], Duration::from_millis(80), |r| results.push(r)).unwrap();
         assert_eq!(results[0].verdict, Verdict::Timeout);
+    }
+    #[test] fn python_contest_helpers_are_preloaded_without_changing_the_solution() {
+        let dir = tempfile::tempdir().unwrap(); let path = dir.path().join("main.py");
+        let code = "counts = Counter(map(int, input().split()))\nh = []\nheappush(h, sum(counts.values()))\nprint(heappop(h), bisect_left([1, 4, 9], 4), gcd(12, 8))\n";
+        fs::write(&path, code).unwrap();
+        let case = Case { id: 0, input: "1 1 2".into(), expected: Some("3 1 4".into()), custom: false };
+        let mut results = Vec::new();
+        run(Language::Python, "python3", &path, &[case], Duration::from_secs(2), |result| results.push(result)).unwrap();
+        assert_eq!(results[0].verdict, Verdict::Pass, "{}", results[0].error);
+        assert_eq!(fs::read_to_string(path).unwrap(), code);
     }
 }

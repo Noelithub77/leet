@@ -543,6 +543,7 @@ impl Workspace {
             .bg(theme.title_bar)
             .text_xs()
             .text_color(theme.muted_foreground)
+            .child(div().font_weight(FontWeight::SEMIBOLD).text_color(theme.primary).child("leet"))
             .when(self.syncing, |el| el.child(h_flex().gap_1().child(Spinner::new().xsmall()).child("syncing")))
             .child(div().flex_1())
             .when_some(flash, |el, (label, _)| {
@@ -553,11 +554,14 @@ impl Workspace {
             })
             .when_some(self.session.as_ref(), |row, session| {
                 let detail = self.intelligence.detail(session.language);
-                row.child(div().id("status-lsp").child(self.intelligence.label(session.language)).tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(detail.clone()).build(window, cx)))
+                row.child(div().id("status-lsp").child(gpui_kit::component::Icon::default()
+                    .path(format!("languages/{}.svg", session.language.id())).xsmall())
+                    .tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(detail.clone()).build(window, cx)))
             })
             .child(div().id("status-ai").child(h_flex().gap_1().items_center().child(crate::brand::icon(self.config.prompt_provider).xsmall()).child(self.config.prompt_style.label()))
+                .cursor_pointer().on_click(cx.listener(|this, _, window, cx| crate::ai::open(this, window, cx)))
                 .tooltip({ let label = format!("{} · {}", self.config.prompt_provider.label(), self.config.prompt_style.label());
-                    move |window, cx| gpui_kit::component::tooltip::Tooltip::new(label.clone()).action(&crate::actions::PromptDefault, Some(crate::actions::WORKSPACE)).build(window, cx) }))
+                    move |window, cx| gpui_kit::component::tooltip::Tooltip::new(label.clone()).action(&crate::actions::ConfigureAi, Some(crate::actions::WORKSPACE)).build(window, cx) }))
             .child(if self.client.signed_in() { "LeetCode ✓" } else { "LeetCode signed out" })
             .child(h_flex().gap_1().child(key(crate::actions::key_for("Search", &self.config))).child("commands"))
     }

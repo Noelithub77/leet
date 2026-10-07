@@ -106,6 +106,7 @@ impl Workspace {
         }
         match loaded {
             Ok(loaded) => self.apply_loaded(loaded, window, cx),
+            Err(_) if self.session.as_ref().and_then(|s| s.question.as_ref()).is_some_and(|q| q.meta["statementSource"] == "competitive-companion") => {},
             Err(err) => self.statement.update(cx, |s, cx| {
                 s.status = Some(err.to_string().into());
                 cx.notify();

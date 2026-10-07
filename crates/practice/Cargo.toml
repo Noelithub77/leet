@@ -6,6 +6,8 @@ license.workspace = true
 
 [dependencies]
 anyhow = "1"
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
+tokio = { version = "1", features = ["rt", "net", "sync"] }
 async-lsp = { version = "0.2.4", default-features = false }
 async-io = "2"
 async-process = "2"

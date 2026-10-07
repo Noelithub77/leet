@@ -63,7 +63,9 @@ impl Server {
                 .notification::<notification::ShowMessage>(|_, _| ControlFlow::Continue(()))
                 .notification::<notification::Progress>(|_, _| ControlFlow::Continue(()))
                 .request::<request::WorkDoneProgressCreate, _>(|_, _| async { Ok(()) })
-                .request::<request::WorkspaceConfiguration, _>(|_, params| async move { Ok(params.items.iter().map(|_| serde_json::Value::Null).collect()) })
+                .request::<request::WorkspaceConfiguration, _>(move |_, params| async move {
+                    Ok(params.items.iter().map(|item| if language == Language::Python { crate::python::configuration(item.section.as_deref().unwrap_or_default()) } else { serde_json::Value::Null }).collect())
+                })
                 .request::<request::RegisterCapability, _>(|_, _| async { Ok(()) })
                 .request::<request::UnregisterCapability, _>(|_, _| async { Ok(()) })
                 .event(|_, _: Stop| ControlFlow::Break(Ok(())));
@@ -119,17 +121,17 @@ impl Server {
     pub async fn open(self: &Arc<Self>, path: &Path, language: Language, text: String) -> Result<Arc<Document>> {
         self.ready().await?;
         let uri = lsp::Url::from_file_path(path).map_err(|_| anyhow::anyhow!("Invalid document path"))?;
-        self.socket.notify::<notification::DidOpenTextDocument>(lsp::DidOpenTextDocumentParams { text_document: lsp::TextDocumentItem { uri: uri.clone(), language_id: language.id().into(), version: 1, text: text.clone() } })?;
-        Ok(Arc::new(Document { server: self.clone(), uri, content: Mutex::new((1, text)) }))
+        self.socket.notify::<notification::DidOpenTextDocument>(lsp::DidOpenTextDocumentParams { text_document: lsp::TextDocumentItem { uri: uri.clone(), language_id: language.id().into(), version: 1, text: crate::python::language_document(language, &text) } })?;
+        Ok(Arc::new(Document { server: self.clone(), uri, language, content: Mutex::new((1, text)) }))
     }
 }
-pub struct Document { pub server: Arc<Server>, pub uri: lsp::Url, content: Mutex<(i32, String)> }
+pub struct Document { pub server: Arc<Server>, pub uri: lsp::Url, language: Language, content: Mutex<(i32, String)> }
 impl Document {
     pub fn sync(&self, text: String) -> Result<()> {
         let mut content = lock(&self.content);
         if content.1 == text { return Ok(()); }
         let version = content.0 + 1;
-        self.server.socket.notify::<notification::DidChangeTextDocument>(lsp::DidChangeTextDocumentParams { text_document: lsp::VersionedTextDocumentIdentifier { uri: self.uri.clone(), version }, content_changes: vec![lsp::TextDocumentContentChangeEvent { range: None, range_length: None, text: text.clone() }] })?;
+        self.server.socket.notify::<notification::DidChangeTextDocument>(lsp::DidChangeTextDocumentParams { text_document: lsp::VersionedTextDocumentIdentifier { uri: self.uri.clone(), version }, content_changes: vec![lsp::TextDocumentContentChangeEvent { range: None, range_length: None, text: crate::python::language_document(self.language, &text) }] })?;
         *content = (version, text); Ok(())
     }
     pub fn position(&self, text: &str, offset: usize) -> lsp::TextDocumentPositionParams {
@@ -143,7 +145,16 @@ impl Document {
         let state = lock(&self.server.state);
         let (sequence, params) = state.diagnostics.get(&self.uri)?;
         if params.version.is_some_and(|version| version != lock(&self.content).0) { return None; }
-        Some((*sequence, params.diagnostics.clone()))
+        let user_lines = lock(&self.content).1.split('\n').count() as u32;
+        Some((*sequence, params.diagnostics.iter().filter_map(|diagnostic| {
+            let mut diagnostic = diagnostic.clone();
+            if self.language == Language::Python && diagnostic.code.is_none()
+                && diagnostic.range.start.line >= user_lines && diagnostic.message.contains("Expected indented block") {
+                let end = lsp::Position::new(user_lines.saturating_sub(1), 0);
+                diagnostic.range = lsp::Range::new(end, end);
+            }
+            crate::python::syntax_diagnostic(self.language, &diagnostic, user_lines).then_some(diagnostic)
+        }).collect()))
     }
     pub fn subscribe(&self) -> futures::channel::mpsc::Receiver<()> {
         let (mut sender, receiver) = futures::channel::mpsc::channel(1);
@@ -159,6 +170,27 @@ impl Drop for Document { fn drop(&mut self) { let _ = self.server.socket.notify:
 
 #[cfg(test)] mod tests {
     use super::*;
+    #[test]
+    #[ignore = "requires basedpyright or pyright"]
+    fn live_python_contest_prelude_and_syntax_only_diagnostics() {
+        async_io::block_on(async {
+            let root = tempfile::tempdir().unwrap(); let path = root.path().join("main.py");
+            let text = "class Solution:\n    def f(self, values: List[int]):\n        counts = defaultdict(int)\n        return counts\n";
+            std::fs::write(&path, text).unwrap();
+            let server = Server::start(Language::Python, root.path()).unwrap();
+            let doc = server.open(&path, Language::Python, text.into()).await.unwrap();
+            async_io::Timer::after(Duration::from_secs(2)).await;
+            let hover = server.request::<request::HoverRequest>(lsp::HoverParams { text_document_position_params: doc.position(text, text.find("defaultdict").unwrap() + 1), work_done_progress_params: Default::default() }).await.unwrap();
+            assert!(hover.is_some(), "preloaded defaultdict has docs");
+            assert!(doc.diagnostics().is_some_and(|(_, diagnostics)| diagnostics.is_empty()), "no unknown-type noise");
+            doc.sync("class Solution:\n    def f(self):\n".into()).unwrap();
+            for _ in 0..30 {
+                async_io::Timer::after(Duration::from_millis(100)).await;
+                if doc.diagnostics().is_some_and(|(_, diagnostics)| diagnostics.iter().any(|diagnostic| diagnostic.message.contains("Expected indented block"))) { return; }
+            }
+            panic!("missing method body must retain its syntax diagnostic");
+        });
+    }
     #[test]
     #[ignore = "requires installed language servers"]
     fn live_completion_hover_definition_and_diagnostics() {
