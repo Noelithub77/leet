@@ -1,0 +1,249 @@
+//! Every command, its default key, and its palette label. One table drives both.
+
+use gpui_kit::*;
+use gpui_kit::component::input::{GoToDefinition, ToggleCodeActions};
+use crate::language_server::Complete;
+
+gpui_kit::actions!(
+    vg,
+    [
+        ShowHome,
+        CloseProblem,
+        CycleTabs,
+        PreviousTab,
+        ToggleLeft,
+        ToggleRight,
+        ToggleReference,
+        ToggleTags,
+        ToggleBottom,
+        ToggleHistory,
+        ToggleZen,
+        ToggleRoadmap,
+        FocusSidebar,
+        FocusEditor,
+        FocusStatement,
+        FindProblem,
+        Search,
+        OpenSettings,
+        PickTheme,
+        CycleList,
+        CycleSource,
+        RunTests,
+        JudgeRun,
+        Submit,
+        NextProblem,
+        PrevProblem,
+        NextCase,
+        PrevCase,
+        AddCustomTest,
+        PromptHints,
+        PromptGuided,
+        PromptFull,
+        PromptSolution,
+        PromptDefault,
+        ConfigureAi,
+        ToggleProvider,
+        CycleStyle,
+        OpenExternal,
+        OpenInBrowser,
+        RefreshCatalog,
+        MarkNeetCode,
+        RevealHint,
+        ResetSolution,
+        Restart,
+        ZoomIn,
+        ZoomOut,
+        ZoomReset,
+        Quit,
+        // Sidebar and roadmap navigation, active only while they have focus.
+        Up,
+        Down,
+        Left,
+        Right,
+        Confirm,
+        Back,
+    ]
+);
+
+pub const WORKSPACE: &str = "Workspace";
+pub const NAV: &str = "VgNav";
+
+pub struct Command {
+    pub id: &'static str,
+    pub label: &'static str,
+    /// Default key; `|` separates alternatives, the first is shown.
+    pub key: &'static str,
+    pub action: fn() -> Box<dyn Action>,
+}
+
+macro_rules! cmd {
+    ($label:literal, $key:literal, $action:ident) => {
+        Command { id: stringify!($action), label: $label, key: $key, action: || Box::new($action) }
+    };
+}
+
+/// Global commands. Keys follow the user's VS Code bindings (modifiers only, no bare letters).
+pub const COMMANDS: &[Command] = &[
+    cmd!("Show Home", "ctrl-.", ShowHome),
+    cmd!("Close problem tab", "ctrl-w", CloseProblem),
+    cmd!("Next tab", "ctrl-tab", CycleTabs),
+    cmd!("Previous tab", "ctrl-shift-tab", PreviousTab),
+    cmd!("Search everything", "ctrl-k|ctrl-shift-p", Search),
+    cmd!("Go to problem", "ctrl-p", FindProblem),
+    cmd!("Settings", "ctrl-,", OpenSettings),
+    cmd!("Run tests", "ctrl-enter", RunTests),
+    cmd!("Run on LeetCode", "ctrl-shift-enter", JudgeRun),
+    cmd!("Submit to LeetCode", "ctrl-alt-enter", Submit),
+    cmd!("Toggle sidebar", "alt-s", ToggleLeft),
+    cmd!("Toggle statement", "alt-d", ToggleRight),
+    cmd!("Toggle reference solution", "ctrl-alt-v", ToggleReference),
+    cmd!("Show/hide problem tags", "ctrl-shift-t", ToggleTags),
+    cmd!("Toggle results", "alt-x", ToggleBottom),
+    cmd!("Solution history", "ctrl-g", ToggleHistory),
+    cmd!("Roadmap", "alt-r", ToggleRoadmap),
+    cmd!("Zen mode", "alt-z", ToggleZen),
+    cmd!("Focus sidebar", "ctrl-0", FocusSidebar),
+    cmd!("Focus editor", "ctrl-1", FocusEditor),
+    cmd!("Focus problem description", "ctrl-2", FocusStatement),
+    cmd!("Editor completions", "ctrl-space", Complete),
+    cmd!("Go to definition", "ctrl-f12", GoToDefinition),
+    cmd!("Editor code actions", "alt-enter", ToggleCodeActions),
+    cmd!("Next problem", "alt-n", NextProblem),
+    cmd!("Previous problem", "alt-p", PrevProblem),
+    cmd!("Next test case", "alt-.", NextCase),
+    cmd!("Previous test case", "alt-,", PrevCase),
+    cmd!("Add custom test", "ctrl-alt-t", AddCustomTest),
+    cmd!("AI: Hints only", "ctrl-alt-1", PromptHints),
+    cmd!("AI: Guided learning", "ctrl-alt-2", PromptGuided),
+    cmd!("AI: Full explanation", "ctrl-alt-3", PromptFull),
+    cmd!("AI: Solution only", "ctrl-alt-4", PromptSolution),
+    cmd!("AI: Assist", "alt-e", PromptDefault),
+    cmd!("AI: Configure", "ctrl-shift-e", ConfigureAi),
+    cmd!("AI: Switch provider", "ctrl-alt-a", ToggleProvider),
+    cmd!("AI: Change default prompt style", "ctrl-alt-s", CycleStyle),
+    cmd!("Cycle NeetCode list", "ctrl-alt-l", CycleList),
+    cmd!("Switch practice source", "ctrl-alt-o", CycleSource),
+    cmd!("Toggle NeetCode completion", "ctrl-alt-m", MarkNeetCode),
+    cmd!("Reveal next hint", "ctrl-alt-h", RevealHint),
+    cmd!("Open in external editor", "ctrl-e", OpenExternal),
+    cmd!("Open problem in browser", "ctrl-o", OpenInBrowser),
+    cmd!("Change theme", "", PickTheme),
+    cmd!("Refresh catalog and progress", "ctrl-alt-r", RefreshCatalog),
+    cmd!("Reset Solution to starter code", "", ResetSolution),
+    cmd!("Zoom in", "ctrl-=|ctrl-+|ctrl-shift-=", ZoomIn),
+    cmd!("Zoom out", "ctrl--", ZoomOut),
+    cmd!("Reset zoom", "", ZoomReset),
+    cmd!("Restart into new build", "ctrl-shift-r", Restart),
+    cmd!("Quit", "ctrl-q", Quit),
+];
+
+pub struct ComponentBindings(pub Vec<KeyBinding>);
+impl Global for ComponentBindings {}
+
+impl Command {
+    pub fn effective_key<'a>(&'a self, config: &'a practice::config::Config) -> &'a str {
+        config.keybindings.get(self.id).map(String::as_str).unwrap_or(self.key)
+    }
+}
+
+pub fn key_for<'a>(id: &str, config: &'a practice::config::Config) -> &'a str {
+    COMMANDS.iter().find(|command| command.id == id).map_or("", |command| command.effective_key(config))
+}
+
+pub fn reload_keys(config: &practice::config::Config, cx: &mut App) {
+    let base = cx.global::<ComponentBindings>().0.clone();
+    cx.clear_key_bindings();
+    cx.bind_keys(base);
+    bind_keys(config, cx);
+    crate::omnibar::bind_keys(cx);
+    crate::accounts::bind_keys(cx);
+    crate::settings::bind_keys(cx);
+    crate::ai::bind_keys(cx);
+}
+
+pub fn bind_keys(config: &practice::config::Config, cx: &mut App) {
+    let mut bindings: Vec<KeyBinding> = COMMANDS
+        .iter()
+        .flat_map(|c| c.effective_key(config).split('|').filter(|k| !k.is_empty()).map(move |k| (c, k)))
+        .filter_map(|(c, key)| {
+            let context = KeyBindingContextPredicate::parse(WORKSPACE).expect("valid context");
+            KeyBinding::load(key, (c.action)(), Some(context.into()), false, None, cx.keyboard_mapper().as_ref())
+                .map_err(|error| eprintln!("leet: invalid shortcut for {}: {error}", c.label)).ok()
+        })
+        .collect();
+    // Apply the same keys in inputs, where component bindings take precedence.
+    for command in COMMANDS {
+        for key in command.effective_key(config).split('|').filter(|key| !key.is_empty()) {
+            let context = KeyBindingContextPredicate::parse("Workspace > Input").expect("valid context");
+            if let Ok(binding) = KeyBinding::load(key, (command.action)(), Some(context.into()), false, None, cx.keyboard_mapper().as_ref()) {
+                bindings.push(binding);
+            }
+        }
+    }
+    // The editor binds these itself; a deeper context wins, so re-bind them inside it.
+    bindings.extend([
+        KeyBinding::new("up", Up, Some(NAV)),
+        KeyBinding::new("down", Down, Some(NAV)),
+        KeyBinding::new("left", Left, Some(NAV)),
+        KeyBinding::new("right", Right, Some(NAV)),
+        KeyBinding::new("enter", Confirm, Some(NAV)),
+        KeyBinding::new("escape", Back, Some(NAV)),
+        // Escape while editing a setting cancels the edit instead of clearing the field.
+        KeyBinding::new("escape", Back, Some("Settings > Input")),
+        KeyBinding::new("enter", Confirm, Some("Settings > Input")),
+    ]);
+    cx.bind_keys(bindings);
+}
+
+/// Parse with GPUI, require GUI modifiers, and reject ambiguous chords.
+pub fn validate_key(index: usize, value: &str, config: &practice::config::Config) -> Result<(), String> {
+    let parse = |value: &str| -> Result<Vec<Vec<Keystroke>>, String> {
+        if value.is_empty() { return Ok(Vec::new()); }
+        value.split('|').map(|alternative| {
+            let keys: Vec<Keystroke> = alternative.split_whitespace()
+                .map(|key| Keystroke::parse(key).map_err(|error| error.to_string()))
+                .collect::<Result<_, _>>()?;
+            if keys.is_empty() || keys.iter().any(|key| {
+                let m = key.modifiers;
+                !(m.control || m.alt || m.platform)
+            }) {
+                return Err("Use Ctrl, Alt or Super with each key.".into());
+            }
+            Ok(keys)
+        }).collect()
+    };
+    let proposed = parse(value)?;
+    for (i, command) in COMMANDS.iter().enumerate() {
+        if i == index { continue; }
+        let existing = parse(command.effective_key(config))?;
+        if proposed.iter().any(|a| existing.iter().any(|b| a.starts_with(b) || b.starts_with(a))) {
+            return Err(format!("Shortcut conflicts with {}.", command.label));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[::core::prelude::v1::test]
+    fn rejects_conflicts_and_bare_keys() {
+        let config = practice::config::Config::default();
+        assert!(validate_key(COMMANDS.iter().position(|c| c.id == "Search").unwrap(), "ctrl-p", &config).is_err());
+        assert!(validate_key(COMMANDS.iter().position(|c| c.id == "Search").unwrap(), "ctrl-p ctrl-k", &config).is_err());
+        assert!(validate_key(COMMANDS.iter().position(|c| c.id == "Search").unwrap(), "k", &config).is_err());
+        assert!(validate_key(COMMANDS.iter().position(|c| c.id == "Search").unwrap(), "shift-k", &config).is_err());
+        assert!(validate_key(COMMANDS.iter().position(|c| c.id == "Search").unwrap(), "ctrl-alt-k", &config).is_ok());
+        assert!(validate_key(COMMANDS.iter().position(|c| c.id == "Search").unwrap(), "", &config).is_ok());
+    }
+
+    #[::core::prelude::v1::test]
+    fn overrides_replace_all_default_alternatives() {
+        let mut config = practice::config::Config::default();
+        config.keybindings.insert("Search".into(), "ctrl-alt-k".into());
+        assert_eq!(COMMANDS.iter().find(|c| c.id == "Search").unwrap().effective_key(&config), "ctrl-alt-k");
+        assert!(validate_key(COMMANDS.iter().position(|c| c.id == "FindProblem").unwrap(), "ctrl-k", &config).is_ok());
+        assert!(validate_key(COMMANDS.iter().position(|c| c.id == "FindProblem").unwrap(), "ctrl-alt-k", &config).is_err());
+    }
+}

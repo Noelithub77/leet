@@ -1,0 +1,3 @@
+# Leave most of the machine free while editors and agents build in the background.
+[build]
+jobs = 4

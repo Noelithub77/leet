@@ -1,0 +1,11 @@
+{
+  "bytes": 11153408,
+  "content_policy": "full-neetcode150-metadata-elsewhere",
+  "environment": "local-bundle",
+  "failures": {},
+  "leetcode_catalog": 4073,
+  "output": "crates/practice/data/base.sqlite",
+  "source": "leetcode",
+  "statements": 150,
+  "upstream_omissions": {}
+}

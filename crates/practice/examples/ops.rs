@@ -1,0 +1,69 @@
+#![forbid(unsafe_code)]
+//! Standalone, local-only project operations; credentials and user data stay untouched.
+use std::{path::{Path,PathBuf},process::{Command,Stdio},time::{SystemTime,UNIX_EPOCH}};
+use anyhow::{Result,Context,bail};
+use serde_json::json;
+
+fn run(program:&str,args:&[&str])->Result<()> {
+    let output=Command::new(program).args(args).stdout(Stdio::piped()).stderr(Stdio::inherit()).output()?;
+    eprint!("{}",String::from_utf8_lossy(&output.stdout));
+    if !output.status.success(){bail!("{program} failed with {}",output.status);} Ok(())
+}
+fn main(){if let Err(error)=execute(){eprintln!("{}",json!({"environment":"local","error":error.to_string()}));std::process::exit(1);}}
+fn execute()->Result<()> {
+    let args:Vec<_>=std::env::args().skip(1).collect();
+    let command=args.first().map(String::as_str).unwrap_or("--help");
+    if matches!(command,"--help"|"-h"|"help"){
+        println!("./ops <check|build|local:deploy|snapshot> [--json]\n\ncheck         Rust workspace tests.\nbuild         Release desktop build.\nlocal:deploy  Build/install leet and vg alias, desktop entry/icon; verify version and links.\nsnapshot      Public-only SQLite refresh; use ./ops snapshot --help.\n\nLocal environment. Preserves settings, credentials, cache, and Solutions. Running windows offer restart.");return Ok(());
+    }
+    if args.iter().skip(1).any(|arg|arg!="--json"){bail!("Unexpected argument; use ./ops --help");}
+    match command {
+        "check"=>run("cargo",&["test","--workspace"])? ,
+        "build"=>run("nice",&["-n","10","cargo","build","--release","-p","gui"])? ,
+        "local:deploy"=>{
+            run("nice",&["-n","10","cargo","build","--release","-p","gui"])?;
+            let home=dirs::home_dir().context("Home directory unavailable")?;
+            let bin=home.join(".local/bin");let builds=home.join(".local/share/leet/bin");
+            std::fs::create_dir_all(&bin)?;std::fs::create_dir_all(&builds)?;
+            let revision=Command::new("git").args(["rev-parse","--short","HEAD"]).output()?;
+            if !revision.status.success(){bail!("Commit the development checkpoint before installing");}
+            let revision=String::from_utf8(revision.stdout)?.trim().to_owned();
+            let stamp=SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+            let installed=builds.join(format!("leet-{stamp}-{revision}"));
+            std::fs::copy("target/release/leet",&installed)?;
+            link(&installed,&bin.join("leet"))?;link(&installed,&bin.join("vg"))?;
+            desktop(&home,&bin.join("leet"))?;
+            for name in ["leet","vg"]{if std::fs::canonicalize(bin.join(name))?!=installed{bail!("{name} command verification failed");}}
+            let version=Command::new(bin.join("leet")).arg("--version").output()?;
+            if !version.status.success(){bail!("Installed leet could not report its version");}
+            let version=String::from_utf8(version.stdout)?.trim().to_owned();
+            prune(&builds,&installed)?;
+            println!("{}",json!({"command":command,"environment":"local","revision":revision,"binary":installed,"installed":bin.join("leet"),"compatibility_alias":bin.join("vg"),"desktop":home.join(".local/share/applications/leet.desktop"),"version":version}));return Ok(());
+        },
+        _=>bail!("Unknown command {command}; use ./ops --help"),
+    }
+    println!("{}",json!({"command":command,"environment":"local"}));Ok(())
+}
+fn link(target:&Path,path:&Path)->Result<()> {
+    if std::fs::symlink_metadata(path).is_ok_and(|info|!info.file_type().is_symlink()){bail!("{} exists and is not a symlink; refusing to overwrite",path.display());}
+    let temp=path.with_extension(format!("{}.tmp",std::process::id()));
+    if std::fs::symlink_metadata(&temp).is_ok(){std::fs::remove_file(&temp)?;}
+    std::os::unix::fs::symlink(target,&temp)?;std::fs::rename(temp,path)?;Ok(())
+}
+fn desktop(home:&Path,command:&Path)->Result<()> {
+    let icons=home.join(".local/share/icons/hicolor/scalable/apps");let apps=home.join(".local/share/applications");
+    std::fs::create_dir_all(&icons)?;std::fs::create_dir_all(&apps)?;
+    std::fs::copy("crates/gui/assets/leet.svg",icons.join("leet.svg"))?;
+    let exec=command.to_string_lossy().replace('\\',"\\\\").replace('"',"\\\"").replace('`',"\\`").replace('$',"\\$");
+    let entry=format!("[Desktop Entry]\nType=Application\nName=leet\nGenericName=Coding practice IDE\nComment=NeetCode, LeetCode and Codeforces practice\nExec=\"{exec}\"\nIcon=leet\nTerminal=false\nStartupWMClass=leet\nCategories=Development;\nKeywords=leetcode;neetcode;codeforces;1337;\n");
+    std::fs::write(apps.join("leet.desktop"),entry)?;
+    // Retire only our old launcher; unrelated user desktop entries stay untouched.
+    let old=apps.join("vg.desktop");
+    if std::fs::read_to_string(&old).is_ok_and(|text|text.contains("Name=vg\n")&&text.contains("StartupWMClass=vg\n")) {std::fs::remove_file(old)?;}
+    Ok(())
+}
+fn prune(dir:&Path,current:&Path)->Result<()> {
+    let mut files:Vec<PathBuf>=std::fs::read_dir(dir)?.filter_map(|entry|entry.ok().map(|entry|entry.path())).filter(|path|path.file_name().is_some_and(|name|name.to_string_lossy().starts_with("leet-"))).collect();
+    files.sort();let remove=files.len().saturating_sub(3);
+    for path in files.into_iter().take(remove){if path!=current{std::fs::remove_file(path)?;}}Ok(())
+}

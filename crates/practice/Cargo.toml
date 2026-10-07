@@ -1,0 +1,34 @@
+[package]
+name = "practice"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow = "1"
+async-lsp = { version = "0.2.4", default-features = false }
+async-io = "2"
+async-process = "2"
+futures = "0.3"
+lsp-types = "0.95"
+diesel = { version = "2.3", features = ["sqlite", "returning_clauses_for_sqlite_3_35"] }
+diesel_migrations = { version = "2.3", features = ["sqlite"] }
+dirs = "6"
+git2 = { version = "0.20", default-features = false }
+html-escape = "0.2"
+htmd = "0.5"
+libsqlite3-sys = { version = "0.35", features = ["bundled"] }
+nucleo-matcher = "0.3"
+strsim = "0.11"
+open = "5"
+regex = "1"
+secret-service = { version = "5", features = ["rt-async-io-crypto-rust"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+scraper = "0.27"
+toml = "0.9"
+ureq = { version = "3", features = ["json"] }
+url = "2"
+
+[dev-dependencies]
+tempfile = "3"
