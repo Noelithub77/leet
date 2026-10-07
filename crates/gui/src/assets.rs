@@ -1,6 +1,6 @@
 use gpui_kit::*;
 
-gpui_kit::assets::icon_assets!(HomeIcons, [House, Map, X, Star, ExternalLink, Play, ArrowLeft, ChevronDown, Brackets, ArrowLeftRight, Layers, Search, PanelTop, Link, Network, GitBranch, ListOrdered, Undo2, CalendarRange, Zap, Share2, Workflow, ChartColumn, Grid2x2, Binary, Calculator, FileText, Lightbulb, Copy, Info, RefreshCw, Plus, Pencil, Tags, ArrowDownAZ]);
+gpui_kit::assets::icon_assets!(HomeIcons, [House, Map, X, Star, ExternalLink, Play, ArrowLeft, ChevronDown, Brackets, ArrowLeftRight, Layers, Search, PanelTop, Link, Network, GitBranch, ListOrdered, Undo2, CalendarRange, Zap, Share2, Workflow, ChartColumn, Grid2x2, Binary, Calculator, FileText, Lightbulb, Copy, Info, RefreshCw, Plus, Pencil, Tags, ArrowDownAZ, Download]);
 
 pub struct Assets;
 
@@ -37,5 +37,18 @@ impl AssetSource for Assets {
         paths.sort();
         paths.dedup();
         Ok(paths)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::HomeIcons;
+    use gpui_kit::AssetSource;
+
+    #[::core::prelude::v1::test]
+    fn update_icon_is_embedded_without_a_runtime_download() {
+        let path = gpui_kit::assets::IconName::Download.path();
+        let icon = HomeIcons.load(&path).unwrap().expect("Update icon must be bundled");
+        assert!(!icon.is_empty());
     }
 }

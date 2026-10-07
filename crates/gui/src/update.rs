@@ -105,14 +105,15 @@ fn install(this: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace
 pub fn button(this: &Workspace, cx: &mut Context<Workspace>) -> impl IntoElement {
     let available = this.update_ready || this.release_update.latest.as_ref().is_some_and(|latest| latest.available.is_some());
     let workspace = cx.entity().downgrade();
-    div().id("release-update-hover").relative()
+    div().id("release-update-hover").relative().flex_shrink_0()
         .hoverable_tooltip(move |_, cx| cx.new(|cx| {
             if let Some(entity) = workspace.upgrade() {
                 cx.observe(&entity, |_, _, cx| cx.notify()).detach();
             }
             Changelog { workspace: workspace.clone() }
         }).into())
-        .child(Button::new("release-updates").ghost().xsmall().icon(IconName::Download)
+        .child(Button::new("release-updates").ghost().small()
+            .icon(gpui_kit::component::Icon::new(IconName::Download).text_color(cx.theme().primary))
             .accessibility_label(if this.update_ready { "Restart updated app" } else { "Download and install update" })
             .on_click(cx.listener(|this, _, window, cx| {
                 if this.release_update.downloading { return; }

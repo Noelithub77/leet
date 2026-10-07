@@ -6,6 +6,7 @@
 
 - Check the latest stable release once per launch. The bottom-right update button has a badge when an update is available; hover for the release changelog and click to download, verify, install, and restart.
 - Save editor state before restarting and preserve settings, accounts, progress, caches, and solutions. Failed verification leaves the installed app intact.
+- Bundle the download icon for offline use and show a larger, accent-colored update icon that keeps its width in the footer.
 - Move the changelog out of Settings. When release notes are unavailable, show the bundled changelog on hover.
 - Build Linux archives and AppImages in the same native jobs, using the same executable. Cache and verify pinned AppImage packaging tools, and retain compiler flags in native build cache keys.
 
