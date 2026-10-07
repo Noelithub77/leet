@@ -138,7 +138,7 @@ jobs:
         run: target/${{ matrix.target }}/release/examples/release${{ runner.os == 'Windows' && '.exe' || '' }} --target '${{ matrix.target }}' --tag "$RELEASE_TAG" --output dist
       - name: Cache pinned AppImage packaging tools
         if: runner.os == 'Linux' && env.RELEASE_TAG != ''
-        uses: actions/cache@v4
+        uses: actions/cache@v6.1.0
         with:
           path: ${{ runner.temp }}/leet-appimage-tools
           key: appimage-tools-${{ matrix.target }}-602438599-610035789-596078161-602438213-610035595-596077442
