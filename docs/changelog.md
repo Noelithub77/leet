@@ -1,3 +1,9 @@
+## 2026-10-07 · Contest explorer status
+
+- The selected contest explorer has browser and refresh actions beside its heading, plus visible loading and unavailable status.
+- Contest list refreshes no longer clear a problem download error. Cached problems remain available while refreshing.
+- Refreshed contest 2275 into the local cache: eight problems are available.
+
 ## 2026-10-07 · Home contest tab
 
 - Home has separate Recent and Contests tabs, with Contests to the right. The contest list no longer sits below recent questions.

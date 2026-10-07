@@ -141,6 +141,13 @@ impl Workspace {
             .child(h_flex().h_9().px_2().gap_2().items_center()
                 .child(self.render_source_menu(cx))
                 .child(div().flex_1().text_xs().text_color(theme.muted_foreground).child(format!("{solved}/{total}")))
+                .when_some(self.contests.selected.filter(|_| self.config.source == practice::language::Source::Codeforces), |row, id| row
+                    .child(gpui_kit::component::button::Button::new("explorer-contest-browser").ghost().xsmall()
+                        .icon(gpui_kit::assets::IconName::ExternalLink).accessibility_label("Open contest in browser").tooltip("Open contest in browser")
+                        .on_click(move |_, _, _| { let _ = open::that_detached(format!("https://codeforces.com/contest/{id}")); }))
+                    .child(gpui_kit::component::button::Button::new("explorer-contest-refresh").ghost().xsmall()
+                        .icon(gpui_kit::assets::IconName::RefreshCw).accessibility_label("Refresh contest problems").tooltip("Refresh contest problems")
+                        .on_click(cx.listener(move |this, _, window, cx| this.refresh_contest_problems(id, window, cx)))))
                 .child(gpui_kit::component::button::Button::new("explorer-roadmap").ghost().xsmall()
                     .icon(gpui_kit::assets::IconName::Map).accessibility_label("Roadmap")
                     .tooltip_with_action("Roadmap", &crate::actions::ToggleRoadmap, Some(crate::actions::WORKSPACE))
@@ -149,6 +156,9 @@ impl Workspace {
                 .child(self.render_topic_grid(cx))
                 .child(h_flex().px_3().gap_2().child(div().flex_1().truncate().text_xs().font_weight(FontWeight::SEMIBOLD).child(TOPICS[self.explorer_topic].name))
                     .child(div().text_xs().text_color(theme.muted_foreground).child({ let (done, total) = self.library.progress(TOPICS[self.explorer_topic].name); format!("{done}/{total}") }))))
+            .when_some(self.contests.selected.filter(|_| self.config.source == practice::language::Source::Codeforces), |view, id| view
+                .when(self.contests.loading.contains(&id), |view| view.child(div().px_3().text_xs().text_color(theme.muted_foreground).child("Refreshing contest problems…")))
+                .when_some(self.contests.problem_status.as_ref(), |view, status| view.child(div().px_3().text_xs().text_color(theme.muted_foreground).child(status.clone()))))
             .child(uniform_list("sidebar", self.rows.len(), cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
                 range.map(|ix| this.render_row(ix, focused, cx)).collect()
             })).track_scroll(&self.sidebar_scroll).flex_1())

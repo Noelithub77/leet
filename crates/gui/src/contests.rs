@@ -16,6 +16,7 @@ pub struct ContestsState {
     pub list_loading: bool,
     pub loading: HashSet<u32>,
     pub status: Option<String>,
+    pub problem_status: Option<String>,
 }
 
 impl ContestsState {
@@ -49,7 +50,7 @@ impl Workspace {
         self.refresh_contests(window, cx);
         self.config.source = Source::Codeforces; self.save_config(window, cx);
         self.contests.selected = Some(id);
-        self.contests.status = None;
+        self.contests.problem_status = None;
         let problems = practice::contests::cached_problems(&self.db, id).unwrap_or_default();
         self.sources.upsert_problems(problems);
         self.rebuild_rows(); self.sidebar_sel = 0;
@@ -70,9 +71,9 @@ impl Workspace {
                 match result {
                     Ok(problems) => {
                         this.sources.upsert_problems(problems); this.omni.stale = true;
-                        if this.contests.selected == Some(id) { this.rebuild_rows(); this.contests.status = None; }
+                        if this.contests.selected == Some(id) { this.rebuild_rows(); this.contests.problem_status = None; }
                     }
-                    Err(error) if this.contests.selected == Some(id) => this.contests.status = Some(
+                    Err(error) if this.contests.selected == Some(id) => this.contests.problem_status = Some(
                         if this.contests.list.iter().any(|contest| contest.id == id && contest.phase == "BEFORE") { "Problems appear when the contest starts".into() }
                         else { format!("Problems unavailable: {error}") }),
                     Err(_) => {},
@@ -104,13 +105,7 @@ impl Workspace {
                     .child(div().text_xs().text_color(if contest.past() { theme.muted_foreground } else { theme.primary }).child(contest.timing(now)))
                     .on_click(cx.listener(move |this, _, window, cx| this.open_contest(id, window, cx)))
             }))
-            .when_some(self.contests.selected, |view, id| view.child(h_flex().gap_2()
-                .child(Button::new("contest-browser").ghost().small().icon(IconName::ExternalLink).label(format!("Contest {id}"))
-                    .tooltip("Open contest and registration in your browser")
-                    .on_click(move |_, _, _| { let _ = open::that_detached(format!("https://codeforces.com/contest/{id}")); }))
-                .child(Button::new("contest-refresh").ghost().small().icon(IconName::RefreshCw).accessibility_label("Refresh contest problems").tooltip("Refresh contest problems")
-                    .on_click(cx.listener(move |this, _, window, cx| this.refresh_contest_problems(id, window, cx))))))
             .when(self.contests.selected.is_some_and(|id| self.contests.loading.contains(&id)), |view| view.child(div().text_xs().text_color(theme.muted_foreground).child("Refreshing contest problems…")))
-            .when_some(self.contests.status.as_ref(), |view, status| view.child(div().text_xs().text_color(theme.muted_foreground).child(status.clone())))
+            .when_some(self.contests.problem_status.as_ref().or(self.contests.status.as_ref()), |view, status| view.child(div().text_xs().text_color(theme.muted_foreground).child(status.clone())))
     }
 }
