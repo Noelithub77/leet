@@ -115,7 +115,7 @@ impl Workspace {
         for (i, c) in COMMANDS.iter().enumerate() {
             items.push(Item { target: Target::Command(i), title: c.label.into() });
             text.push(crate::actions::shortcut_search_text(c.label, c.effective_key(&self.config)));
-            items.push(Item { target: Target::Setting(Setting::Keybinding(i)), title: format!("Shortcut: {}", c.label).into() });
+            items.push(Item { target: Target::Setting(Setting::Keybinding(i)), title: c.label.into() });
             text.push(crate::actions::shortcut_search_text(c.label, c.effective_key(&self.config)));
         }
         let bindings: Vec<_> = cx.key_bindings().borrow().bindings().cloned().collect();

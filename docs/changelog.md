@@ -1,3 +1,7 @@
+## 2026-10-07 · Cleaner shortcut labels
+
+- Shortcut help and search show action names without the repeated “Shortcut:” prefix.
+
 ## 2026-10-07 · Launch updates and portable Linux releases
 
 - Check the latest stable release once per launch. The bottom-right update button has a badge when an update is available; hover for the release changelog and click to download, verify, install, and restart.
