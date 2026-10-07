@@ -1,6 +1,8 @@
 //! Topic details beside the roadmap, backed by the existing cached library.
 use std::collections::HashSet;
+use std::time::Duration;
 
+use gpui_kit::base::{Transition, transition};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::progress::ProgressCircle;
@@ -81,12 +83,20 @@ impl Workspace {
     }
 
     pub(crate) fn render_roadmap(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        h_flex().size_full().min_h_0().gap_2()
-            .child(div().flex_1().min_w_0().h_full().overflow_hidden().child(self.render_roadmap_graph(window, cx)))
-            .when(self.roadmap.details, |view| view.child(self.render_roadmap_topic(window, cx)))
+        let reveal = transition("roadmap-topic-reveal", if self.roadmap.details { 1. } else { 0. },
+            Transition::new(Duration::from_millis(280)), window, cx).clamp(0., 1.);
+        let width = panel_width(window, true);
+        let occupied = (width + 8.) * reveal;
+        h_flex().size_full().min_h_0()
+            .child(div().flex_1().min_w_0().h_full().overflow_hidden()
+                .child(self.render_roadmap_graph(occupied, window, cx)))
+            .when(reveal > 0., |view| view.child(div().w(px(occupied)).h_full().min_h_0()
+                .flex_shrink_0().overflow_hidden().pl(px(8. * reveal))
+                // Keep text and rows at their final width while the shell reveals them.
+                .child(self.render_roadmap_topic(window, cx).opacity(reveal))))
     }
 
-    fn render_roadmap_topic(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_roadmap_topic(&self, window: &mut Window, cx: &mut Context<Self>) -> Div {
         let theme = cx.theme().clone();
         let topic = &TOPICS[self.roadmap_sel];
         let (done, total) = self.library.progress(topic.name);

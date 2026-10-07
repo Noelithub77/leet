@@ -432,13 +432,13 @@ impl Workspace {
         Some(el.into_any_element())
     }
 
-    pub(crate) fn render_roadmap_graph(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(crate) fn render_roadmap_graph(&self, panel_space: f32, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme().clone();
         let max_col = TOPICS.iter().map(|t| t.col).fold(0., f32::max);
         let max_row = TOPICS.iter().map(|t| t.row).max().unwrap_or(0) as f32;
         // Scale the graph to fit the window, leaving room for the title and status bar.
         let viewport = window.viewport_size();
-        let (avail_w, avail_h) = (f32::from(viewport.width) - 64. - crate::roadmap::panel_width(window, self.roadmap.details), f32::from(viewport.height) - 182.);
+        let (avail_w, avail_h) = (f32::from(viewport.width) - 64. - panel_space, f32::from(viewport.height) - 182.);
         let (base_w, base_h) = (max_col * 190. + 168., max_row * 96. + 56.);
         let scale = (avail_w / base_w).min(avail_h / base_h).clamp(0.25, 1.3);
         let (node_w, node_h, col, row) = (168. * scale, 52., 190. * scale, ((avail_h - 52.) / max_row).min(96.));

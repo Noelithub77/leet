@@ -102,3 +102,7 @@
 
 - Vesper by default, bundled themes, Python editor, and NeetCode roadmap.
 - Local tests, LeetCode runs and submissions, solution Git history, and AI prompts.
+## 2026-10-07 · Smooth roadmap topic panels
+
+- Topic panels open and close with a 280 ms eased reveal and content fade. The graph uses the same animated width, avoiding a sudden layout jump.
+- Panel contents retain their final width during the reveal; rapid opening/closing reverses the current transition. The toolkit respects reduced-motion preferences.
