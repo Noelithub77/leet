@@ -1,3 +1,7 @@
+## 2026-10-07 · 1337 launch alias
+
+- `1337` launches the same installed app as `leet` and `vg`. The Rust installer updates and verifies all three symlinks at each deployment.
+
 ## 2026-10-07 · Editable cases and calmer chrome
 
 - Active problem tabs have white labels on a cyan-tinted background with 12 px rounded corners. Existing scrolling, Home, close actions, and tab shortcuts remain available.

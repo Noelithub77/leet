@@ -14,7 +14,7 @@ fn execute()->Result<()> {
     let args:Vec<_>=std::env::args().skip(1).collect();
     let command=args.first().map(String::as_str).unwrap_or("--help");
     if matches!(command,"--help"|"-h"|"help"){
-        println!("./ops <check|build|local:deploy|snapshot> [--json]\n\ncheck         Rust workspace tests.\nbuild         Release desktop build.\nlocal:deploy  Build/install leet and vg alias, desktop entry/icon; verify version and links.\nsnapshot      Public-only SQLite refresh; use ./ops snapshot --help.\n\nLocal environment. Preserves settings, credentials, cache, and Solutions. Running windows offer restart.");return Ok(());
+        println!("./ops <check|build|local:deploy|snapshot> [--json]\n\ncheck         Rust workspace tests.\nbuild         Release desktop build.\nlocal:deploy  Build/install leet, vg and 1337 aliases, desktop entry/icon; verify version and links.\nsnapshot      Public-only SQLite refresh; use ./ops snapshot --help.\n\nLocal environment. Preserves settings, credentials, cache, and Solutions. Running windows offer restart.");return Ok(());
     }
     if args.iter().skip(1).any(|arg|arg!="--json"){bail!("Unexpected argument; use ./ops --help");}
     match command {
@@ -31,14 +31,14 @@ fn execute()->Result<()> {
             let stamp=SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
             let installed=builds.join(format!("leet-{stamp}-{revision}"));
             std::fs::copy("target/release/leet",&installed)?;
-            link(&installed,&bin.join("leet"))?;link(&installed,&bin.join("vg"))?;
+            for name in ["leet", "vg", "1337"] { link(&installed, &bin.join(name))?; }
             desktop(&home,&bin.join("leet"))?;
-            for name in ["leet","vg"]{if std::fs::canonicalize(bin.join(name))?!=installed{bail!("{name} command verification failed");}}
+            for name in ["leet","vg","1337"]{if std::fs::canonicalize(bin.join(name))?!=installed{bail!("{name} command verification failed");}}
             let version=Command::new(bin.join("leet")).arg("--version").output()?;
             if !version.status.success(){bail!("Installed leet could not report its version");}
             let version=String::from_utf8(version.stdout)?.trim().to_owned();
             prune(&builds,&installed)?;
-            println!("{}",json!({"command":command,"environment":"local","revision":revision,"binary":installed,"installed":bin.join("leet"),"compatibility_alias":bin.join("vg"),"desktop":home.join(".local/share/applications/leet.desktop"),"version":version}));return Ok(());
+            println!("{}",json!({"command":command,"environment":"local","revision":revision,"binary":installed,"installed":bin.join("leet"),"compatibility_alias":bin.join("vg"),"easter_egg_alias":bin.join("1337"),"desktop":home.join(".local/share/applications/leet.desktop"),"version":version}));return Ok(());
         },
         _=>bail!("Unknown command {command}; use ./ops --help"),
     }

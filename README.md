@@ -18,3 +18,5 @@ Existing vg settings, credentials, cached data, and Solutions remain available a
 Try `leet --1337`; there is another small Easter egg hidden in Home.
 
 The desktop application and deployment operator are Rust. No Go compiler, verd executable, or verd deployment wrapper is required. Python is needed to run Python solutions; other languages use their installed compilers and language servers.
+
+Launch with `leet`, `vg`, or `1337`; all three commands point to the same installed build. The Rust installer refreshes all aliases at each deployment.
