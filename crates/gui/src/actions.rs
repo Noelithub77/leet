@@ -199,7 +199,6 @@ pub fn reload_keys(config: &practice::config::Config, cx: &mut App) {
     bind_keys(config, cx);
     crate::omnibar::bind_keys(cx);
     crate::accounts::bind_keys(cx);
-    crate::settings::bind_keys(cx);
     crate::ai::bind_keys(cx);
     crate::onboarding::bind_keys(cx);
     crate::statement::bind_keys(cx);

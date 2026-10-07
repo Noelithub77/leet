@@ -60,7 +60,6 @@ fn main() {
         actions::bind_keys(&config, cx);
         omnibar::bind_keys(cx);
         accounts::bind_keys(cx);
-        settings::bind_keys(cx);
         ai::bind_keys(cx);
         onboarding::bind_keys(cx);
         statement::bind_keys(cx);

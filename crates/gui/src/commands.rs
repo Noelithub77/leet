@@ -284,7 +284,7 @@ impl Workspace {
                     this.roadmap_close_topic(window, cx);
                 } else if this.settings.editing.is_some() {
                     this.settings_cancel_edit(window, cx);
-                } else if this.center == Center::Settings && this.settings.keybindings {
+                } else if this.center == Center::Settings && this.settings.tab == crate::settings::SettingsTab::Keybindings {
                     this.open_settings(None, window, cx);
                 } else {
                     this.back_to_editor(window, cx);

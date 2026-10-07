@@ -1,19 +1,13 @@
 //! VS Code-style settings page (`ctrl+,`). Choices change with left/right and apply at once;
 //! text values edit inline. Every setting is also reachable from universal search.
 
+use gpui_kit::base::{Tab, Tabs};
 use gpui_kit::component::input::{Input, InputState};
-use gpui_kit::component::{ActiveTheme as _, Selectable as _, Sizable as _, h_flex, v_flex};
+use gpui_kit::component::{ActiveTheme as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use practice::prompts::Style;
 
 use crate::workspace::{Center, Focus, Workspace};
-
-gpui_kit::actions!(settings, [SavePrompt]);
-
-pub fn bind_keys(cx: &mut App) {
-    cx.bind_keys([KeyBinding::new("ctrl-enter", SavePrompt, Some("PromptForm > Input"))]);
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Setting {
@@ -26,8 +20,6 @@ pub enum Setting {
     Theme,
     Font,
     List,
-    Provider,
-    PromptStyle,
     Python,
     ExternalEditor,
     TestTimeout,
@@ -35,7 +27,6 @@ pub enum Setting {
     OpenFile,
     Keybindings,
     Keybinding(usize),
-    Prompt(Style),
 }
 
 pub enum Kind {
@@ -45,7 +36,7 @@ pub enum Kind {
 }
 
 impl Setting {
-    pub const ALL: [Setting; 21] = [
+    pub const ALL: [Setting; 15] = [
         Setting::Onboarding,
         Setting::Language,
         Setting::LanguageServer,
@@ -55,17 +46,11 @@ impl Setting {
         Setting::Theme,
         Setting::Font,
         Setting::List,
-        Setting::Provider,
-        Setting::PromptStyle,
         Setting::Python,
         Setting::ExternalEditor,
         Setting::TestTimeout,
         Setting::Workspace,
         Setting::Keybindings,
-        Setting::Prompt(Style::Hints),
-        Setting::Prompt(Style::Guided),
-        Setting::Prompt(Style::Full),
-        Setting::Prompt(Style::SolutionOnly),
         Setting::OpenFile,
     ];
 
@@ -80,8 +65,6 @@ impl Setting {
             Setting::Theme => "Theme",
             Setting::Font => "Font",
             Setting::List => "Roadmap list",
-            Setting::Provider => "AI assistant",
-            Setting::PromptStyle => "Default prompt style",
             Setting::Python => "Python interpreter",
             Setting::ExternalEditor => "External editor",
             Setting::TestTimeout => "Test timeout (seconds)",
@@ -89,7 +72,6 @@ impl Setting {
             Setting::OpenFile => "Open config.toml",
             Setting::Keybindings => "Keyboard shortcuts",
             Setting::Keybinding(i) => crate::actions::COMMANDS[i].label,
-            Setting::Prompt(style) => style.label(),
         }
     }
 
@@ -104,22 +86,19 @@ impl Setting {
             Setting::Theme => "color appearance dark light vesper",
             Setting::Font => "fonts typography font family liberation sans system",
             Setting::List => "neetcode 150 250 all",
-            Setting::Provider => "chatgpt claude gemini ai",
-            Setting::PromptStyle => "hints guided explanation solution ai",
             Setting::Python => "python3 pypy interpreter",
             Setting::ExternalEditor => "zed code nvim",
             Setting::TestTimeout => "limit time",
             Setting::Workspace => "workspace directory path git",
             Setting::OpenFile => "toml config file",
             Setting::Keybindings | Setting::Keybinding(_) => "keyboard shortcut binding keys",
-            Setting::Prompt(_) => "ai instructions custom prompt",
         }
     }
 
     pub fn kind(self) -> Kind {
         match self {
-            Setting::Language | Setting::Theme | Setting::List | Setting::Provider | Setting::PromptStyle | Setting::TestTimeout => Kind::Choice,
-            Setting::Python | Setting::ExternalEditor | Setting::Workspace | Setting::Keybinding(_) | Setting::Prompt(_) => Kind::Text,
+            Setting::Language | Setting::Theme | Setting::List | Setting::TestTimeout => Kind::Choice,
+            Setting::Python | Setting::ExternalEditor | Setting::Workspace | Setting::Keybinding(_) => Kind::Text,
             Setting::Onboarding | Setting::LanguageServer | Setting::Codeforces | Setting::OpenFile | Setting::Font | Setting::Keybindings | Setting::LeetCode | Setting::NeetCode => Kind::Action,
         }
     }
@@ -136,15 +115,12 @@ impl Setting {
             Setting::Theme => cx.theme().theme_name().to_string(),
             Setting::Font => c.font_family.clone(),
             Setting::List => c.roadmap_list.label().into(),
-            Setting::Provider => c.prompt_provider.label().into(),
-            Setting::PromptStyle => c.prompt_style.label().into(),
             Setting::Python => c.python.clone(),
             Setting::ExternalEditor => c.external_editor.clone(),
             Setting::TestTimeout => c.test_timeout_secs.to_string(),
             Setting::Workspace => c.workspace.display().to_string(),
             Setting::OpenFile | Setting::Keybindings => String::new(),
             Setting::Keybinding(i) => crate::actions::COMMANDS[i].effective_key(c).into(),
-            Setting::Prompt(style) => c.prompt_instructions.get(style.id()).cloned().unwrap_or_else(|| style.instructions().into()),
         }
     }
 
@@ -157,33 +133,57 @@ impl Setting {
     }
 }
 
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub enum SettingsTab { #[default] General, Editor, Appearance, Accounts, Keybindings }
+
+impl SettingsTab {
+    const ALL: [Self; 5] = [Self::General, Self::Editor, Self::Appearance, Self::Accounts, Self::Keybindings];
+    fn label(self) -> &'static str {
+        match self { Self::General => "General", Self::Editor => "Editor", Self::Appearance => "Appearance", Self::Accounts => "Accounts", Self::Keybindings => "Keybindings" }
+    }
+    fn settings(self) -> &'static [Setting] {
+        match self {
+            Self::General => &[Setting::List, Setting::Workspace, Setting::Onboarding, Setting::OpenFile],
+            Self::Editor => &[Setting::Language, Setting::Python, Setting::ExternalEditor, Setting::TestTimeout, Setting::LanguageServer],
+            Self::Appearance => &[Setting::Theme, Setting::Font],
+            Self::Accounts => &[Setting::Codeforces, Setting::LeetCode, Setting::NeetCode],
+            Self::Keybindings => &[],
+        }
+    }
+    fn for_setting(setting: Setting) -> Self {
+        if matches!(setting, Setting::Keybinding(_) | Setting::Keybindings) { return Self::Keybindings; }
+        Self::ALL.into_iter().find(|tab| tab.settings().contains(&setting)).unwrap_or_default()
+    }
+}
+
 pub struct SettingsState {
     pub selected: usize,
-    pub keybindings: bool,
+    pub tab: SettingsTab,
     pub scroll: ScrollHandle,
     pub editing: Option<(Setting, Entity<InputState>)>,
 }
 
 impl SettingsState {
     pub fn new() -> Self {
-        Self { scroll: ScrollHandle::new(), keybindings: false, selected: 0, editing: None }
+        Self { scroll: ScrollHandle::new(), tab: SettingsTab::General, selected: 0, editing: None }
     }
 }
 
 impl Workspace {
     pub fn open_settings(&mut self, focus: Option<Setting>, window: &mut Window, cx: &mut Context<Self>) {
         self.center = Center::Settings;
-        self.settings.keybindings = false;
+        self.settings.tab = focus.map(SettingsTab::for_setting).unwrap_or_default();
+        self.settings.selected = 0;
         if let Some(Setting::Keybinding(index)) = focus {
-            self.settings.keybindings = true;
+            self.settings.tab = SettingsTab::Keybindings;
             self.settings.selected = index;
         } else if let Some(setting) = focus {
-            self.settings.selected = Setting::ALL.iter().position(|s| *s == setting).unwrap_or(0);
+            self.settings.selected = self.setting_rows().iter().position(|s| *s == setting).unwrap_or(0);
         }
         self.settings.editing = None;
         cx.on_next_frame(window, |this, _, cx| {
             if this.center == Center::Settings {
-                this.settings.scroll.scroll_to_item(this.settings.selected + 1);
+                this.settings.scroll.scroll_to_item(this.settings.selected);
                 cx.notify();
             }
         });
@@ -194,15 +194,15 @@ impl Workspace {
     pub fn settings_move(&mut self, delta: isize, cx: &mut Context<Self>) {
         let len = self.setting_rows().len() as isize;
         self.settings.selected = (self.settings.selected as isize + delta).clamp(0, len - 1) as usize;
-        self.settings.scroll.scroll_to_item(self.settings.selected + 1);
+        self.settings.scroll.scroll_to_item(self.settings.selected);
         cx.notify();
     }
 
     fn setting_rows(&self) -> Vec<Setting> {
-        if self.settings.keybindings {
+        if self.settings.tab == SettingsTab::Keybindings {
             (0..crate::actions::COMMANDS.len()).map(Setting::Keybinding).collect()
         } else {
-            Setting::ALL.to_vec()
+            self.settings.tab.settings().to_vec()
         }
     }
 
@@ -227,11 +227,6 @@ impl Workspace {
                 self.rebuild_library();
             }
             Setting::Language => self.config.preferred_language = self.config.preferred_language.next(),
-            Setting::Provider => self.config.prompt_provider = self.config.prompt_provider.toggle(),
-            Setting::PromptStyle => {
-                let i = Style::ALL.iter().position(|s| *s == self.config.prompt_style).unwrap_or(0);
-                self.config.prompt_style = Style::ALL[step(Style::ALL.len(), i)];
-            }
             Setting::TestTimeout => {
                 self.config.test_timeout_secs = (self.config.test_timeout_secs as i64 + delta as i64).clamp(1, 120) as u64;
             }
@@ -249,10 +244,6 @@ impl Workspace {
             return;
         }
         let setting = self.selected_setting();
-        if let Setting::Prompt(style) = setting {
-            self.edit_prompt(style, window, cx);
-            return;
-        }
         match setting.kind() {
             Kind::Choice => self.settings_cycle(1, window, cx),
             Kind::Action if setting == Setting::LanguageServer => self.restart_language_server(window, cx),
@@ -266,7 +257,7 @@ impl Workspace {
                 crate::accounts::open(account, self.account_names[account.index()] != "Signed out", window, cx);
             }
             Kind::Action if setting == Setting::Keybindings => {
-                self.settings.keybindings = true;
+                self.settings.tab = SettingsTab::Keybindings;
                 self.settings.selected = 0;
                 self.settings.scroll.scroll_to_item(0);
                 cx.notify();
@@ -310,10 +301,6 @@ impl Workspace {
                 crate::actions::reload_keys(&self.config, cx);
                 self.omni.stale = true;
             }
-            Setting::Prompt(style) => {
-                if value.is_empty() { self.config.prompt_instructions.remove(style.id()); }
-                else { self.config.prompt_instructions.insert(style.id().into(), value); }
-            }
             Setting::Python if !value.is_empty() => self.config.python = value,
             Setting::ExternalEditor if !value.is_empty() => self.config.external_editor = value,
             Setting::Workspace if !value.is_empty() => {
@@ -335,67 +322,34 @@ impl Workspace {
     pub fn render_settings(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme().clone();
         let focused = self.focus_area == Focus::Settings && self.nav_focus.is_focused(window);
-        v_flex()
-            .flex_1()
-            .size_full()
-            .items_center()
-            .child(
-                v_flex()
-                    .id("settings-scroll")
-                    .overflow_y_scroll()
-                    .track_scroll(&self.settings.scroll)
-                    .min_h_0()
-                    .h_full()
-                    .flex_1()
-                    .w_full()
-                    .max_w(px(780.))
-                    .px_4()
-                    .pb_8()
-                    .pt_10()
-                    .gap_1()
-                    .child(
-                        h_flex()
-                            .flex_shrink_0()
-                            .pb_4()
-                            .justify_between()
-                            .child(v_flex().gap_1()
-                                .child(div().text_xl().font_weight(FontWeight::SEMIBOLD).child(if self.settings.keybindings { "Keyboard shortcuts" } else { "Settings" }))
-                                .when(self.settings.keybindings, |heading| heading.child(div().text_xs().text_color(theme.muted_foreground).child("Empty resets · none disables · | separates keys"))))
-                            .child(
-                                h_flex()
-                                    .gap_3()
-                                    .text_xs()
-                                    .text_color(theme.muted_foreground)
-                                    .child(h_flex().gap_1().child(crate::view::key("left")).child(crate::view::key("right")).child("change"))
-                                    .child(h_flex().gap_1().child(crate::view::key("enter")).child("edit"))
-                                    .child(h_flex().gap_1().child(crate::view::key("escape")).child("close")),
-                            ),
-                    )
+        v_flex().size_full().items_center()
+            .child(v_flex().w_full().max_w(px(780.)).h_full().min_h_0().px_4().pt_10().gap_4()
+                .child(div().flex_shrink_0().text_xl().font_weight(FontWeight::SEMIBOLD).child("Settings"))
+                .child(Tabs::new("settings-tabs").flex_shrink_0().gap_1()
+                    .children(SettingsTab::ALL.into_iter().enumerate().map(|(index, tab)| {
+                        Tab::new(("settings-tab", index)).selected(self.settings.tab == tab).set_position(index + 1, SettingsTab::ALL.len())
+                            .h_9().px_3().rounded_lg().child(div().line_height(relative(1.4)).py_1().child(tab.label()))
+                            .styles(|styles| styles.selected(|style| style.bg(theme.list_active).text_color(theme.primary)))
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.settings.tab = tab; this.settings.selected = 0; this.settings.editing = None;
+                                this.settings.scroll.scroll_to_item(0); this.focus_nav(Focus::Settings, window, cx); cx.notify();
+                            }))
+                    })))
+                .child(v_flex().id("settings-scroll").overflow_y_scroll().track_scroll(&self.settings.scroll)
+                    .min_h_0().flex_1().w_full().pb_8().gap_1()
                     .children(self.setting_rows().iter().enumerate().map(|(i, &setting)| {
                         let selected = i == self.settings.selected;
                         let editing = self.settings.editing.as_ref().filter(|(s, _)| *s == setting);
                         let value = setting.value(self, cx);
                         let control = match (editing, setting.kind()) {
                             (Some((_, input)), _) => div().w(px(320.)).child(Input::new(input)).into_any_element(),
-                            (None, Kind::Choice) if setting == Setting::Provider => h_flex().gap_1().children(
-                                practice::prompts::Provider::ALL.into_iter().enumerate().map(|(index, provider)| {
-                                    use gpui_kit::component::button::{Button, ButtonVariants as _};
-                                    Button::new(("settings-provider", index)).ghost().small().icon(crate::brand::icon(provider))
-                                        .selected(provider == self.config.prompt_provider)
-                                        .accessibility_label(provider.label()).tooltip(provider.label())
-                                        .on_click(cx.listener(move |this, _, window, cx| {
-                                            this.config.prompt_provider = provider;
-                                            this.save_config(window, cx);
-                                            cx.notify();
-                                        }))
-                                })
-                            ).into_any_element(),
                             (None, Kind::Choice) => h_flex()
                                 .gap_2()
                                 .child(div().text_color(theme.muted_foreground).child("‹"))
                                 .child(div().min_w(px(140.)).text_center().child(value))
                                 .child(div().text_color(theme.muted_foreground).child("›"))
                                 .into_any_element(),
+                            (None, Kind::Text) if matches!(setting, Setting::Keybinding(_)) => crate::view::shortcut_keys(&value).into_any_element(),
                             (None, Kind::Text) => div()
                                 .w(px(320.))
                                 .truncate()
@@ -427,51 +381,33 @@ impl Workspace {
                                 this.settings.selected = i;
                                 this.settings_confirm(window, cx);
                             }))
-                    })),
-            )
+                    }))
+                    .when(self.settings.tab == SettingsTab::Keybindings, |view| {
+                        let bindings: Vec<_> = cx.key_bindings().borrow().bindings().cloned().collect();
+                        view.children(crate::actions::contextual_shortcuts(&bindings, &self.config).into_iter().map(|shortcut| {
+                            h_flex().px_4().py_3().gap_4().justify_between()
+                                .child(v_flex().gap_1().child(shortcut.label).child(div().text_xs().text_color(theme.muted_foreground).child(shortcut.context)))
+                                .child(crate::view::shortcut_keys(&shortcut.keys))
+                        }))
+                    })))
     }
 }
 
-impl Workspace {
-    fn edit_prompt(&mut self, style: Style, window: &mut Window, cx: &mut Context<Self>) {
-        use std::rc::Rc;
-        use gpui_kit::component::button::{Button, ButtonVariants as _};
-        use gpui_kit::component::input::{Textarea, TextareaState};
-        use gpui_kit::component::WindowExt as _;
-        let value = self.config.prompt_instructions.get(style.id()).cloned().unwrap_or_else(|| style.instructions().into());
-        let input = cx.new(|cx| TextareaState::new(window, cx).rows(8).default_value(value));
-        let weak = cx.weak_entity();
-        let save: Rc<dyn Fn(&mut Window, &mut App)> = {
-            let input = input.clone();
-            Rc::new(move |window, cx| {
-                let value = input.read(cx).value().trim().to_string();
-                let mut saved = false;
-                let _ = weak.update(cx, |ws, cx| {
-                    let mut config = ws.config.clone();
-                    if value.is_empty() { config.prompt_instructions.remove(style.id()); }
-                    else { config.prompt_instructions.insert(style.id().into(), value); }
-                    match config.save() {
-                        Ok(()) => { ws.config = config; saved = true; ws.focus_nav(Focus::Settings, window, cx); }
-                        Err(error) => ws.toast(gpui_kit::component::notification::Notification::error(error.to_string()), window, cx),
-                    }
-                    cx.notify();
-                });
-                if saved { window.close_dialog(cx); }
-            })
-        };
-        let focus = input.clone();
-        window.open_dialog(cx, move |dialog, _, cx| {
-            let save = save.clone();
-            let save_key = save.clone();
-            dialog.title(format!("{} instructions", style.label())).w(px(640.)).child(
-                v_flex().key_context("PromptForm").gap_3()
-                    .on_action(move |_: &SavePrompt, window, cx| save_key(window, cx))
-                    .child(Textarea::new(&input))
-                    .child(div().text_xs().text_color(cx.theme().muted_foreground)
-                        .child("Problem context is added automatically. Empty restores defaults. Ctrl+Enter saves."))
-                    .child(Button::new("save-prompt").primary().label("Save").on_click(move |_, window, cx| save(window, cx)))
-            )
-        });
-        window.defer(cx, move |window, cx| focus.update(cx, |state, cx| state.focus(window, cx)));
+
+#[cfg(test)]
+mod tests {
+    use super::{Setting, SettingsTab};
+
+    #[test]
+    fn searchable_settings_route_to_one_tab_and_keybindings_use_their_own_tab() {
+        for setting in Setting::ALL {
+            let tab = SettingsTab::for_setting(setting);
+            if setting == Setting::Keybindings { assert!(tab == SettingsTab::Keybindings); continue; }
+            assert_eq!(SettingsTab::ALL.into_iter().filter(|tab| tab.settings().contains(&setting)).count(), 1);
+            assert!(tab.settings().contains(&setting));
+        }
+        assert!(SettingsTab::for_setting(Setting::Keybinding(0)) == SettingsTab::Keybindings);
+        assert!(SettingsTab::for_setting(Setting::Theme) == SettingsTab::Appearance);
+        assert!(SettingsTab::for_setting(Setting::LeetCode) == SettingsTab::Accounts);
     }
 }
