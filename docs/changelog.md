@@ -10,6 +10,8 @@
 - Animated arrays, grids, trees, graphs, linked lists, stacks, queues, heaps, maps, sets, and intervals.
 - Settings → AI for agent, model, reasoning, Fast tier, and web chat.
 - Edit test inputs and expected values inline with a pencil or double-click.
+- Java in onboarding, language switching, highlighting, and local contest runs.
+- Onboarding checks the selected language's tools and links to missing setup.
 - Keep Competitive Companion under Provider settings when Codeforces is configured.
 - Organize Settings into General, Editor, Appearance, Provider, AI, Accounts, and Keybindings tabs.
 - Show current shortcuts with keycaps.
@@ -37,6 +39,8 @@
 - Keep Settings tabs horizontal on one row.
 - Show the solutions folder using its home-relative path.
 
+- Keep only the active language server running.
+- Remove shortcut hints from AI and language popups.
 - Popups stay above the status line.
 - Local deployments restart into the newly installed build.
 - The update icon stays visible without a network connection.

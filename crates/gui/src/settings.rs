@@ -109,7 +109,7 @@ impl Setting {
     pub fn keywords(self) -> &'static str {
         match self {
             Setting::Onboarding => "setup onboarding welcome language account sign in",
-            Setting::Language => "language python cpp c++ go c preferred",
+            Setting::Language => "language python cpp c++ go c java preferred",
             Setting::LanguageServer => "lsp intellisense completion diagnostics hover definitions restart",
             Setting::Codeforces => "codeforces handle account sign in",
             Setting::CompanionEnabled => "competitive companion browser import enable disable",
