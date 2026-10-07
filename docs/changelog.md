@@ -16,6 +16,8 @@
 <details>
 <summary>Fix</summary>
 
+- Recognize the migrated ~/leet folder when an older running instance saves ~/vg.
+
 - Remove old app names from account controls, export instructions, and internal action namespaces.
 - New users use ~/leet for their solutions.
 

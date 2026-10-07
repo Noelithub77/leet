@@ -24,7 +24,7 @@ fn execute()->Result<()> {
         if !destination.is_absolute() { bail!("Workspace path must be absolute"); }
         let mut config = practice::config::Config::load()?;
         let source = config.workspace.clone();
-        let moved = if source == destination { false } else {
+        let moved = if source == destination { config.save()?; false } else {
             if destination.symlink_metadata().is_ok() { bail!("Destination already exists; refusing to overwrite solutions"); }
             if destination.starts_with(&source) || source.symlink_metadata()?.file_type().is_symlink() || !source.is_dir() { bail!("Workspace must be a directory and destination must be outside it"); }
             std::fs::rename(&source, &destination).context("Move workspace on the same filesystem")?;

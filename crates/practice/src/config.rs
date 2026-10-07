@@ -60,6 +60,12 @@ impl Default for Config {
     }
 }
 
+fn migrated_workspace(path: &Path, home: &Path) -> PathBuf {
+    let current = home.join("leet");
+    if path == home.join("vg") && std::fs::read_link(path).is_ok_and(|target| target == current) { current }
+    else { path.to_owned() }
+}
+
 impl Config {
     pub fn path() -> PathBuf {
         config_dir().join("config.toml")
@@ -71,7 +77,11 @@ impl Config {
 
     pub fn load_from(path: &Path) -> Result<Self> {
         match std::fs::read_to_string(path) {
-            Ok(text) => toml::from_str(&text).with_context(|| format!("parse {}", path.display())),
+            Ok(text) => {
+                let mut config: Self = toml::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
+                config.workspace = migrated_workspace(&config.workspace, &home());
+                Ok(config)
+            },
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
             Err(err) => Err(err).with_context(|| format!("read {}", path.display())),
         }
@@ -116,6 +126,21 @@ pub fn database_path() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn migrated_workspace_follows_only_the_known_compatibility_link() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path(); let legacy = home.join("vg"); let current = home.join("leet");
+        std::fs::create_dir(&current).unwrap();
+        assert_eq!(migrated_workspace(&legacy, home), legacy);
+        std::os::unix::fs::symlink(&current, &legacy).unwrap();
+        assert_eq!(migrated_workspace(&legacy, home), current);
+        let custom = home.join("custom"); std::os::unix::fs::symlink(&current, &custom).unwrap();
+        assert_eq!(migrated_workspace(&custom, home), custom);
+        std::fs::remove_file(&legacy).unwrap(); std::os::unix::fs::symlink(&custom, &legacy).unwrap();
+        assert_eq!(migrated_workspace(&legacy, home), legacy);
+    }
 
     #[test]
     fn missing_file_gives_defaults_and_round_trips() {
