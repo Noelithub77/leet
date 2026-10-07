@@ -272,7 +272,7 @@ impl Workspace {
         for (id, icon, label, enabled, action) in toggles {
             let highlight = transition(id, if enabled { 1. } else { 0. }, Transition::new(Duration::from_millis(160)), window, cx);
             let style = ButtonCustomVariant::new(cx)
-                .foreground(theme.muted_foreground.mix_oklab(theme.primary, highlight))
+                .foreground(theme.primary.mix_oklab(theme.muted_foreground, highlight))
                 .color(theme.primary.opacity(0.12 * highlight))
                 .hover(theme.primary.opacity(0.18)).active(theme.primary.opacity(0.24));
             controls = controls.child(Button::new(id).custom(style).small().icon(icon)
