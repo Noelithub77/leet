@@ -9,6 +9,10 @@ on:
         description: 'Existing version tag to build (vX.Y.Z)'
         required: true
         type: string
+      publish:
+        description: 'Publish release assets (disable to validate and warm caches only)'
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -18,6 +22,42 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  test:
+    name: Test Linux workspace
+    runs-on: ubuntu-22.04
+    env:
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+      - name: Install Linux build libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang cmake pkg-config libssl-dev libxcb1-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libegl1-mesa-dev libfontconfig1-dev libasound2-dev libvulkan-dev
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - name: Identify compiler and runner capacity
+        id: compiler
+        run: |
+          echo "version=$(rustc -Vv | sha256sum | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "CARGO_BUILD_JOBS=$(nproc)" >> "$GITHUB_ENV"
+      - name: Cache test dependencies
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/debug/.fingerprint
+            target/debug/build
+            target/debug/deps
+          key: rust-test-v1-ubuntu-22.04-${{ steps.compiler.outputs.version }}-${{ hashFiles('Cargo.lock', '**/Cargo.toml', '.cargo/config.toml', '.github/workflows/release.yml') }}
+          restore-keys: rust-test-v1-ubuntu-22.04-${{ steps.compiler.outputs.version }}-
+      - run: ./ops check --json
+
   build:
     name: Build ${{ matrix.target }}
     strategy:
@@ -55,7 +95,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake pkg-config libssl-dev libxcb1-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libegl1-mesa-dev libfontconfig1-dev libasound2-dev libvulkan-dev
+          sudo apt-get install -y --no-install-recommends clang cmake pkg-config libssl-dev libxcb1-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libegl1-mesa-dev libfontconfig1-dev libasound2-dev libvulkan-dev
       - name: Install Rust
         run: |
           rustup toolchain install stable --profile minimal
@@ -64,13 +104,35 @@ jobs:
       - name: Use the static Windows C runtime
         if: runner.os == 'Windows'
         run: echo 'RUSTFLAGS=-C target-feature=+crt-static' >> "$GITHUB_ENV"
-      - name: Test Linux workspace
-        if: matrix.target == 'x86_64-unknown-linux-gnu'
-        run: ./ops check --json
+      - name: Identify compiler and runner capacity
+        id: compiler
+        run: |
+          echo "version=$(rustc -Vv | sha256sum | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          case "$RUNNER_OS" in
+            Linux) jobs=$(nproc) ;;
+            macOS) jobs=$(sysctl -n hw.logicalcpu) ;;
+            Windows) jobs="$NUMBER_OF_PROCESSORS" ;;
+          esac
+          echo "CARGO_BUILD_JOBS=$jobs" >> "$GITHUB_ENV"
+      - name: Cache native release dependencies
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/release/.fingerprint
+            target/release/build
+            target/release/deps
+            target/${{ matrix.target }}/release/.fingerprint
+            target/${{ matrix.target }}/release/build
+            target/${{ matrix.target }}/release/deps
+          # Isolate native libraries, CRT flags, and compiler outputs by runner and target.
+          key: rust-release-v1-${{ matrix.os }}-${{ matrix.target }}-${{ steps.compiler.outputs.version }}-${{ hashFiles('Cargo.lock', '**/Cargo.toml', '.cargo/config.toml', '.github/workflows/release.yml') }}
+          restore-keys: rust-release-v1-${{ matrix.os }}-${{ matrix.target }}-${{ steps.compiler.outputs.version }}-
+      - name: Build executable and packaging tool together
+        run: cargo build --locked --release --workspace --bins --example release --target '${{ matrix.target }}'
       - name: Check platform code and examples
-        run: cargo check --locked --workspace --all-targets --target '${{ matrix.target }}'
-      - name: Build release executable
-        run: cargo build --locked --release -p gui --bin leet --target '${{ matrix.target }}'
+        run: cargo check --locked --release --workspace --all-targets --target '${{ matrix.target }}'
       - name: Verify Unix executable
         if: runner.os != 'Windows'
         run: target/${{ matrix.target }}/release/leet --version
@@ -84,15 +146,18 @@ jobs:
           if ($version -notmatch '^leet ' -or $version -notmatch [regex]::Escape($env:RELEASE_TAG)) { throw "Unexpected version: $version" }
           Write-Output $version
       - name: Package native release
-        run: cargo run --locked -p practice --example release --target '${{ matrix.target }}' -- --target '${{ matrix.target }}' --tag "$RELEASE_TAG" --output dist
+        run: cargo run --locked --release -p practice --example release --target '${{ matrix.target }}' -- --target '${{ matrix.target }}' --tag "$RELEASE_TAG" --output dist
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: ${{ matrix.target }}
           path: dist/leet-*
           if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
 
   publish:
-    needs: build
+    if: github.event_name != 'workflow_dispatch' || inputs.publish
+    needs: [test, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write

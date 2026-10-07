@@ -33,7 +33,7 @@ Linux retains the existing Secret Service and private-file credential behavior. 
 
 ## Building and publishing
 
-The [release workflow](../.github/workflows/release.yml) builds all five native targets on GitHub-hosted runners. Linux x86_64 runs the full workspace and installer tests. All targets check the workspace and examples, build a release executable, and check its version. The Rust packaging operator produces Unix archives or a single Windows executable:
+The [release workflow](../.github/workflows/release.yml) builds all five native targets on GitHub-hosted runners. A separate Linux x86_64 job runs the full workspace and installer tests alongside the native builds; publishing requires both tests and every platform build to pass. All targets build the executable and packaging tool together, then check the workspace and examples in the same release profile and check the executable's version. This avoids rebuilding dependencies in a separate development profile just to package the app. Thin LTO and the app's release optimization remain enabled. The Rust packaging operator produces Unix archives or a single Windows executable:
 
 ```sh
 cargo build --locked --release -p gui --target x86_64-unknown-linux-gnu
@@ -43,7 +43,7 @@ cargo build --locked --release -p gui --target x86_64-unknown-linux-gnu
 On Windows, invoke the same Rust operator directly:
 
 ```powershell
-cargo run --locked -p practice --example release --target x86_64-pc-windows-msvc -- --target x86_64-pc-windows-msvc --tag v0.1.0 --output dist
+cargo run --locked --release -p practice --example release --target x86_64-pc-windows-msvc -- --target x86_64-pc-windows-msvc --tag v0.1.0 --output dist
 ```
 
 Push a version tag to release it:
@@ -55,6 +55,10 @@ git push origin v0.1.0
 
 Use the GitHub Actions **Release → Run workflow** button with an existing `vX.Y.Z` tag to retry/rebuild that release. The selected tag must exist; every build checks out that tag. Publishing waits for every target, uploads archives, the executable, installer, and SHA-256 manifest to a draft, and then publishes it. Failed builds do not publish an incomplete release. Workflow tokens need `contents: write` only in the publishing job. Never put personal credentials or data into build artifacts.
 
+Rust builds use GitHub's first-party cache action for Cargo downloads and compiled dependencies. Test and release caches are separate; native caches are isolated by runner OS/version, target architecture, compiler identity, lockfile, manifests, and build configuration. Incremental directories and finished executables are excluded. Cargo still validates and builds the sources on every run; a cache hit never skips checks or tests.
+
+To warm caches without replacing a published release, select the **main** branch in **Release → Run workflow**, enter an existing version tag, and disable **publish**. The workflow builds and packages the tag but skips the publishing job. GitHub scopes caches to the workflow's branch: caches saved on main are available to future tags; caches saved on one tag cannot be read by another tag. The first run is cold. Repeat the build-only run to measure restoration and build time before expecting faster releases. New compiler versions or native build changes can require a fresh cache. Ordinary pushes do not start Rust builds.
+
 The Vite landing page lives in `site/`, with React and Tailwind for the requested shadcn `Kbd`/`KbdGroup` components. The adapted upstream component and its MIT license live in `site/src/components/ui/`. Platform detection and copying use browser APIs. The page uses Vesper's `#99FFE4` accent and a 130% desktop type scale, with responsive sizing on mobile. Its logo splash is initial HTML and disappears when React is ready, with no timed delay. The GitHub Pages workflow publishes changes pushed to main; Pages must use **GitHub Actions** as its source.
 
 ```sh
@@ -64,5 +68,7 @@ pnpm ops --help
 pnpm ops check --json
 pnpm dev
 ```
+
+The Pages workflow caches pnpm's package store using `site/pnpm-lock.yaml`; installation still uses the frozen lockfile, and checks/builds run on every deployment. Release uploads skip redundant ZIP compression and expire after three days; the published GitHub Release assets are retained independently.
 
 `./ops check --json` covers Rust and isolated installer regressions; `pnpm ops check --json` in `site/` covers platform detection and the production page build. A successful build/version probe does not establish native window rendering, account-store behavior, or OS download-policy behavior on another computer. Validate those on the corresponding desktop before claiming device-level support.

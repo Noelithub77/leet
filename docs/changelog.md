@@ -3,6 +3,12 @@
 - Historical Codeforces statements load when the snapshot has null or omitted samples/tags, including contest 1001 quantum problems. No sample tests are fabricated.
 - Malformed sample records and empty statements still produce actionable errors instead of entering the cache as complete questions.
 
+## 2026-10-07 · Faster release builds
+
+- Cache Cargo downloads and compiled dependencies separately for native release targets and Linux tests; cache the landing page's pnpm store by its lockfile.
+- Run tests alongside platform builds and share the release profile between the app, checks, and packaging tool.
+- Add a manual build-only run that warms caches without publishing. Keep release optimization enabled and avoid recompressing release archives during upload.
+
 ## 2026-10-07 · Shared question view preferences
 
 - Video explanations have a compact play button beside the Question, Solution, and Tags toolbar icons. Question shortcut hints sit in a fixed footer below the scrolling content.
