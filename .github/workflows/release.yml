@@ -146,7 +146,7 @@ jobs:
           if ($version -notmatch '^leet ' -or $version -notmatch [regex]::Escape($env:RELEASE_TAG)) { throw "Unexpected version: $version" }
           Write-Output $version
       - name: Package native release
-        run: cargo run --locked --release -p practice --example release --target '${{ matrix.target }}' -- --target '${{ matrix.target }}' --tag "$RELEASE_TAG" --output dist
+        run: target/${{ matrix.target }}/release/examples/release${{ runner.os == 'Windows' && '.exe' || '' }} --target '${{ matrix.target }}' --tag "$RELEASE_TAG" --output dist
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: ${{ matrix.target }}

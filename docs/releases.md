@@ -33,7 +33,7 @@ Linux retains the existing Secret Service and private-file credential behavior. 
 
 ## Building and publishing
 
-The [release workflow](../.github/workflows/release.yml) builds all five native targets on GitHub-hosted runners. A separate Linux x86_64 job runs the full workspace and installer tests alongside the native builds; publishing requires both tests and every platform build to pass. All targets build the executable and packaging tool together, then check the workspace and examples in the same release profile and check the executable's version. This avoids rebuilding dependencies in a separate development profile just to package the app. Thin LTO and the app's release optimization remain enabled. The Rust packaging operator produces Unix archives or a single Windows executable:
+The [release workflow](../.github/workflows/release.yml) builds all five native targets on GitHub-hosted runners. A separate Linux x86_64 job runs the full workspace and installer tests alongside the native builds; publishing requires both tests and every platform build to pass. All targets build the executable and packaging tool together, then check the workspace and examples in the same release profile and check the executable's version. Packaging invokes the compiled Rust tool directly, avoiding a separate development build or another Cargo invocation with a different dependency feature selection. Thin LTO and the app's release optimization remain enabled. The Rust packaging operator produces Unix archives or a single Windows executable:
 
 ```sh
 cargo build --locked --release -p gui --target x86_64-unknown-linux-gnu
