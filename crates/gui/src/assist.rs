@@ -713,7 +713,7 @@ impl Assist {
                 div().h(px(4.)).flex_1().rounded_full().bg(color)
             })))
             .children(solve.log.iter().map(|(tone, text)| {
-                let (_, _, fg) = crate::gen_ui::tone_colors(*tone, &theme);
+                let (_, _, fg) = crate::gen_ui::style::tone_colors(*tone, &theme);
                 h_flex().gap_2().text_xs().child(div().size(px(6.)).rounded_full().bg(fg)).child(div().text_color(theme.foreground).child(text.clone()))
             }))
             .when(run.phase == Phase::Confirm, |el| el.child(h_flex().gap_2().pt_1()
