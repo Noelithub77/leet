@@ -26,7 +26,7 @@ pub(super) fn render(id: &str, items: &[Cell], pointers: &[Pointer], spans: &[Sp
     let mut rows: HashMap<usize, usize> = HashMap::new();
     let pointer_rows: Vec<usize> = pointers.iter().map(|p| { let row = rows.entry(p.index).or_default(); *row += 1; *row - 1 }).collect();
     let depth = pointer_rows.iter().max().map_or(0., |r| 70. + *r as f32 * 26.);
-    let span_h = if spans.is_empty() { 0. } else { 10. };
+    let span_h = if spans.iter().any(|span| !span.label.is_empty()) { 24. } else if spans.is_empty() { 0. } else { 10. };
     let mut el = div().relative().w(px(total)).h(px(span_h + CELL_H + 14. + depth))
         .child(div().absolute().left(px(12.)).top(px(span_h)).flex().gap(px(GAP)).children(items.iter().enumerate().map(|(i, c)| {
             let tone = if c.tone == Tone::Default && active.contains(&i) { Tone::Active } else { c.tone };
@@ -44,7 +44,7 @@ pub(super) fn render(id: &str, items: &[Cell], pointers: &[Pointer], spans: &[Sp
         let color = if span.tone == Tone::Default { theme.info } else { tone_colors(span.tone, &theme).2 };
         el = el.child(div().absolute().left(px(l - 2.)).top(px(span_h - 4.)).w(px((r - l + 4.).max(0.))).h(px(CELL_H + 8.)).rounded_lg()
             .border_1().border_color(color.opacity(0.6)).bg(color.opacity(0.06))
-            .when(!span.label.is_empty(), |el| el.child(div().absolute().top(px(-12.)).left(px(4.)).text_size(px(9.)).text_color(color).child(span.label.clone()))));
+            .when(!span.label.is_empty(), |el| el.child(div().absolute().top(px(-18.)).left(px(4.)).h(px(16.)).line_height(px(16.)).text_size(px(11.)).text_color(color).child(span.label.clone()))));
     }
     // Paint longer stems first so shorter pointer labels remain readable.
     for (n, pointer) in pointers.iter().enumerate().rev() {

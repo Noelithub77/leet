@@ -10,6 +10,7 @@
 - Antigravity defaults to the latest available Flash model with low reasoning.
 - Syntax highlighting in Debug mode follows the editor theme.
 - Larger array cells and pointer labels with longer stems and smoother movement.
+- Clear headings for the call stack, variables, data structures, and printed output.
 - Debug mode replays every test case with a seek bar, line heat, and live data structures for Python and C++.
 - Explain a recorded case to mark the step where it first goes wrong.
 - Animated arrays, grids, trees, graphs, linked lists, stacks, queues, heaps, maps, sets, and intervals.
@@ -33,6 +34,8 @@
 <summary>Fix</summary>
 
 - Show function icons for calls, returns, and stack frames in Debug mode.
+- Keep array range labels fully visible above the cells.
+- Debug mode shows named user functions and variables without generated runtime frames.
 
 - Settings values line up on the right edge.
 - Keep explicit Web mode selected when local agents are installed.

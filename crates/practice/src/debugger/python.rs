@@ -158,6 +158,18 @@ pub fn record(python: &str, solution: &Path, meta: &serde_json::Value, case: &cr
         assert!(step.locals.iter().any(|v|matches!(&v.value,super::super::Value::Ref{id} if id=="linked:node:0")));
         assert!(step.locals.iter().any(|v|matches!(&v.value,super::super::Value::List{truncated:8,..})));
     }
+    #[test] fn debugger_python_hides_generated_frames_but_keeps_user_helpers() {
+        if available("python3").is_err() { return; }
+        let trace = run("class Solution:\n def double(self,x):\n  return x*2\n def solve(self,n):\n  values=[i for i in range(n)]\n  total=sum(self.double(x) for x in values)\n  identity=lambda value:value\n  return identity(total)\n", "3", Limits::default());
+        assert_eq!(trace.error, None);
+        assert_eq!(trace.output.as_deref(), Some("6"));
+        assert!(trace.steps.iter().any(|step| step.function == "double"));
+        assert!(trace.steps.iter().any(|step| step.function == "lambda"));
+        assert!(trace.steps.iter().all(|step| !step.function.starts_with('<')
+            && step.stack.iter().all(|frame| !frame.function.starts_with('<'))
+            && step.locals.iter().all(|variable| variable.name != ".0")));
+        assert!(trace.steps.iter().any(|step| step.locals.iter().any(|variable| variable.name == "total")));
+    }
     #[test] fn debugger_python_timeout_exception_and_void_output() {
         if available("python3").is_err(){eprintln!("Skipping Python recorder: python3 missing");return;}
         let trace=run("class Solution:\n def solve(self,n):\n  print('before',flush=True)\n  time.sleep(1)\n  return n\n","3",Limits{timeout:Duration::from_millis(150),..Limits::default()});

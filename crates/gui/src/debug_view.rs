@@ -15,6 +15,7 @@ use gpui_kit::*;
 use practice::debugger::{self, Limits, Step, StepKind, Trace};
 use practice::language::Language;
 use practice::runner::{Case, Compare};
+use practice::viz::Structure;
 
 use crate::assist::{Assist, TraceReview};
 use crate::gen_ui::player::{self, Playback};
@@ -362,11 +363,13 @@ impl Debugger {
             return empty(IconName::TriangleAlert, "No steps recorded", trace.and_then(|t| t.error.as_deref()).unwrap_or("The solution produced no traceable steps."), &theme);
         };
         let structures = debugger::structures(step, previous);
+        let (variables, data): (Vec<_>, Vec<_>) = structures.iter().partition(|structure| matches!(structure, Structure::Vars { .. }));
+        let heading = |title: &'static str| div().text_xs().font_weight(FontWeight::MEDIUM).text_color(theme.muted_foreground).child(title);
         let (icon, color, what) = match step.kind {
-            StepKind::Call => (IconName::SquareFunction, theme.info, format!("call {}", step.function)),
-            StepKind::Return => (IconName::SquareFunction, theme.success, format!("return from {}", step.function)),
-            StepKind::Exception => (IconName::TriangleAlert, theme.danger, format!("exception in {}", step.function)),
-            StepKind::Line => (IconName::ArrowRight, theme.primary, format!("line {} · {}", step.line, step.function)),
+            StepKind::Call => (IconName::SquareFunction, theme.info, format!("Calling {}", step.function)),
+            StepKind::Return => (IconName::SquareFunction, theme.success, format!("Returning from {}", step.function)),
+            StepKind::Exception => (IconName::TriangleAlert, theme.danger, format!("Error in {}", step.function)),
+            StepKind::Line => (IconName::ArrowRight, theme.primary, format!("Line {} · {}", step.line, step.function)),
         };
         let stack = h_flex().gap_1().flex_wrap().children(step.stack.iter().enumerate().map(|(i, frame)| {
             let last = i + 1 == step.stack.len();
@@ -384,11 +387,14 @@ impl Debugger {
             .child(h_flex().gap_2().items_center()
                 .child(div().size(px(26.)).rounded_lg().flex().items_center().justify_center().bg(color.opacity(0.15)).child(Icon::new(icon).size_3p5().text_color(color)))
                 .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(what)))
-            .child(stack)
+            .child(v_flex().gap_1p5().child(heading("Call stack")).child(stack))
             .children(step.exception.clone().map(|e| div().p_2().rounded_md().bg(theme.danger.opacity(0.1)).text_xs().text_color(theme.danger).font_family(theme.mono_font_family.clone()).child(e)))
-            .children(structures.iter().map(|s| crate::gen_ui::structure("debugger", s, window, cx)))
-            .when(structures.is_empty(), |el| el.child(div().text_xs().text_color(theme.muted_foreground).child("No local variables yet")))
-            .when(!stdout.is_empty(), |el| el.child(v_flex().gap_1().child(div().text_xs().text_color(theme.muted_foreground).child("stdout"))
+            .when(!variables.is_empty(), |el| el.child(v_flex().gap_2().child(heading("Variables"))
+                .children(variables.iter().map(|s| crate::gen_ui::structure("debugger", s, window, cx)))))
+            .when(!data.is_empty(), |el| el.child(v_flex().gap_4().child(heading("Data structures"))
+                .children(data.iter().map(|s| crate::gen_ui::structure("debugger", s, window, cx)))))
+            .when(structures.is_empty(), |el| el.child(div().text_xs().text_color(theme.muted_foreground).child("No variables yet")))
+            .when(!stdout.is_empty(), |el| el.child(v_flex().gap_1().child(div().text_xs().text_color(theme.muted_foreground).child("Printed output"))
                 .child(div().p_2().rounded_md().bg(theme.muted).text_xs().font_family(theme.mono_font_family.clone()).child(stdout))))
             .when(last, |el| el.children(trace.map(|t| {
                 let ok = self.verdict(self.selected);

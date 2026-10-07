@@ -105,13 +105,15 @@ def _record_main():
     def trace(frame, event, arg):
         nonlocal count, trace_bytes
         if frame.f_code.co_filename != path: return trace
+        # Comprehension and generator frames are compiler machinery, not named user functions.
+        if frame.f_code.co_name.startswith('<') and frame.f_code.co_name != '<lambda>': return trace
         if event not in ('call','line','return','exception'): return trace
         if count >= spec['max_steps']:
             result['truncated']=True; sys.settrace(None); raise _TraceStop()
         encode_value = encoder()
         variables=[]
         for name,v in frame.f_locals.items():
-            if name == 'self' or name.startswith('__') or isinstance(v,(types.ModuleType,types.FunctionType,types.MethodType,type)): continue
+            if not name.isidentifier() or name == 'self' or name.startswith('__') or isinstance(v,(types.ModuleType,types.FunctionType,types.MethodType,type)): continue
             variables.append({'name':name,'value':encode_value(v,0,name)})
         obj=frame.f_locals.get('self')
         if obj is not None and type(obj).__name__ != 'Solution':
@@ -119,9 +121,9 @@ def _record_main():
                 if not name.startswith('__') and not isinstance(v,(types.ModuleType,types.FunctionType,types.MethodType,type)): variables.append({'name':'self.'+name,'value':encode_value(v,0,'self.'+name)})
         stack=[]; current=frame
         while current:
-            if current.f_code.co_filename == path: stack.append({'function':current.f_code.co_name,'line':current.f_lineno})
+            if current.f_code.co_filename == path and (not current.f_code.co_name.startswith('<') or current.f_code.co_name == '<lambda>'): stack.append({'function':current.f_code.co_name.strip('<>'),'line':current.f_lineno})
             current=current.f_back
-        step={'kind':event,'line':frame.f_lineno,'function':frame.f_code.co_name,'stack':stack[::-1],'locals':variables,'stdout_len':stdout.byte_len}
+        step={'kind':event,'line':frame.f_lineno,'function':frame.f_code.co_name.strip('<>'),'stack':stack[::-1],'locals':variables,'stdout_len':stdout.byte_len}
         if event=='return': step['returned']=encode_value(arg)
         if event=='exception': step['exception']=_exception(arg[1])
         data = (json.dumps(step,separators=(',',':'),ensure_ascii=False)+'\n').encode('utf-8')
