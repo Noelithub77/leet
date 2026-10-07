@@ -1,6 +1,7 @@
 <details open>
 <summary>Feat</summary>
 
+- Edit test inputs and expected values inline with a pencil or double-click.
 - Keep Competitive Companion under Provider settings when Codeforces is configured.
 - Organize Settings into General, Editor, Appearance, Provider, Accounts, and Keybindings tabs.
 - Show current shortcuts with keycaps.

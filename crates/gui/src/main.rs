@@ -9,6 +9,7 @@ mod assets;
 mod actions;
 mod commands;
 mod dialogs;
+mod case_editor;
 mod library;
 mod roadmap;
 mod onboarding;
@@ -61,6 +62,7 @@ fn main() {
         omnibar::bind_keys(cx);
         accounts::bind_keys(cx);
         ai::bind_keys(cx);
+        case_editor::bind_keys(cx);
         onboarding::bind_keys(cx);
         statement::bind_keys(cx);
         cx.activate(true);

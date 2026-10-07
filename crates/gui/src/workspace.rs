@@ -218,6 +218,7 @@ pub struct Workspace {
     pub release_update: crate::update::State,
     pub ai: crate::ai::State,
     pub language_picker: crate::language_picker::State,
+    pub case_edit: Option<crate::case_editor::Draft>,
     /// Last shortcut, shown briefly in the status bar.
     pub flash: Option<(SharedString, u64)>,
     flash_seq: u64,
@@ -302,6 +303,7 @@ impl Workspace {
             release_update: crate::update::State::default(),
             ai: crate::ai::State::default(),
             language_picker: crate::language_picker::State::default(),
+            case_edit: None,
             flash: None,
             flash_seq: 0,
             save_task: Task::ready(()),
@@ -841,6 +843,7 @@ impl Workspace {
     // ---- runs --------------------------------------------------------------------------
 
     pub fn run_tests(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !crate::case_editor::save(self, window, cx) { return; }
         self.save_now(cx);
         if self.session.as_ref().is_some_and(|session| session.language != Language::Python && !session.slug.starts_with("cf:")) {
             self.judge(false, window, cx);
@@ -909,6 +912,7 @@ impl Workspace {
     }
 
     pub fn judge(&mut self, submission: bool, window: &mut Window, cx: &mut Context<Self>) {
+        if !crate::case_editor::save(self, window, cx) { return; }
         self.save_now(cx);
         if let Some(session) = self.session.as_ref().filter(|session| session.slug.starts_with("cf:")) {
             if submission {
@@ -1002,19 +1006,19 @@ impl Workspace {
         self.open_problem(slugs[next].clone(), window, cx);
     }
 
-    pub fn save_test_case(&mut self, index: Option<usize>, input: String, expected: String, cx: &mut Context<Self>) {
-        let Some(session) = self.session.as_ref() else { return; };
+    pub fn save_test_case(&mut self, index: Option<usize>, input: String, expected: String, cx: &mut Context<Self>) -> bool {
+        let Some(session) = self.session.as_ref() else { return false; };
         if session.running || matches!(session.judge, Some(Judge::Running { .. })) {
-            self.flash("Wait for the current run to finish", cx); return;
+            self.flash("Wait for the current run to finish", cx); return false;
         }
         let mut cases = session.cases.clone();
         let selected = index.unwrap_or(cases.len());
         let expected = (!expected.trim().is_empty()).then_some(expected);
         if let Some(index) = index {
-            let Some(case) = cases.get_mut(index) else { return; };
+            let Some(case) = cases.get_mut(index) else { return false; };
             case.input = input; case.expected = expected;
         } else { cases.push(Case { id: selected, input, expected, custom: true }); }
-        self.replace_test_cases(cases, selected, cx);
+        self.replace_test_cases(cases, selected, cx)
     }
 
     pub fn reset_test_cases(&mut self, cx: &mut Context<Self>) {
@@ -1025,21 +1029,23 @@ impl Workspace {
         self.replace_test_cases(cases, 0, cx);
     }
 
-    fn replace_test_cases(&mut self, mut cases: Vec<Case>, selected: usize, cx: &mut Context<Self>) {
-        let Some(session) = self.session.as_ref() else { return; };
+    fn replace_test_cases(&mut self, mut cases: Vec<Case>, selected: usize, cx: &mut Context<Self>) -> bool {
+        let Some(session) = self.session.as_ref() else { return false; };
         if session.running || matches!(session.judge, Some(Judge::Running { .. })) {
-            self.flash("Wait for the current run to finish", cx); return;
+            self.flash("Wait for the current run to finish", cx); return false;
         }
         for (id, case) in cases.iter_mut().enumerate() { case.id = id; }
         if let Err(error) = self.db.save_test_cases(&session.slug, &cases) {
-            self.flash(format!("Could not save test cases: {error}"), cx); return;
+            self.flash(format!("Could not save test cases: {error}"), cx); return false;
         }
-        let Some(session) = self.session.as_mut() else { return; };
+        let Some(session) = self.session.as_mut() else { return false; };
         session.selected_case = selected.min(cases.len().saturating_sub(1));
         session.results = vec![None; cases.len()]; session.cases = cases;
         session.compile_error = None; session.judge = None;
+        self.case_edit = None;
         self.bottom = true;
         cx.notify();
+        true
     }
 
     pub fn reveal_hint(&mut self, cx: &mut Context<Self>) {

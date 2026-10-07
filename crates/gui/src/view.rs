@@ -330,6 +330,7 @@ impl Workspace {
                 .on_click(cx.listener(move |this, _, _, cx| {
                     if let Some(s) = &mut this.session {
                         s.selected_case = i;
+                        this.case_edit = None;
                         cx.notify();
                     }
                 }));
@@ -364,8 +365,8 @@ impl Workspace {
             h_flex()
                 .gap_3()
                 .items_start()
-                .child(field("Input", case.input.clone(), None))
-                .child(field("Expected", case.expected.clone().unwrap_or_default(), None))
+                .child(crate::case_editor::field(self, crate::case_editor::Field::Input, case.input.clone(), cx))
+                .child(crate::case_editor::field(self, crate::case_editor::Field::Expected, case.expected.clone().unwrap_or_default(), cx))
                 .child(field(
                     "Output",
                     result.map(|r| if r.error.is_empty() { r.output.clone() } else { r.error.lines().last().unwrap_or("").to_string() }).unwrap_or_default(),
@@ -387,10 +388,6 @@ impl Workspace {
                             .accessibility_label("Add test case").tooltip_with_action("Add test case", &crate::actions::AddCustomTest, Some(crate::actions::WORKSPACE))
                             .disabled(s.running || matches!(s.judge, Some(Judge::Running { .. })))
                             .on_click(cx.listener(|this, _, window, cx| crate::dialogs::open_custom_test(this, window, cx))))
-                        .child(Button::new("edit-test-case").ghost().xsmall().icon(IconName::Pencil)
-                            .accessibility_label("Edit selected test case").tooltip_with_action("Edit selected test case", &crate::actions::EditTestCase, Some(crate::actions::WORKSPACE))
-                            .disabled(s.cases.is_empty() || s.running || matches!(s.judge, Some(Judge::Running { .. })))
-                            .on_click(cx.listener(|this, _, window, cx| crate::dialogs::edit_test_case(this, window, cx))))
                         .child(Button::new("reset-test-cases").ghost().xsmall().icon(IconName::RefreshCw)
                             .accessibility_label("Restore question examples").tooltip("Restore question examples; remove edits and custom cases")
                             .disabled(s.running || matches!(s.judge, Some(Judge::Running { .. })))
