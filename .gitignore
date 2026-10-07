@@ -6,3 +6,4 @@
 /site/node_modules/
 /site/dist/
 /dist/
+/tests/local-deploy-timings.jsonl

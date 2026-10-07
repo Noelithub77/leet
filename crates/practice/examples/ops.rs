@@ -2,7 +2,7 @@
 //! Standalone, local-only project operations; credentials and user data stay untouched.
 #[cfg(unix)]
 mod unix {
-use std::{path::{Path,PathBuf},process::{Command,Stdio},time::{SystemTime,UNIX_EPOCH}};
+use std::{path::{Path,PathBuf},process::{Command,Stdio},time::{Instant,SystemTime,UNIX_EPOCH}};
 use anyhow::{Result,Context,bail};
 use serde_json::json;
 
@@ -52,9 +52,18 @@ fn execute()->Result<()> {
         "check"=>{run("cargo",&["test","--workspace"])?;run("python3",&["tests/install.py"])?;},
         "build"=>run("nice",&["-n","10","cargo","build","--release","-p","gui"])? ,
         "local:deploy"=>{
+            let started=Instant::now();
+            let mut stages=Vec::new();
+            let result=(|| -> Result<_> {
+            let stage=Instant::now();
             run("nice",&["-n","10","cargo","build","--release","-p","gui"])?;
+            let build_duration=stage.elapsed();
+            if build_duration >= std::time::Duration::from_secs(1) {
+                stages.push(json!({"name":"build","duration_seconds":build_duration.as_secs_f64()}));
+            }
             let home=dirs::home_dir().context("Home directory unavailable")?;
             let bin=home.join(".local/bin");let builds=home.join(".local/share/leet/bin");
+            let stage=Instant::now();
             std::fs::create_dir_all(&bin)?;std::fs::create_dir_all(&builds)?;
             let revision=Command::new("git").args(["rev-parse","--short","HEAD"]).output()?;
             if !revision.status.success(){bail!("Commit the development checkpoint before installing");}
@@ -63,6 +72,8 @@ fn execute()->Result<()> {
             let installed=builds.join(format!("leet-{stamp}-{revision}"));
             std::fs::copy("target/release/leet",&installed)?;
             for name in ["leet", "1337"] { link(&installed, &bin.join(name))?; }
+            stages.push(json!({"name":"install_binary_and_links","duration_seconds":stage.elapsed().as_secs_f64()}));
+            let stage=Instant::now();
             let legacy = bin.join("vg");
             if legacy.symlink_metadata().is_ok() {
                 let target = std::fs::canonicalize(&legacy)?;
@@ -70,16 +81,38 @@ fn execute()->Result<()> {
                 std::fs::remove_file(&legacy)?;
             }
             desktop(&home,&bin.join("leet"))?;
+            stages.push(json!({"name":"desktop_entry","duration_seconds":stage.elapsed().as_secs_f64()}));
+            let stage=Instant::now();
             for name in ["leet","1337"]{if std::fs::canonicalize(bin.join(name))?!=installed{bail!("{name} command verification failed");}}
             let version=Command::new(bin.join("leet")).arg("--version").output()?;
             if !version.status.success(){bail!("Installed leet could not report its version");}
             let version=String::from_utf8(version.stdout)?.trim().to_owned();
+            stages.push(json!({"name":"verify_install","duration_seconds":stage.elapsed().as_secs_f64()}));
+            let stage=Instant::now();
             prune(&builds,&installed)?;
-            println!("{}",json!({"command":command,"environment":"local","revision":revision,"binary":installed,"installed":bin.join("leet"),"removed_alias":legacy,"easter_egg_alias":bin.join("1337"),"desktop":home.join(".local/share/applications/leet.desktop"),"version":version}));return Ok(());
+            stages.push(json!({"name":"prune_old_builds","duration_seconds":stage.elapsed().as_secs_f64()}));
+            Ok(json!({"command":command,"environment":"local","revision":revision,"binary":installed,"installed":bin.join("leet"),"removed_alias":legacy,"easter_egg_alias":bin.join("1337"),"desktop":home.join(".local/share/applications/leet.desktop"),"version":version}))
+            })();
+            let record=json!({
+                "timestamp_unix":SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
+                "duration_seconds":started.elapsed().as_secs_f64(),
+                "stages":stages,
+                "outcome":if result.is_ok(){"success"}else{"failure"},
+                "error":result.as_ref().err().map(ToString::to_string)
+            });
+            append_deploy_timing(&record)?;
+            println!("{}",json!({"command":command,"environment":"local","timings_file":"tests/local-deploy-timings.jsonl","timing":record,"result":result?}));return Ok(());
         },
         _=>bail!("Unknown command {command}; use ./ops --help"),
     }
     println!("{}",json!({"command":command,"environment":"local"}));Ok(())
+}
+fn append_deploy_timing(record:&serde_json::Value)->Result<()> {
+    use std::io::Write;
+    let path=Path::new("tests/local-deploy-timings.jsonl");
+    let mut file=std::fs::OpenOptions::new().create(true).append(true).open(path)?;
+    writeln!(file,"{}",record)?;
+    Ok(())
 }
 fn link(target:&Path,path:&Path)->Result<()> {
     if std::fs::symlink_metadata(path).is_ok_and(|info|!info.file_type().is_symlink()){bail!("{} exists and is not a symlink; refusing to overwrite",path.display());}
