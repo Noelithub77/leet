@@ -56,7 +56,10 @@ jobs:
             target/debug/deps
           key: rust-test-v1-ubuntu-22.04-${{ steps.compiler.outputs.version }}-${{ hashFiles('Cargo.lock', '**/Cargo.toml', '.cargo/config.toml', '.github/workflows/release.yml') }}
           restore-keys: rust-test-v1-ubuntu-22.04-${{ steps.compiler.outputs.version }}-
-      - run: ./ops check --json
+      - name: Test workspace
+        run: cargo test --locked --workspace
+      - name: Test installer
+        run: python3 tests/install.py
 
   build:
     name: Build ${{ matrix.target }}
