@@ -18,7 +18,7 @@ struct Snapshot {
     id: String, title: String, description: String,
     input_format: Option<String>, output_format: Option<String>,
     interaction_format: Option<String>, note: Option<String>,
-    examples: Vec<Sample>, tags: Vec<String>,
+    examples: Option<Vec<Sample>>, tags: Option<Vec<String>>,
     time_limit: Option<f64>, memory_limit: Option<f64>,
 }
 
@@ -45,6 +45,7 @@ pub fn question(slug: &str) -> Result<Question> {
 
 impl Snapshot {
     fn into_question(self, slug: &str) -> Result<Question> {
+        if self.description.trim().is_empty() { bail!("Snapshot has no statement text; import from your browser"); }
         let escape = |value: &str| html_escape::encode_text(value).into_owned();
         let mut html = format!("<div class=\"problem-statement\"><div class=\"header\"><div class=\"title\">{}</div></div><p>{} s · {} MB</p>",
             escape(&self.title), self.time_limit.unwrap_or(0.), self.memory_limit.unwrap_or(0.));
@@ -55,11 +56,11 @@ impl Snapshot {
             }
         }
         html.push_str("<div class=\"sample-test\">");
-        for sample in self.examples { html.push_str(&format!("<div class=\"input\"><pre>{}</pre></div><div class=\"output\"><pre>{}</pre></div>", escape(&sample.input), escape(&sample.output))); }
+        for sample in self.examples.unwrap_or_default() { html.push_str(&format!("<div class=\"input\"><pre>{}</pre></div><div class=\"output\"><pre>{}</pre></div>", escape(&sample.input), escape(&sample.output))); }
         html.push_str("</div><p>Historical snapshot · Open-R1 / Codeforces · CC BY 4.0</p></div>");
         let mut q = crate::codeforces::parse_statement(slug, &html)?;
         q.title = self.title;
-        q.topics = self.tags;
+        q.topics = self.tags.unwrap_or_default();
         q.meta["statementSource"] = serde_json::json!("open-r1/codeforces");
         Ok(q)
     }
@@ -77,6 +78,22 @@ mod tests {
         assert_eq!(q.meta["statementSource"], "open-r1/codeforces");
         assert!(INDEX.contains_key("4/A"));
     }
+    #[test]
+    fn null_or_missing_samples_and_tags_do_not_hide_the_statement() {
+        for fields in [serde_json::json!({}), serde_json::json!({"examples": null, "tags": null})] {
+            let mut value = serde_json::json!({"id":"1001/F", "title":"Distinguish multi-qubit basis states", "description":"Identify the given quantum state.", "input_format":"Implement the requested operation.", "output_format":null});
+            value.as_object_mut().unwrap().extend(fields.as_object().unwrap().clone());
+            let q = serde_json::from_value::<Snapshot>(value).unwrap().into_question("cf:1001:F").unwrap();
+            assert!(q.content.contains("Identify the given quantum state."));
+            assert!(q.examples.is_empty()); assert!(q.outputs.is_empty()); assert!(q.topics.is_empty());
+            assert_eq!(q.meta["statementSource"], "open-r1/codeforces");
+        }
+        let malformed = serde_json::json!({"id":"1/A", "title":"Bad samples", "description":"Statement", "examples":[{"input":"8"}]});
+        assert!(serde_json::from_value::<Snapshot>(malformed).is_err());
+        let blank = serde_json::json!({"id":"1/A", "title":"Missing statement", "description":" "});
+        assert!(serde_json::from_value::<Snapshot>(blank).unwrap().into_question("cf:1:A").is_err());
+    }
+
     #[test]
     #[ignore = "downloads a public snapshot row"]
     fn live_watermelon_snapshot() { let q = question("cf:4:A").unwrap(); assert_eq!(q.title, "Watermelon"); assert!(!q.examples.is_empty()); }
