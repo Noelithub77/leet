@@ -1,6 +1,6 @@
 use gpui_kit::*;
 
-gpui_kit::assets::icon_assets!(HomeIcons, [House, Map, X, Star, ExternalLink, Play, ArrowLeft, ChevronDown, Brackets, ArrowLeftRight, Layers, Search, PanelTop, Link, Network, GitBranch, ListOrdered, Undo2, CalendarRange, Zap, Share2, Workflow, ChartColumn, Grid2x2, Binary, Calculator, FileText, Lightbulb, Copy, Info, RefreshCw, Plus, Pencil, Tags, ArrowDownAZ, Download, PanelLeft, PanelBottom, PanelRight]);
+gpui_kit::assets::icon_assets!(HomeIcons, [House, Map, X, Star, ExternalLink, Play, ArrowLeft, ChevronDown, Brackets, ArrowLeftRight, Layers, Search, PanelTop, Link, Network, GitBranch, ListOrdered, Undo2, CalendarRange, Zap, Share2, Workflow, ChartColumn, Grid2x2, Binary, Calculator, FileText, Lightbulb, Copy, Info, RefreshCw, Plus, Pencil, Tags, ArrowDownAZ, Download, PanelLeft, PanelBottom, PanelRight, LifeBuoy, Bug, FlaskConical, Gauge, Rocket, Sparkles, Footprints, Puzzle, BookOpen, WandSparkles, BugPlay, Timer, CircleStop, SkipBack, SkipForward, Pause, ChevronLeft, ChevronRight, Code, Bot, CircleCheck, CircleX, Brain, Globe, Terminal, ArrowUpRight, Send, Undo, Check]);
 
 pub struct Assets;
 
@@ -23,6 +23,12 @@ impl AssetSource for Assets {
             "providers/chatgpt.svg" => Some(include_bytes!("../assets/providers/chatgpt.svg")),
             "providers/claude.svg" => Some(include_bytes!("../assets/providers/claude.svg")),
             "providers/gemini.svg" => Some(include_bytes!("../assets/providers/gemini.svg")),
+            "providers/codex.svg" => Some(include_bytes!("../assets/providers/codex.svg")),
+            "providers/claude-code.svg" => Some(include_bytes!("../assets/providers/claude-code.svg")),
+            "providers/opencode.svg" => Some(include_bytes!("../assets/providers/opencode.svg")),
+            "providers/antigravity.svg" => Some(include_bytes!("../assets/providers/antigravity.svg")),
+            "providers/gemini-cli.svg" => Some(include_bytes!("../assets/providers/gemini-cli.svg")),
+            "providers/cursor.svg" => Some(include_bytes!("../assets/providers/cursor.svg")),
             _ => None,
         };
         if let Some(bytes) = brand { return Ok(Some(std::borrow::Cow::Borrowed(bytes))); }
@@ -35,7 +41,7 @@ impl AssetSource for Assets {
     fn list(&self, path: &str) -> Result<Vec<SharedString>> {
         let mut paths = gpui_kit::assets::Assets.list(path)?;
         paths.extend(HomeIcons.list(path)?);
-        paths.extend(["leet.svg", "providers/neetcode.svg", "providers/leetcode.svg", "providers/codeforces.svg", "providers/chatgpt.svg", "providers/claude.svg", "providers/gemini.svg", "languages/python.svg", "languages/cpp.svg", "languages/go.svg", "languages/c.svg", "languages/java.svg"].into_iter().filter(|name| name.starts_with(path)).map(Into::into));
+        paths.extend(["leet.svg", "providers/neetcode.svg", "providers/leetcode.svg", "providers/codeforces.svg", "providers/chatgpt.svg", "providers/claude.svg", "providers/gemini.svg", "providers/codex.svg", "providers/claude-code.svg", "providers/opencode.svg", "providers/antigravity.svg", "providers/gemini-cli.svg", "providers/cursor.svg", "languages/python.svg", "languages/cpp.svg", "languages/go.svg", "languages/c.svg", "languages/java.svg"].into_iter().filter(|name| name.starts_with(path)).map(Into::into));
         paths.sort();
         paths.dedup();
         Ok(paths)

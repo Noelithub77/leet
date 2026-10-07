@@ -72,7 +72,11 @@ impl Render for Workspace {
                 .flex_1()
                 .min_h_0()
                 .child(self.render_header(cx))
-                .child(div().flex_1().min_h_0().rounded_lg().overflow_hidden().child(self.editor_pane.clone().cached(StyleRefinement::default().size_full())))
+                .child(div().flex().flex_1().min_h_0().rounded_lg().overflow_hidden().child(if self.debug_mode {
+                    self.debugger.clone().into_any_element()
+                } else {
+                    self.editor_pane.clone().cached(StyleRefinement::default().size_full()).into_any_element()
+                }))
                 .into_any_element(),
             Center::Roadmap => self.render_roadmap(window, cx).into_any_element(),
             Center::Settings => div().key_context("Settings").flex_1().min_h_0().h_full().overflow_hidden().child(self.render_settings(window, cx)).into_any_element(),
@@ -242,6 +246,12 @@ impl Workspace {
             }))
             .when(solved, |el| el.child(div().text_xs().text_color(theme.success).child("✓ Solved")))
             .child(div().flex_1())
+            .child(h_flex().gap_0p5().p_0p5().rounded_lg().bg(theme.secondary)
+                .child(crate::theme::selected_choice(Button::new("center-code").ghost().xsmall(), !self.debug_mode, cx).icon(IconName::Code).label("Code")
+                    .tooltip("Edit code").on_click(cx.listener(|this, _, window, cx| this.set_debug(false, window, cx))))
+                .child(crate::theme::selected_choice(Button::new("center-debug").ghost().xsmall(), self.debug_mode, cx).icon(IconName::BugPlay).label("Debug")
+                    .tooltip_with_action("Step through every test case", &crate::actions::ToggleDebug, Some(crate::actions::WORKSPACE))
+                    .on_click(cx.listener(|this, _, window, cx| this.set_debug(true, window, cx)))))
             .when(judging || s.running, |el| {
                 el.child(h_flex().gap_2().text_xs().text_color(theme.muted_foreground).child(Spinner::new().xsmall()).child(if judging { "LeetCode judging" } else { "Running" }))
             })
@@ -253,6 +263,8 @@ impl Workspace {
         let theme = cx.theme().clone();
         let content = if self.history_mode {
             self.render_versions(cx).into_any_element()
+        } else if self.assist_open {
+            self.assist.clone().into_any_element()
         } else {
             self.statement.clone().cached(StyleRefinement::default().size_full()).into_any_element()
         };
@@ -267,8 +279,10 @@ impl Workspace {
             .bg(theme.sidebar)
             .child(v_flex().w(px(RIGHT_W * self.config.zoom)).h_full().opacity((width / (RIGHT_W * self.config.zoom)).clamp(0., 1.))
                 .child(h_flex().p_2().gap_1()
-                    .child(crate::theme::selected_choice(Button::new("right-question").ghost().small(), !self.history_mode, cx).icon(IconName::FileText).tooltip("Question and solution").accessibility_label("Question and solution")
-                        .on_click(cx.listener(|this,_,_,cx|{this.history_mode=false;cx.notify();})))
+                    .child(crate::theme::selected_choice(Button::new("right-question").ghost().small(), !self.history_mode && !self.assist_open, cx).icon(IconName::FileText).tooltip("Question and solution").accessibility_label("Question and solution")
+                        .on_click(cx.listener(|this,_,_,cx|{this.history_mode=false;this.assist_open=false;cx.notify();})))
+                    .child(crate::theme::selected_choice(Button::new("right-assist").ghost().small(), !self.history_mode && self.assist_open, cx).icon(IconName::Sparkles).tooltip_with_action("Assist", &crate::actions::ToggleAssist, Some(crate::actions::WORKSPACE)).accessibility_label("Assist")
+                        .on_click(cx.listener(|this,_,_,cx|{this.history_mode=false;this.assist_open=true;cx.notify();})))
                     .child(crate::theme::selected_choice(Button::new("right-history").ghost().small(), self.history_mode, cx).icon(IconName::GitBranch).tooltip_with_action("History", &crate::actions::ToggleHistory, Some(crate::actions::WORKSPACE)).accessibility_label("History")
                         .on_click(cx.listener(|this,_,window,cx|{this.history_mode=true;if this.session.as_ref().is_some_and(|session|!session.history_loaded){this.load_remote_versions(window,cx);}this.focus_nav(Focus::Sidebar,window,cx);cx.notify();}))))
                 .child(div().flex_1().min_h_0().child(content)))
@@ -568,7 +582,7 @@ impl Workspace {
                 el.child(div().opacity(flash_opacity).text_color(theme.foreground).child(label))
             })
             .child(crate::language_picker::status(self, cx))
-            .child(crate::ai::status(self, cx))
+            .child(self.ai_chip.clone())
             .child(if self.client.signed_in() { "LeetCode ✓" } else { "LeetCode signed out" })
             .child(h_flex().gap_1().child(key(crate::actions::key_for("Search", &self.config))).child("commands"))
             .child(crate::update::button(self, cx))

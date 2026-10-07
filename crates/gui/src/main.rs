@@ -4,6 +4,10 @@
 mod accounts;
 mod companion;
 mod ai;
+mod assist;
+mod debug_view;
+#[path = "gen-ui/mod.rs"]
+mod gen_ui;
 mod brand;
 mod assets;
 mod actions;
@@ -62,6 +66,7 @@ fn main() {
         omnibar::bind_keys(cx);
         accounts::bind_keys(cx);
         ai::bind_keys(cx);
+        debug_view::bind_keys(cx);
         case_editor::bind_keys(cx);
         onboarding::bind_keys(cx);
         statement::bind_keys(cx);

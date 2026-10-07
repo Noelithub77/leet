@@ -39,6 +39,7 @@ impl Workspace {
         for tab in self.tabs.iter().flatten() { crate::language_server::clear_editor_adapters(&tab.editor, cx); }
     }
     pub fn park_tab(&mut self) {
+        self.debug_mode = false;
         if let (Some(index), Some(session)) = (self.active_tab, self.session.take()) {
             self.tabs[index] = Some(ProblemTab {
                 session, editor: self.editor.clone(), pane: self.editor_pane.clone(),
@@ -78,6 +79,7 @@ impl Workspace {
         if index >= self.tabs.len() { return; }
         self.save_now(cx);
         if self.active_tab != Some(index) {
+            self.assist.update(cx, |assist, cx| assist.stop_solves(cx));
             self.park_tab();
             self.take_tab(index);
         }

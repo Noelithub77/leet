@@ -37,7 +37,7 @@ pub fn status(ws: &Workspace, cx: &mut Context<Workspace>) -> impl IntoElement {
         .on_open_change(cx.listener(move |this, open, window, cx| {
             if *open {
                 this.release_update.close();
-                crate::ai::close(this, window, cx);
+                this.ai_chip.update(cx, |chip, cx| chip.hide(cx));
                 this.language_picker.return_focus = Some(this.focus_area);
                 let language = this.session.as_ref().map_or(this.config.preferred_language, |session| session.language);
                 let workspace = cx.weak_entity();

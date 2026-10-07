@@ -7,6 +7,9 @@ use gpui_kit::component::{ActiveTheme as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
+use practice::agents::AgentKind;
+
+use crate::assist::Target;
 use crate::workspace::{Center, Focus, Workspace};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -29,6 +32,12 @@ pub enum Setting {
     OpenFile,
     Keybindings,
     Keybinding(usize),
+    AiAgent,
+    AiModel,
+    AiReasoning,
+    AiFast,
+    WebChat,
+    Install(AgentKind),
 }
 
 pub enum Kind {
@@ -39,7 +48,7 @@ pub enum Kind {
 }
 
 impl Setting {
-    pub const ALL: [Setting; 17] = [
+    pub const ALL: [Setting; 24] = [
         Setting::Onboarding,
         Setting::Language,
         Setting::LanguageServer,
@@ -57,6 +66,13 @@ impl Setting {
         Setting::Workspace,
         Setting::Keybindings,
         Setting::OpenFile,
+        Setting::AiAgent,
+        Setting::AiModel,
+        Setting::AiReasoning,
+        Setting::AiFast,
+        Setting::WebChat,
+        Setting::Install(AgentKind::OpenCode),
+        Setting::Install(AgentKind::Antigravity),
     ];
 
     pub fn label(self) -> &'static str {
@@ -79,6 +95,13 @@ impl Setting {
             Setting::OpenFile => "Open config.toml",
             Setting::Keybindings => "Keyboard shortcuts",
             Setting::Keybinding(i) => crate::actions::COMMANDS[i].label,
+            Setting::AiAgent => "Agent",
+            Setting::AiModel => "Model",
+            Setting::AiReasoning => "Reasoning",
+            Setting::AiFast => "Fast tier",
+            Setting::WebChat => "Web chat",
+            Setting::Install(AgentKind::OpenCode) => "Install OpenCode",
+            Setting::Install(_) => "Install Antigravity",
         }
     }
 
@@ -101,13 +124,20 @@ impl Setting {
             Setting::Workspace => "workspace directory path git",
             Setting::OpenFile => "toml config file",
             Setting::Keybindings | Setting::Keybinding(_) => "keyboard shortcut binding keys",
+            Setting::AiAgent => "ai agent codex claude opencode antigravity gemini cursor local",
+            Setting::AiModel => "ai model luna haiku free",
+            Setting::AiReasoning => "ai reasoning effort thinking",
+            Setting::AiFast => "ai fast tier speed",
+            Setting::WebChat => "ai web chat chatgpt claude gemini browser",
+            Setting::Install(_) => "ai install agent free models opencode antigravity",
         }
     }
 
     pub fn kind(self) -> Kind {
         match self {
-            Setting::Language | Setting::Theme | Setting::List | Setting::TestTimeout => Kind::Choice,
-            Setting::CompanionEnabled => Kind::Toggle,
+            Setting::Language | Setting::Theme | Setting::List | Setting::TestTimeout | Setting::AiAgent | Setting::AiReasoning | Setting::WebChat => Kind::Choice,
+            Setting::CompanionEnabled | Setting::AiFast => Kind::Toggle,
+            Setting::AiModel | Setting::Install(_) => Kind::Action,
             Setting::Python | Setting::ExternalEditor | Setting::Workspace | Setting::CompanionPort | Setting::Keybinding(_) => Kind::Text,
             Setting::Onboarding | Setting::LanguageServer | Setting::Codeforces | Setting::OpenFile | Setting::Font | Setting::Keybindings | Setting::LeetCode | Setting::NeetCode => Kind::Action,
         }
@@ -133,6 +163,12 @@ impl Setting {
             Setting::Workspace => dirs::home_dir().and_then(|home| c.workspace.strip_prefix(home).ok().map(|path| format!("~/{}", path.display()))).unwrap_or_else(|| c.workspace.display().to_string()),
             Setting::OpenFile | Setting::Keybindings => String::new(),
             Setting::Keybinding(i) => crate::actions::COMMANDS[i].effective_key(c).into(),
+            Setting::AiAgent => match ws.assist.read(cx).target(c) { Target::Agent(agent, _) => agent.kind.label().into(), Target::Web(_) => "Web chat".into() },
+            Setting::AiModel => ws.ai_selection(cx).map_or_else(|| "Default".into(), |s| s.model),
+            Setting::AiReasoning => ws.ai_selection(cx).and_then(|s| s.effort).unwrap_or_else(|| "Default".into()),
+            Setting::AiFast => if ws.ai_selection(cx).is_some_and(|s| s.fast) { "On".into() } else { "Off".into() },
+            Setting::WebChat => c.web_chat.label().into(),
+            Setting::Install(kind) => if ws.assist.read(cx).installing == Some(kind) { "Installing…".into() } else { "Install".into() },
         }
     }
 
@@ -146,12 +182,12 @@ impl Setting {
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
-pub enum SettingsTab { #[default] General, Editor, Appearance, Provider, Accounts, Keybindings }
+pub enum SettingsTab { #[default] General, Editor, Appearance, Provider, Ai, Accounts, Keybindings }
 
 impl SettingsTab {
-    const ALL: [Self; 6] = [Self::General, Self::Editor, Self::Appearance, Self::Provider, Self::Accounts, Self::Keybindings];
+    const ALL: [Self; 7] = [Self::General, Self::Editor, Self::Appearance, Self::Provider, Self::Ai, Self::Accounts, Self::Keybindings];
     fn label(self) -> &'static str {
-        match self { Self::General => "General", Self::Editor => "Editor", Self::Appearance => "Appearance", Self::Provider => "Provider", Self::Accounts => "Accounts", Self::Keybindings => "Keybindings" }
+        match self { Self::General => "General", Self::Editor => "Editor", Self::Appearance => "Appearance", Self::Provider => "Provider", Self::Ai => "AI", Self::Accounts => "Accounts", Self::Keybindings => "Keybindings" }
     }
     fn settings(self) -> &'static [Setting] {
         match self {
@@ -159,6 +195,7 @@ impl SettingsTab {
             Self::Editor => &[Setting::Language, Setting::Python, Setting::ExternalEditor, Setting::TestTimeout, Setting::LanguageServer],
             Self::Appearance => &[Setting::Theme, Setting::Font],
             Self::Provider => &[Setting::Codeforces, Setting::CompanionEnabled, Setting::CompanionPort],
+            Self::Ai => &[Setting::AiAgent, Setting::AiModel, Setting::AiReasoning, Setting::AiFast, Setting::WebChat, Setting::Install(AgentKind::OpenCode), Setting::Install(AgentKind::Antigravity)],
             Self::Accounts => &[Setting::LeetCode, Setting::NeetCode],
             Self::Keybindings => &[],
         }
@@ -195,7 +232,7 @@ impl Workspace {
             self.settings.tab = SettingsTab::Keybindings;
             self.settings.selected = index;
         } else if let Some(setting) = focus {
-            self.settings.selected = self.setting_rows().iter().position(|s| *s == setting).unwrap_or(0);
+            self.settings.selected = self.setting_rows(cx).iter().position(|s| *s == setting).unwrap_or(0);
         }
         self.settings.editing = None;
         cx.on_next_frame(window, |this, _, cx| {
@@ -209,29 +246,93 @@ impl Workspace {
     }
 
     pub fn settings_move(&mut self, delta: isize, cx: &mut Context<Self>) {
-        let len = self.setting_rows().len() as isize;
+        let len = self.setting_rows(cx).len() as isize;
         self.settings.selected = (self.settings.selected as isize + delta).clamp(0, len - 1) as usize;
         self.settings.scroll.scroll_to_item(self.settings.selected);
         cx.notify();
     }
 
-    fn setting_rows(&self) -> Vec<Setting> {
+    fn setting_rows(&self, cx: &App) -> Vec<Setting> {
         if self.settings.tab == SettingsTab::Keybindings {
             (0..crate::actions::COMMANDS.len()).map(Setting::Keybinding).collect()
         } else {
             self.settings.tab.settings().iter().copied().filter(|setting| {
-                self.settings.tab.setting_visible(*setting, !self.config.codeforces_handle.trim().is_empty())
+                self.settings.tab.setting_visible(*setting, !self.config.codeforces_handle.trim().is_empty()) && self.ai_setting_visible(*setting, cx)
             }).collect()
         }
     }
 
-    fn selected_setting(&self) -> Setting {
-        self.setting_rows()[self.settings.selected]
+    fn selected_setting(&self, cx: &App) -> Setting {
+        self.setting_rows(cx)[self.settings.selected]
+    }
+
+    /// AI rows that only apply to a local agent, a model with options, or a missing installable agent.
+    fn ai_setting_visible(&self, setting: Setting, cx: &App) -> bool {
+        let assist = self.assist.read(cx);
+        let local = matches!(assist.target(&self.config), Target::Agent(..));
+        let model = self.ai_model(cx);
+        match setting {
+            Setting::AiModel => local,
+            Setting::AiReasoning => local && model.is_some_and(|m| !m.efforts.is_empty()),
+            Setting::AiFast => local && model.is_some_and(|m| m.fast),
+            Setting::Install(kind) => assist.detected(kind).is_none() && !assist.detecting,
+            _ => true,
+        }
+    }
+
+    /// The effective model choice: remembered, else the catalog default.
+    pub fn ai_selection(&self, cx: &App) -> Option<practice::agents::Selection> {
+        let assist = self.assist.read(cx);
+        let Target::Agent(agent, selection) = assist.target(&self.config) else { return None };
+        selection.or_else(|| {
+            let catalog = assist.catalog(agent.kind)?;
+            let model = catalog.models.iter().find(|m| Some(&m.id) == catalog.default_model.as_ref())?;
+            Some(practice::agents::Selection { agent: agent.kind, model: model.id.clone(), effort: model.default_effort.clone(), fast: false })
+        })
+    }
+
+    fn ai_model(&self, cx: &App) -> Option<practice::agents::Model> {
+        let selection = self.ai_selection(cx)?;
+        self.assist.read(cx).catalog(selection.agent)?.models.iter().find(|m| m.id == selection.model).cloned()
+    }
+
+    fn cycle_ai(&mut self, setting: Setting, delta: isize, window: &mut Window, cx: &mut Context<Self>) {
+        let step = |len: usize, i: usize| (i as isize + delta).rem_euclid(len.max(1) as isize) as usize;
+        match setting {
+            Setting::AiAgent => {
+                let options: Vec<Option<AgentKind>> = self.assist.read(cx).agents.iter().map(|a| Some(a.kind)).chain([None]).collect();
+                let current = match self.assist.read(cx).target(&self.config) { Target::Agent(agent, _) => Some(agent.kind), Target::Web(_) => None };
+                let index = options.iter().position(|o| *o == current).unwrap_or(0);
+                self.config.agent = options[step(options.len(), index)];
+                self.config.ai_web = self.config.agent.is_none();
+                if let Some(kind) = self.config.agent { self.assist.update(cx, |assist, cx| assist.load_catalog(kind, cx)); }
+            }
+            Setting::AiReasoning | Setting::AiFast => {
+                let (Some(mut selection), Some(model)) = (self.ai_selection(cx), self.ai_model(cx)) else { return };
+                if setting == Setting::AiFast { selection.fast = !selection.fast; } else {
+                    let index = model.efforts.iter().position(|e| Some(&e.id) == selection.effort.as_ref()).unwrap_or(0);
+                    selection.effort = model.efforts.get(step(model.efforts.len(), index)).map(|e| e.id.clone());
+                }
+                self.config.agent = Some(selection.agent);
+                self.config.ai_web = false;
+                self.config.remember(selection);
+            }
+            Setting::WebChat => {
+                let all = practice::prompts::Provider::ALL;
+                let index = all.iter().position(|p| *p == self.config.web_chat).unwrap_or(0);
+                self.config.web_chat = all[step(all.len(), index)];
+            }
+            _ => return,
+        }
+        self.save_config(window, cx);
+        self.ai_chip.update(cx, |_, cx| cx.notify());
+        cx.notify();
     }
 
     /// Steps a choice setting; `delta` is ±1.
     pub fn settings_cycle(&mut self, delta: isize, window: &mut Window, cx: &mut Context<Self>) {
-        let setting = self.selected_setting();
+        let setting = self.selected_setting(cx);
+        if matches!(setting, Setting::AiAgent | Setting::AiReasoning | Setting::AiFast | Setting::WebChat) { self.cycle_ai(setting, delta, window, cx); return; }
         let step = |len: usize, i: usize| (i as isize + delta).rem_euclid(len as isize) as usize;
         match setting {
             Setting::Theme => {
@@ -269,7 +370,7 @@ impl Workspace {
             self.apply_text_setting(setting, value, window, cx);
             return;
         }
-        let setting = self.selected_setting();
+        let setting = self.selected_setting(cx);
         match setting.kind() {
             Kind::Choice => self.settings_cycle(1, window, cx),
             Kind::Toggle => self.settings_cycle(1, window, cx),
@@ -282,6 +383,10 @@ impl Workspace {
             Kind::Action if matches!(setting, Setting::LeetCode | Setting::NeetCode) => {
                 let account = if setting == Setting::LeetCode { practice::creds::Account::LeetCode } else { practice::creds::Account::NeetCode };
                 crate::accounts::open(account, self.account_names[account.index()] != "Signed out", window, cx);
+            }
+            Kind::Action if setting == Setting::AiModel => self.ai_chip.update(cx, |chip, cx| chip.open(window, cx)),
+            Kind::Action if matches!(setting, Setting::Install(_)) => {
+                if let Setting::Install(kind) = setting { self.assist.update(cx, |assist, cx| assist.install(kind, window, cx)); }
             }
             Kind::Action if setting == Setting::Keybindings => {
                 self.settings.tab = SettingsTab::Keybindings;
@@ -378,7 +483,7 @@ impl Workspace {
                     })))
                 .child(v_flex().id("settings-scroll").overflow_y_scroll().track_scroll(&self.settings.scroll)
                     .min_h_0().flex_1().w_full().pb_8().gap_1()
-                    .children(self.setting_rows().iter().enumerate().map(|(i, &setting)| {
+                    .children(self.setting_rows(cx).iter().enumerate().map(|(i, &setting)| {
                         let selected = i == self.settings.selected;
                         let editing = self.settings.editing.as_ref().filter(|(s, _)| *s == setting);
                         let value = setting.value(self, cx);
@@ -387,13 +492,14 @@ impl Workspace {
                             (None, Kind::Choice | Kind::Toggle) => h_flex()
                                 .gap_2()
                                 .child(div().text_color(theme.muted_foreground).child("‹"))
-                                .child(div().min_w(px(140.)).text_center().child(value))
+                                .child(div().text_right().child(value))
                                 .child(div().text_color(theme.muted_foreground).child("›"))
                                 .into_any_element(),
                             (None, Kind::Text) if matches!(setting, Setting::Keybinding(_)) => crate::view::shortcut_keys(&value).into_any_element(),
                             (None, Kind::Text) => div()
                                 .w(px(320.))
                                 .truncate()
+                                .text_right()
                                 .font_family(theme.mono_font_family.clone())
                                 .text_xs()
                                 .child(if value.is_empty() { "—".into() } else { value })

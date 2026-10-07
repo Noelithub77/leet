@@ -1,0 +1,3 @@
+{
+  "response": "{\"answer\":\"pong\"}\n{\"answer\":\"{\\\"answer\\\":\\\"pong\\\"}\",\"toolAction\":\"Finishing task\",\"toolSummary\":\"Finish task\"}\n"
+}

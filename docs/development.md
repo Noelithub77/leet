@@ -52,18 +52,18 @@ Modifier shortcuts follow the user's VS Code bindings. Bare arrows, `enter` and 
 | `alt+.` / `alt+,` | Next / previous test case |
 | `ctrl+alt+t` | Add a custom test (`ctrl+enter` saves) |
 | `ctrl+alt+shift+t` | Edit the selected test case |
-| `ctrl+alt+1`…`4` | AI prompt: hints only, guided learning, full explanation, solution only |
-| `alt+e` | AI assist with the default style |
-| `ctrl+shift+e` | Configure AI in an editor overlay |
-| `ctrl+alt+a` | Cycle AI between ChatGPT, Claude, and Gemini |
-| `ctrl+alt+s` | Change the default prompt style (used by `alt+e`) |
+| `ctrl+alt+1`…`9`, `0` | Assist: hints, stuck, bugs, edge cases, complexity, optimize, visualize, dry run, pattern, explain |
+| `alt+e` | Toggle the Assist panel |
+| `alt+b` | Toggle Debug mode (←/→ step, shift+←/→ next call or return, space play, ↑/↓ case) |
+| `ctrl+shift+e` | Choose the AI agent, model, reasoning, and Fast tier |
+| `ctrl+alt+a` | Switch between detected agents and the web chat |
 | `ctrl+alt+h` | Reveal the next LeetCode hint |
 | `ctrl+alt+l` | Cycle NeetCode 150 → 250 → All |
 | `ctrl+0` / `ctrl+1` | Focus sidebar / editor |
 | `ctrl+e` | Open the Solution in the external editor (changes reload automatically) |
 | `ctrl+o` | Open the problem source (NeetCode for roadmap problems, otherwise LeetCode) |
 | `ctrl+k` / `ctrl+shift+p` | Search problems, commands, settings and themes |
-| `ctrl+,` | Settings, accounts, keyboard shortcuts and prompt instructions |
+| `ctrl+,` | Settings, AI, accounts, and keyboard shortcuts |
 | `ctrl+=` / `ctrl+-` | Zoom in / out |
 | `ctrl+alt+m` | Toggle NeetCode completion |
 | `ctrl+alt+r` | Refresh the catalog and solved progress |
@@ -81,19 +81,39 @@ stars, and source/video links. Up/Down select a problem; Enter opens its tab. Le
 returns focus to the graph and Right returns to the panel. Escape closes the
 panel first, then leaves the roadmap. Stars are stored locally in SQLite.
 
-## AI prompts
+## AI Assist
 
-Alt+E opens AI assist with your configured defaults. Ctrl+Shift+E opens a compact
-editor overlay for assistant, prompt style, and per-style
-instructions. Ctrl+Enter saves; Escape returns to the editor.
+The right panel's Assist tab shows an icon grid of actions; each result is a card in the same panel, kept per problem in the local cache. The status-line chip shows the agent and model, and a stopwatch while a run is active; it opens the picker for agent, model, reasoning, and Fast tier. Settings → AI holds the same choices plus installers.
 
-A prompt includes the statement, your current code unless it is still the starter, and up to three failing cases. ChatGPT and Claude open with the prompt in `q`; Gemini opens `gemini.google.com/app` with the prompt copied for pasting. The selected account controls its model. Prompts are always copied to the clipboard in case a website drops a long URL. ChatGPT and Claude URL prefill is best-effort.
+Local agents are detected on `PATH` and common user bin directories. Each uses its own native protocol with typed messages (`crates/practice/src/agents/`):
+
+| Agent | Transport | Models |
+| --- | --- | --- |
+| Codex | `codex app-server` JSON-RPC | `model/list`: reasoning efforts and Fast tier |
+| Claude Code | `claude -p` stream-json control protocol | `initialize`: aliases, effort levels, fast mode |
+| Antigravity | `agy -p --output-format stream-json` | `agy models` |
+| OpenCode, Gemini CLI | ACP (`agent-client-protocol`) | session config options |
+| Cursor Agent | print/stream-json | `--list-models` |
+
+No model list is hardcoded. Defaults are the newest Luna for Codex, Haiku for Claude, a free Zen model for OpenCode, and the first Flash model for Antigravity and Gemini. Answers are typed: `practice::assist` derives a JSON Schema for each action (enforced natively by Codex, Claude, and agy), validates with serde, and asks once for a corrected answer. Read-only actions run without tools in a temporary directory. Solve may edit the solution file inside the solutions folder; leet then runs the tests, asks before every LeetCode submission, and feeds failures back for up to five attempts. Changing the problem or language stops the solve loop. Python and Codeforces cases run locally; other LeetCode languages use the existing online test endpoint. Codeforces submission copies the solution and opens its submit page; leet cannot observe acceptance there.
+
+Web mode can be selected explicitly even with installed agents. Actions open ChatGPT, Claude, or Gemini with the prompt prefilled and copied. Settings → AI and the picker offer the official OpenCode and Antigravity installers.
+
+`./ops agents --catalog --json` lists detected agents and their live catalogs. `./ops agents --smoke --json` sends a small read-only structured-output probe using each available default. Authentication and upstream model restrictions are reported per agent.
+
+OpenCode free-model availability depends on its upstream service; a model appearing in the catalog does not guarantee that it accepts requests through ACP. Gemini and Cursor require their own CLI authentication. Fast mode also depends on account eligibility.
+
+## Debug mode
+
+Debug (`alt+b` or the header switch) records every test case with a deterministic tracer, then plays it back like a video: the code shows the current line and a heat gutter, and the state canvas draws locals as arrays with index pointers, grids, trees, linked lists, stacks, queues, heaps, maps, sets, and graphs (`practice::debugger::structures`). Native renderers and shared playback controls live in `crates/gui/src/gen-ui/`; their UI-independent scene schema lives in `practice::viz`. Python uses `sys.settrace`. C++ compiles a generated LeetCode driver with `g++ -O0 -g` and steps it under gdb's Python API, so it needs `g++` and `gdb` with Python. Recordings stop at 4,000 steps. **Explain** sends the real trace to the agent, which marks the first wrong step on the seek bar. Other languages and Codeforces stdin problems use the AI Dry run action. Recordings use a captured copy of the editor source, so later file edits cannot change their states.
+
+`./ops trace --help` records a trace from the command line.
 
 ## Files
 
 | Path | Contents |
 | --- | --- |
-| `~/.config/leet/config.toml` | New Linux installs: workspace, theme, Python, external editor, list, AI provider/style, timeout |
+| `~/.config/leet/config.toml` | New Linux installs: workspace, theme, Python, external editor, list, AI agent, models, and web chat, timeout |
 | `~/.local/share/leet/leet.db` | New Linux installs: catalog, questions, solved marks, custom tests, layout |
 | `~/leet/leetcode/<id>-<slug>.py` | New solutions (the workspace is a git repository; commits only on Accepted) |
 | `crates/gui/themes/` | Bundled themes; Vesper is the default |

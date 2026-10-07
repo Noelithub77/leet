@@ -17,7 +17,7 @@ use practice::creds::{self, Account};
 use practice::db::Db;
 use practice::git;
 use practice::leetcode::{CatalogItem, Client, JudgeResult, Question};
-use practice::prompts::{self, Style};
+use practice::prompts;
 use practice::roadmap::{self, ENTRIES, TOPICS};
 use practice::language::{Language, Source};
 use practice::runner::{self, Case, CaseResult, Compare, Verdict};
@@ -216,7 +216,13 @@ pub struct Workspace {
     pub syncing: bool,
     pub update_ready: bool,
     pub release_update: crate::update::State,
-    pub ai: crate::ai::State,
+    pub assist: Entity<crate::assist::Assist>,
+    pub ai_chip: Entity<crate::ai::Chip>,
+    pub debugger: Entity<crate::debug_view::Debugger>,
+    /// The right panel shows Assist instead of the statement.
+    pub assist_open: bool,
+    /// The center shows the debugger instead of the editor.
+    pub debug_mode: bool,
     pub language_picker: crate::language_picker::State,
     pub case_edit: Option<crate::case_editor::Draft>,
     /// Last shortcut, shown briefly in the status bar.
@@ -255,6 +261,10 @@ impl Workspace {
         let (omni, omni_sub) = Omnibar::new(window, cx);
         cx.set_global(crate::statement::TagsVisible(config.show_tags));
         cx.set_global(crate::statement::Sections(db.statement_sections().unwrap_or([true, false, false])));
+        let weak = cx.weak_entity();
+        let assist = cx.new(|cx| crate::assist::Assist::new(weak.clone(), db.clone(), cx));
+        let ai_chip = cx.new(|cx| crate::ai::Chip::new(weak.clone(), assist.clone(), cx));
+        let debugger = cx.new(|cx| crate::debug_view::Debugger::new(weak, assist.clone(), cx));
         let mut this = Self {
             companion_task: None,
             onboarding: None,
@@ -301,7 +311,11 @@ impl Workspace {
             syncing: false,
             update_ready: false,
             release_update: crate::update::State::default(),
-            ai: crate::ai::State::default(),
+            assist,
+            ai_chip,
+            debugger,
+            assist_open: false,
+            debug_mode: false,
             language_picker: crate::language_picker::State::default(),
             case_edit: None,
             flash: None,
@@ -604,6 +618,7 @@ impl Workspace {
             self.select_tab(index, window, cx);
             return;
         }
+        self.assist.update(cx, |assist, cx| assist.stop_solves(cx));
         self.save_now(cx);
         self.park_tab();
         self.new_editor(window, cx);
@@ -685,6 +700,7 @@ impl Workspace {
         };
         if session.language == language { crate::language_picker::close(self, window, cx); return; }
         if session.question.is_none() || session.running || matches!(session.judge, Some(Judge::Running { .. })) { return; }
+        self.assist.update(cx, |assist, cx| assist.stop_solves(cx));
         let slug = session.slug.clone();
         let previous = session.language;
         let tab = self.active_tab;
@@ -852,6 +868,8 @@ impl Workspace {
         let Some(s) = self.session.as_mut() else { return };
         let Some(q) = s.question.as_ref() else { return };
         if s.running || s.cases.is_empty() {
+            let slug = s.slug.clone();
+            self.assist.update(cx, |assist, cx| assist.fail_solve(&slug, "No available cases, or tests already running".into(), cx));
             return;
         }
         s.running = true;
@@ -897,6 +915,10 @@ impl Workspace {
                 {
                     s.selected_case = first_bad;
                 }
+                let report = match &s.compile_error { Some(error) => error.clone(), None => s.failures().join("\n") };
+                let ok = s.compile_error.is_none() && passed == total;
+                this.assist.update(cx, |assist, cx| assist.tests_finished(&slug, ok, format!("{passed}/{total} local tests passed\n{report}"), window, cx));
+                let Some(s) = this.session_for_mut(&slug) else { return };
                 let note = if s.compile_error.is_some() {
                     Notification::error("Syntax error")
                 } else if passed == total {
@@ -925,6 +947,9 @@ impl Workspace {
             return;
         }
         if !self.client.signed_in() {
+            if let Some(slug) = self.session.as_ref().map(|s| s.slug.clone()) {
+                self.assist.update(cx, |assist, cx| assist.fail_solve(&slug, "LeetCode sign-in needed to run this language or submit".into(), cx));
+            }
             self.toast(
                 Notification::warning("LeetCode sign-in needed. Open Settings → LeetCode account."),
                 window,
@@ -963,6 +988,11 @@ impl Workspace {
                 if matches!(&result, Ok((r, _, _)) if r.submission && r.accepted()) && this.solved.insert(slug.clone()) {
                     this.rebuild_library();
                 }
+                if let Ok((r, _, _)) = &result {
+                    let report = judge_report(r);
+                    if r.submission { this.assist.update(cx, |assist, cx| assist.judge_finished(&slug, r.accepted(), report, window, cx)); }
+                    else { this.assist.update(cx, |assist, cx| assist.tests_finished(&slug, r.accepted(), report, window, cx)); }
+                }
                 let Some(s) = this.session_for_mut(&slug) else { return };
                 let note = match result {
                     Ok((r, commit, history)) => {
@@ -974,6 +1004,7 @@ impl Workspace {
                     Err(err) => {
                         let note = Notification::error(err.to_string());
                         s.judge = Some(Judge::Failed(err.to_string()));
+                        this.assist.update(cx, |assist, cx| assist.fail_solve(&slug, err.to_string(), cx));
                         note
                     }
                 };
@@ -1069,41 +1100,6 @@ impl Workspace {
         cx.notify();
     }
 
-    // ---- prompts -----------------------------------------------------------------------
-
-    pub fn prompt(&mut self, style: Style, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(s) = self.session.as_ref() else { return };
-        let Some(q) = s.question.as_ref() else { return };
-        let code = self.editor.read(cx).value().to_string();
-        let failures = s.failures();
-        let url = crate::roadmap::problem_url(s.source, &q.slug);
-        let text = prompts::build_custom(
-            style,
-            &prompts::Context {
-                title: &q.title,
-                difficulty: &q.difficulty,
-                url: &url,
-                statement_html: &q.content,
-                code: &code,
-                starter: q.starter(s.language).unwrap_or_default(),
-                language: s.language,
-                failures: &failures,
-            },
-            self.config.prompt_instructions.get(style.id()).map(String::as_str).unwrap_or(style.instructions()),
-        );
-        let provider = self.config.prompt_provider;
-        let link = prompts::url(provider, &text);
-        cx.write_to_clipboard(ClipboardItem::new_string(text));
-        match open::that_detached(&link) {
-            Ok(()) => self.toast(
-                Notification::info(format!("{} · {} opened (prompt also copied)", style.label(), provider.label())),
-                window,
-                cx,
-            ),
-            Err(err) => self.toast(Notification::error(format!("Could not open browser: {err}")), window, cx),
-        }
-    }
-
     // ---- history -----------------------------------------------------------------------
 
     pub fn restore_commit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1184,6 +1180,16 @@ pub(crate) struct Loaded {
     history: Vec<crate::history::LocalVersion>,
     statement: Vec<practice::description::Block>,
     hints: Vec<String>,
+}
+
+/// The judge's verdict as plain text for an agent fixing the solution.
+fn judge_report(r: &JudgeResult) -> String {
+    let status = if r.status_code == 10 && !r.accepted() { "Wrong Answer" } else { r.status.as_str() };
+    let mut report = status.to_owned();
+    if let (Some(c), Some(t)) = (r.total_correct, r.total_testcases) { report.push_str(&format!(" · {c}/{t} testcases")); }
+    if !r.last_input.is_empty() { report.push_str(&format!("\ninput: {}\nexpected: {}\ngot: {}", r.last_input.replace('\n', ", "), r.expected_output, r.actual_output)); }
+    if !r.error.is_empty() { report.push_str(&format!("\nerror: {}", r.error)); }
+    report
 }
 
 fn judge_note(r: &JudgeResult, committed: bool) -> Notification {

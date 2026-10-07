@@ -16,7 +16,39 @@ fn execute()->Result<()> {
     let args:Vec<_>=std::env::args().skip(1).collect();
     let command=args.first().map(String::as_str).unwrap_or("--help");
     if matches!(command,"--help"|"-h"|"help"){
-        println!("./ops <check|build|local:deploy|snapshot|cache:fetch|contests:refresh|workspace:move|release:package> [--json]\n\ncheck         Rust workspace tests.\nbuild         Release desktop build.\nlocal:deploy  Build/install leet and 1337 commands, desktop entry/icon; verify version and links.\nsnapshot      Public-only SQLite refresh; use ./ops snapshot --help.\ncache:fetch   Cache one Codeforces statement: --slug cf:CONTEST:INDEX.\ncontests:refresh  Refresh cached Codeforces contests; optional --contest ID.\nworkspace:move Move solutions and Git history: --path /absolute/path; preserve a compatibility link.\nrelease:package  Package a native CI build; use ./ops release:package --help.\n\nLocal environment. Preserves settings, credentials, cache, and Solutions. Running windows offer restart.");return Ok(());
+        println!("./ops <check|build|local:deploy|agents|snapshot|cache:fetch|contests:refresh|workspace:move|release:package|trace> [--json]\n\nagents        Detect local agents; --catalog lists live models, --smoke runs read-only JSON probes.\ncheck         Rust workspace tests.\nbuild         Release desktop build.\nlocal:deploy  Build/install leet and 1337 commands, desktop entry/icon; verify version and links.\nsnapshot      Public-only SQLite refresh; use ./ops snapshot --help.\ncache:fetch   Cache one Codeforces statement: --slug cf:CONTEST:INDEX.\ncontests:refresh  Refresh cached Codeforces contests; optional --contest ID.\nworkspace:move Move solutions and Git history: --path /absolute/path; preserve a compatibility link.\nrelease:package  Package a native CI build; use ./ops release:package --help.\ntrace         Record one case; use ./ops trace --help.\n\nLocal environment. Preserves settings, credentials, cache, and Solutions. Running windows offer restart.");return Ok(());
+    }
+    if command == "trace" { return trace(&args[1..]); }
+    if command == "agents" {
+        if args.iter().skip(1).any(|arg| !matches!(arg.as_str(), "--json"|"--catalog"|"--smoke"|"--help")) { bail!("Use ./ops agents [--json] [--catalog] [--smoke]"); }
+        if args.iter().any(|arg| arg == "--help") { println!("./ops agents [--json] [--catalog] [--smoke]\nLocal installed CLIs. Catalog discovery is read-only; smoke sends a small read-only prompt using each default model."); return Ok(()); }
+        let catalogs = args.iter().any(|arg| matches!(arg.as_str(), "--catalog"|"--smoke"));
+        let smoke = args.iter().any(|arg| arg == "--smoke");
+        let mut records = Vec::new(); let mut failed = false;
+        for agent in practice::agents::detect() {
+            let mut record = json!({"kind":agent.kind,"path":agent.path,"version":agent.version});
+            if catalogs { match practice::agents::catalog(&agent) {
+                Ok(catalog) => {
+                    if catalog.models.is_empty() { failed=true; record["catalog_error"]=json!(catalog.sign_in_hint.as_deref().unwrap_or("Agent returned no models")); }
+                    if smoke { if let Some(model) = catalog.default_model.clone() {
+                        let model = if agent.kind == practice::agents::AgentKind::Antigravity { catalog.models.iter().find(|entry| entry.id.starts_with(model.trim_end_matches("-high").trim_end_matches("-medium")) && entry.id.ends_with("-low")).map(|entry|entry.id.clone()).unwrap_or(model) } else {model};
+                        let effort = catalog.models.iter().find(|entry| entry.id == model).and_then(|entry| entry.efforts.first()).map(|effort| effort.id.clone());
+                        let request = practice::agents::Request { agent:agent.clone(), selection:practice::agents::Selection { agent:agent.kind, model, effort, fast:false }, prompt:"Return exactly {\"answer\":\"pong\"}. Answer immediately from this prompt. Do not use tools or create planning artifacts or walkthroughs.".into(), schema:Some(json!({"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"],"additionalProperties":false})), cwd:std::env::temp_dir(), access:practice::agents::Access::ReadOnly, resume:None };
+                        let cancel = practice::agents::Cancel::default(); let deadline = cancel.clone();
+                        let (stop_tx, stop_rx) = std::sync::mpsc::channel();
+                        let watchdog = std::thread::spawn(move || { if stop_rx.recv_timeout(std::time::Duration::from_secs(90)).is_err() { deadline.cancel(); } });
+                        let result = practice::agents::run(&request, &mut |_| {}, &cancel);
+                        let _ = stop_tx.send(()); let _ = watchdog.join();
+                        match result { Ok(outcome) => { let passed = outcome.structured.as_ref().is_some_and(|value| value["answer"] == "pong"); failed |= !passed; record["smoke"] = json!({"passed":passed,"text":outcome.text,"structured":outcome.structured,"session":outcome.session,"model":request.selection.model}); }, Err(error) => { failed=true; record["smoke_error"]=json!(error.to_string()); } }
+                    } else { failed=true; record["smoke_error"]=json!("Agent did not advertise a default model"); } }
+                    record["catalog"]=serde_json::to_value(catalog)?;
+                }
+                Err(error) => { failed=true; record["catalog_error"]=json!(error.to_string()); }
+            } }
+            records.push(record);
+        }
+        println!("{}",json!({"command":"agents","environment":"local-agent-clis","agents":records,"success":!failed}));
+        if failed { bail!("Some agent probes failed; see per-agent results"); } return Ok(());
     }
     if command == "workspace:move" {
         if args.len() < 3 || args.len() > 4 || args[1] != "--path" || args.get(3).is_some_and(|arg| arg != "--json") { bail!("Use ./ops workspace:move --path /absolute/path [--json]"); }
@@ -128,6 +160,33 @@ fn execute()->Result<()> {
         _=>bail!("Unknown command {command}; use ./ops --help"),
     }
     println!("{}",json!({"command":command,"environment":"local"}));Ok(())
+}
+fn trace(args:&[String])->Result<()> {
+    const USAGE:&str="./ops trace --language python|cpp --solution PATH --meta PATH --input PATH [--json] [--max-steps N]";
+    if args.iter().any(|arg|matches!(arg.as_str(),"--help"|"-h")){println!("{USAGE}\nLocal solution execution; no account, cache, or solution repository writes.");return Ok(());}
+    let mut language=None;let mut solution=None;let mut meta=None;let mut input=None;let mut max_steps=4000;let mut json_output=false;let mut i=0;
+    while i<args.len(){
+        let option=args[i].as_str();
+        if option=="--json" {json_output=true;i+=1;continue;}
+        let value=args.get(i+1).with_context(||format!("{option} requires a value; {USAGE}"))?;
+        match option {
+            "--language" if language.is_none()=>language=Some(match value.as_str(){"python"=>practice::language::Language::Python,"cpp"=>practice::language::Language::Cpp,_=>bail!("Language must be python or cpp")}),
+            "--solution" if solution.is_none()=>solution=Some(PathBuf::from(value)),
+            "--meta" if meta.is_none()=>meta=Some(PathBuf::from(value)),
+            "--input" if input.is_none()=>input=Some(PathBuf::from(value)),
+            "--max-steps"=>max_steps=value.parse().context("max-steps must be a nonnegative integer")?,
+            _=>bail!("Unexpected option {option}; {USAGE}"),
+        }i+=2;
+    }
+    let language=language.context(USAGE)?;let solution=solution.context(USAGE)?;
+    let meta:serde_json::Value=serde_json::from_str(&std::fs::read_to_string(meta.context(USAGE)?)?)?;
+    let case=practice::runner::Case{id:0,input:std::fs::read_to_string(input.context(USAGE)?)?,expected:None,custom:true};
+    let started=Instant::now();
+    let trace=practice::debugger::record(language,"python3",&solution,&meta,&case,practice::debugger::Limits{max_steps,..Default::default()})?;
+    let ms=started.elapsed().as_secs_f64()*1000.;
+    if json_output{println!("{}",json!({"command":"trace","environment":"local","steps_count":trace.steps.len(),"ms":ms,"trace":trace}));}
+    else{println!("{} steps, truncated={}, {:.1} ms\noutput: {}",trace.steps.len(),trace.truncated,ms,trace.output.as_deref().unwrap_or("(none)"));if let Some(error)=trace.error{println!("error: {error}");}}
+    Ok(())
 }
 fn append_deploy_timing(record:&serde_json::Value)->Result<()> {
     use std::io::Write;

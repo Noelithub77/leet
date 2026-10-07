@@ -7,9 +7,9 @@ use gpui_kit::component::notification::Notification;
 use gpui_kit::*;
 use practice::creds::{self, Account};
 use practice::leetcode::Client;
-use practice::prompts::Style;
 
 use crate::actions::*;
+use practice::assist::Action;
 use crate::omnibar::Scope;
 use crate::workspace::{Center, Focus, Workspace};
 
@@ -159,28 +159,39 @@ impl Workspace {
             .on_action(cx.listener(|this, _: &PrevProblem, window, cx| this.step_problem(-1, window, cx)))
             .on_action(cx.listener(|this, _: &NextCase, _, cx| this.step_case(1, cx)))
             .on_action(cx.listener(|this, _: &PrevCase, _, cx| this.step_case(-1, cx)))
-            .on_action(cx.listener(|this, _: &PromptHints, window, cx| this.prompt(Style::Hints, window, cx)))
-            .on_action(cx.listener(|this, _: &PromptGuided, window, cx| this.prompt(Style::Guided, window, cx)))
-            .on_action(cx.listener(|this, _: &PromptFull, window, cx| this.prompt(Style::Full, window, cx)))
-            .on_action(cx.listener(|this, _: &PromptSolution, window, cx| this.prompt(Style::SolutionOnly, window, cx)))
-            .on_action(cx.listener(|this, _: &PromptDefault, window, cx| {
-                let style = this.config.prompt_style;
-                this.prompt(style, window, cx);
+            .on_action(cx.listener(|this, _: &AssistHints, window, cx| this.run_assist(Action::Hints, window, cx)))
+            .on_action(cx.listener(|this, _: &AssistStuck, window, cx| this.run_assist(Action::Stuck, window, cx)))
+            .on_action(cx.listener(|this, _: &AssistBugs, window, cx| this.run_assist(Action::Bugs, window, cx)))
+            .on_action(cx.listener(|this, _: &AssistTests, window, cx| this.run_assist(Action::Tests, window, cx)))
+            .on_action(cx.listener(|this, _: &AssistAnalyze, window, cx| this.run_assist(Action::Analyze, window, cx)))
+            .on_action(cx.listener(|this, _: &AssistOptimize, window, cx| this.run_assist(Action::Optimize, window, cx)))
+            .on_action(cx.listener(|this, _: &AssistVisualize, window, cx| this.run_assist(Action::Visualize, window, cx)))
+            .on_action(cx.listener(|this, _: &AssistDryRun, window, cx| this.run_assist(Action::DryRun, window, cx)))
+            .on_action(cx.listener(|this, _: &AssistPattern, window, cx| this.run_assist(Action::Pattern, window, cx)))
+            .on_action(cx.listener(|this, _: &AssistExplain, window, cx| this.run_assist(Action::Explain, window, cx)))
+            .on_action(cx.listener(|this, _: &AssistSolve, window, cx| this.run_assist(Action::Solve, window, cx)))
+            .on_action(cx.listener(|this, _: &StopAssist, _, cx| { this.assist.update(cx, |assist, cx| assist.stop_all(cx)); this.flash("AI stopped", cx); }))
+            .on_action(cx.listener(|this, _: &ToggleAssist, window, cx| {
+                this.assist_open = !(this.right && this.assist_open && !this.history_mode);
+                this.right = true; this.history_mode = false; this.save_layout();
+                if !this.assist_open { this.focus_editor(window, cx); }
+                this.flash(if this.assist_open { "Assist" } else { "Statement" }, cx);
             }))
-            .on_action(cx.listener(|this, _: &ConfigureAi, window, cx| crate::ai::open(this, window, cx)))
-            .on_action(cx.listener(|this, _: &ToggleProvider, window, cx| {
-                this.config.prompt_provider = this.config.prompt_provider.toggle();
-                this.save_config(window, cx);
-                let label = format!("AI: {}", this.config.prompt_provider.label());
-                this.flash(label, cx);
+            .on_action(cx.listener(|this, _: &ToggleDebug, window, cx| {
+                if this.center != Center::Editor { this.back_to_editor(window, cx); }
+                let on = !this.debug_mode;
+                this.set_debug(on, window, cx);
             }))
-            .on_action(cx.listener(|this, _: &CycleStyle, window, cx| {
-                let styles = Style::ALL;
-                let next = styles.iter().position(|s| *s == this.config.prompt_style).map_or(0, |i| (i + 1) % styles.len());
-                this.config.prompt_style = styles[next];
+            .on_action(cx.listener(|this, _: &ConfigureAi, window, cx| this.ai_chip.update(cx, |chip, cx| chip.open(window, cx))))
+            .on_action(cx.listener(|this, _: &CycleAgent, window, cx| {
+                let agents: Vec<Option<practice::agents::AgentKind>> = this.assist.read(cx).agents.iter().map(|a| Some(a.kind)).chain([None]).collect();
+                let current = match this.assist.read(cx).target(&this.config) { crate::assist::Target::Agent(agent, _) => Some(agent.kind), crate::assist::Target::Web(_) => None };
+                let next = agents.iter().position(|a| *a == current).map_or(0, |i| (i + 1) % agents.len());
+                this.config.agent = agents[next];
+                this.config.ai_web = this.config.agent.is_none();
                 this.save_config(window, cx);
-                let label = format!("Default prompt: {} (alt+e)", styles[next].label());
-                this.flash(label, cx);
+                this.flash(format!("AI: {}", agents[next].map_or("Web chat", practice::agents::AgentKind::label)), cx);
+                this.ai_chip.update(cx, |_, cx| cx.notify());
             }))
             .on_action(cx.listener(|this, _: &OpenExternal, window, cx| {
                 this.save_now(cx);

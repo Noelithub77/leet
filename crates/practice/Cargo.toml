@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 anyhow = "1"
+agent-client-protocol = { version = "3.1", features = ["process"] }
 axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
 tokio = { version = "1", features = ["rt", "net", "sync"] }
 async-lsp = { version = "0.2.4", default-features = false }
@@ -26,6 +27,7 @@ open = "5"
 regex = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+schemars = "1"
 scraper = "0.27"
 toml = "0.9"
 ureq = { version = "3", features = ["json"] }

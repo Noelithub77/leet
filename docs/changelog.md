@@ -1,9 +1,17 @@
 <details open>
 <summary>Feat</summary>
 
+- Assist panel with hints, I'm stuck, find bugs, edge cases, complexity, optimize, visualize, dry run, pattern, explain, and solve.
+- Run Codex, Claude Code, OpenCode, Antigravity, Gemini CLI, or Cursor Agent locally with live models, reasoning levels, and Fast tier.
+- Install OpenCode or Antigravity from the AI menu to use free models.
+- Solve edits, tests, and retries LeetCode submissions, asking before each submit.
+- Debug mode replays every test case with a seek bar, line heat, and live data structures for Python and C++.
+- Explain a recorded case to mark the step where it first goes wrong.
+- Animated arrays, grids, trees, graphs, linked lists, stacks, queues, heaps, maps, sets, and intervals.
+- Settings → AI for agent, model, reasoning, Fast tier, and web chat.
 - Edit test inputs and expected values inline with a pencil or double-click.
 - Keep Competitive Companion under Provider settings when Codeforces is configured.
-- Organize Settings into General, Editor, Appearance, Provider, Accounts, and Keybindings tabs.
+- Organize Settings into General, Editor, Appearance, Provider, AI, Accounts, and Keybindings tabs.
 - Show current shortcuts with keycaps.
 - Animated panel toggles beside Settings with current shortcut tooltips.
 - Compact status-bar popups for updates, AI preferences, and language switching.
@@ -16,6 +24,10 @@
 
 <details>
 <summary>Fix</summary>
+
+- Settings values line up on the right edge.
+- Keep explicit Web mode selected when local agents are installed.
+- Stop solve runs on cancellation or problem changes.
 
 - Recognize the migrated ~/leet folder when an older running instance saves ~/vg.
 

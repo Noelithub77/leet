@@ -171,7 +171,7 @@ pub fn button(this: &Workspace, cx: &mut Context<Workspace>) -> impl IntoElement
             .icon(gpui_kit::component::Icon::new(IconName::Download).text_color(cx.theme().primary))
             .accessibility_label("Changelog and updates")
             .on_click(cx.listener(|this, _, window, cx| {
-                crate::ai::close(this, window, cx);
+                this.ai_chip.update(cx, |chip, cx| chip.hide(cx));
                 crate::language_picker::close(this, window, cx);
                 this.omni.open = false;
                 this.release_update.open = true;

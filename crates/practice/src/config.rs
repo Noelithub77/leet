@@ -4,7 +4,8 @@ use std::collections::BTreeMap;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::prompts::{Provider, Style};
+use crate::agents::{AgentKind, Selection};
+use crate::prompts::Provider;
 use crate::roadmap::List;
 use crate::language::{Language, Source};
 
@@ -25,13 +26,19 @@ pub struct Config {
     pub companion_port: u16,
     pub external_editor: String,
     pub roadmap_list: List,
-    pub prompt_provider: Provider,
-    pub prompt_style: Style,
+    /// Web chat for Assist when no local agent is chosen.
+    #[serde(alias = "prompt_provider")]
+    pub web_chat: Provider,
+    /// The preferred local agent; `None` detects the first installed agent.
+    pub agent: Option<AgentKind>,
+    /// Explicit web choice survives detection and restarts.
+    pub ai_web: bool,
+    /// The last model choice per agent.
+    pub agent_models: Vec<Selection>,
     pub test_timeout_secs: u64,
     /// UI scale; `ctrl+=` / `ctrl+-` change it.
     pub zoom: f32,
     pub keybindings: BTreeMap<String, String>,
-    pub prompt_instructions: BTreeMap<String, String>,
 }
 
 impl Default for Config {
@@ -50,12 +57,13 @@ impl Default for Config {
             companion_port: 13337,
             external_editor: "zed".into(),
             roadmap_list: List::NeetCode150,
-            prompt_provider: Provider::ChatGpt,
-            prompt_style: Style::Guided,
+            web_chat: Provider::ChatGpt,
+            agent: None,
+            ai_web: false,
+            agent_models: Vec::new(),
             test_timeout_secs: 10,
             zoom: 1.0,
             keybindings: BTreeMap::new(),
-            prompt_instructions: BTreeMap::new(),
         }
     }
 }
@@ -67,6 +75,16 @@ fn migrated_workspace(path: &Path, home: &Path) -> PathBuf {
 }
 
 impl Config {
+    /// The remembered choice for `agent`, if any.
+    pub fn selection(&self, agent: AgentKind) -> Option<&Selection> {
+        self.agent_models.iter().find(|selection| selection.agent == agent)
+    }
+
+    pub fn remember(&mut self, selection: Selection) {
+        self.agent_models.retain(|s| s.agent != selection.agent);
+        self.agent_models.push(selection);
+    }
+
     pub fn path() -> PathBuf {
         config_dir().join("config.toml")
     }
@@ -152,6 +170,7 @@ mod tests {
         assert_eq!(config.font_family, "Liberation Sans");
         assert!(!config.show_tags);
         config.show_tags = true;
+        config.ai_web = true;
         config.theme = "Ayu Dark".into();
         config.preferred_language = Language::Go;
         config.source = Source::Codeforces;
@@ -159,25 +178,28 @@ mod tests {
         config.onboarding_completed = true;
         config.font_family = "DejaVu Sans".into();
         config.keybindings.insert("Search".into(), "ctrl-alt-k".into());
-        config.prompt_instructions.insert("guided".into(), "Ask one question.\nWait for my answer.".into());
+        config.agent = Some(AgentKind::Codex);
+        config.remember(Selection { agent: AgentKind::Codex, model: "gpt-6-luna".into(), effort: Some("low".into()), fast: true });
         config.save_to(&path).unwrap();
         let saved = Config::load_from(&path).unwrap();
         assert_eq!(saved.theme, "Ayu Dark");
         assert!(saved.show_tags);
+        assert!(saved.ai_web);
         assert_eq!(saved.preferred_language, Language::Go);
         assert_eq!(saved.source, Source::Codeforces);
         assert_eq!(saved.codeforces_handle, "tourist");
         assert!(saved.onboarding_completed);
         assert_eq!(saved.font_family, "DejaVu Sans");
         assert_eq!(saved.keybindings["Search"], "ctrl-alt-k");
-        assert_eq!(saved.prompt_instructions["guided"], "Ask one question.\nWait for my answer.");
+        assert_eq!(saved.agent, Some(AgentKind::Codex));
+        assert_eq!(saved.selection(AgentKind::Codex).map(|s| (s.model.as_str(), s.fast)), Some(("gpt-6-luna", true)));
     }
 
     #[test]
     fn partial_file_keeps_other_defaults() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.toml");
-        std::fs::write(&path, "python = \"pypy3\"\nchatgpt_model = \"legacy-model\"\n").unwrap();
+        std::fs::write(&path, "python = \"pypy3\"\nchatgpt_model = \"legacy-model\"\nprompt_provider = \"claude\"\nprompt_style = \"hints\"\n").unwrap();
         let config = Config::load_from(&path).unwrap();
         assert_eq!(config.python, "pypy3");
         assert_eq!(config.workspace, home().join("leet"));
@@ -185,5 +207,7 @@ mod tests {
         assert!(!config.onboarding_completed);
         assert_eq!(config.font_family, "Liberation Sans");
         assert_eq!(config.roadmap_list, List::NeetCode150);
+        assert_eq!(config.web_chat, Provider::Claude);
+        assert_eq!(config.agent, None);
     }
 }

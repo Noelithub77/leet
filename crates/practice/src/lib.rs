@@ -1,6 +1,9 @@
 #![forbid(unsafe_code)]
 
+pub mod agents;
+pub mod assist;
 pub mod config;
+pub mod debugger;
 pub mod language;
 pub mod codeforces;
 pub mod creds;
@@ -31,3 +34,5 @@ pub mod updates;
 pub mod release_notes;
 
 pub mod toolchain;
+
+pub mod viz;
