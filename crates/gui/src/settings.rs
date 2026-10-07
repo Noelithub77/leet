@@ -15,6 +15,8 @@ pub enum Setting {
     Language,
     LanguageServer,
     Codeforces,
+    CompanionEnabled,
+    CompanionPort,
     LeetCode,
     NeetCode,
     Theme,
@@ -31,16 +33,19 @@ pub enum Setting {
 
 pub enum Kind {
     Choice,
+    Toggle,
     Text,
     Action,
 }
 
 impl Setting {
-    pub const ALL: [Setting; 15] = [
+    pub const ALL: [Setting; 17] = [
         Setting::Onboarding,
         Setting::Language,
         Setting::LanguageServer,
         Setting::Codeforces,
+        Setting::CompanionEnabled,
+        Setting::CompanionPort,
         Setting::LeetCode,
         Setting::NeetCode,
         Setting::Theme,
@@ -60,6 +65,8 @@ impl Setting {
             Setting::Language => "Preferred language",
             Setting::LanguageServer => "Restart language server",
             Setting::Codeforces => "Codeforces account",
+            Setting::CompanionEnabled => "Competitive Companion",
+            Setting::CompanionPort => "Browser import port",
             Setting::LeetCode => "LeetCode account",
             Setting::NeetCode => "NeetCode account",
             Setting::Theme => "Theme",
@@ -82,6 +89,8 @@ impl Setting {
             Setting::Language => "language python cpp c++ go c preferred",
             Setting::LanguageServer => "lsp intellisense completion diagnostics hover definitions restart",
             Setting::Codeforces => "codeforces handle account sign in",
+            Setting::CompanionEnabled => "competitive companion browser import enable disable",
+            Setting::CompanionPort => "browser import port localhost",
             Setting::LeetCode | Setting::NeetCode => "login session account sign in sync",
             Setting::Theme => "color appearance dark light vesper",
             Setting::Font => "fonts typography font family liberation sans system",
@@ -98,7 +107,8 @@ impl Setting {
     pub fn kind(self) -> Kind {
         match self {
             Setting::Language | Setting::Theme | Setting::List | Setting::TestTimeout => Kind::Choice,
-            Setting::Python | Setting::ExternalEditor | Setting::Workspace | Setting::Keybinding(_) => Kind::Text,
+            Setting::CompanionEnabled => Kind::Toggle,
+            Setting::Python | Setting::ExternalEditor | Setting::Workspace | Setting::CompanionPort | Setting::Keybinding(_) => Kind::Text,
             Setting::Onboarding | Setting::LanguageServer | Setting::Codeforces | Setting::OpenFile | Setting::Font | Setting::Keybindings | Setting::LeetCode | Setting::NeetCode => Kind::Action,
         }
     }
@@ -110,6 +120,8 @@ impl Setting {
             Setting::Language => c.preferred_language.label().into(),
             Setting::LanguageServer => ws.intelligence.label(ws.session.as_ref().map_or(c.preferred_language, |session| session.language)),
             Setting::Codeforces => if c.codeforces_handle.is_empty() { "Not set".into() } else { c.codeforces_handle.clone() },
+            Setting::CompanionEnabled => if c.companion_enabled { "On".into() } else { "Off".into() },
+            Setting::CompanionPort => c.companion_port.to_string(),
             Setting::LeetCode => ws.account_names[0].clone(),
             Setting::NeetCode => ws.account_names[1].clone(),
             Setting::Theme => cx.theme().theme_name().to_string(),
@@ -134,21 +146,26 @@ impl Setting {
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
-pub enum SettingsTab { #[default] General, Editor, Appearance, Accounts, Keybindings }
+pub enum SettingsTab { #[default] General, Editor, Appearance, Provider, Accounts, Keybindings }
 
 impl SettingsTab {
-    const ALL: [Self; 5] = [Self::General, Self::Editor, Self::Appearance, Self::Accounts, Self::Keybindings];
+    const ALL: [Self; 6] = [Self::General, Self::Editor, Self::Appearance, Self::Provider, Self::Accounts, Self::Keybindings];
     fn label(self) -> &'static str {
-        match self { Self::General => "General", Self::Editor => "Editor", Self::Appearance => "Appearance", Self::Accounts => "Accounts", Self::Keybindings => "Keybindings" }
+        match self { Self::General => "General", Self::Editor => "Editor", Self::Appearance => "Appearance", Self::Provider => "Provider", Self::Accounts => "Accounts", Self::Keybindings => "Keybindings" }
     }
     fn settings(self) -> &'static [Setting] {
         match self {
             Self::General => &[Setting::List, Setting::Workspace, Setting::Onboarding, Setting::OpenFile],
             Self::Editor => &[Setting::Language, Setting::Python, Setting::ExternalEditor, Setting::TestTimeout, Setting::LanguageServer],
             Self::Appearance => &[Setting::Theme, Setting::Font],
-            Self::Accounts => &[Setting::Codeforces, Setting::LeetCode, Setting::NeetCode],
+            Self::Provider => &[Setting::Codeforces, Setting::CompanionEnabled, Setting::CompanionPort],
+            Self::Accounts => &[Setting::LeetCode, Setting::NeetCode],
             Self::Keybindings => &[],
         }
+    }
+    fn setting_visible(self, setting: Setting, codeforces_configured: bool) -> bool {
+        self.settings().contains(&setting)
+            && (!matches!(setting, Setting::CompanionEnabled | Setting::CompanionPort) || codeforces_configured)
     }
     fn for_setting(setting: Setting) -> Self {
         if matches!(setting, Setting::Keybinding(_) | Setting::Keybindings) { return Self::Keybindings; }
@@ -202,7 +219,9 @@ impl Workspace {
         if self.settings.tab == SettingsTab::Keybindings {
             (0..crate::actions::COMMANDS.len()).map(Setting::Keybinding).collect()
         } else {
-            self.settings.tab.settings().to_vec()
+            self.settings.tab.settings().iter().copied().filter(|setting| {
+                self.settings.tab.setting_visible(*setting, !self.config.codeforces_handle.trim().is_empty())
+            }).collect()
         }
     }
 
@@ -227,6 +246,13 @@ impl Workspace {
                 self.rebuild_library();
             }
             Setting::Language => self.config.preferred_language = self.config.preferred_language.next(),
+            Setting::CompanionEnabled => {
+                self.config.companion_enabled = !self.config.companion_enabled;
+                self.save_config(window, cx);
+                self.start_companion(window, cx);
+                cx.notify();
+                return;
+            }
             Setting::TestTimeout => {
                 self.config.test_timeout_secs = (self.config.test_timeout_secs as i64 + delta as i64).clamp(1, 120) as u64;
             }
@@ -246,6 +272,7 @@ impl Workspace {
         let setting = self.selected_setting();
         match setting.kind() {
             Kind::Choice => self.settings_cycle(1, window, cx),
+            Kind::Toggle => self.settings_cycle(1, window, cx),
             Kind::Action if setting == Setting::LanguageServer => self.restart_language_server(window, cx),
             Kind::Action if setting == Setting::Onboarding => self.begin_onboarding(false, window, cx),
             Kind::Action if setting == Setting::Codeforces => self.begin_onboarding(true, window, cx),
@@ -302,6 +329,20 @@ impl Workspace {
                 self.omni.stale = true;
             }
             Setting::Python if !value.is_empty() => self.config.python = value,
+            Setting::CompanionPort => match value.parse::<u16>() {
+                Ok(port) if port != 0 => {
+                    self.config.companion_port = port;
+                    self.save_config(window, cx);
+                    self.settings_cancel_edit(window, cx);
+                    self.start_companion(window, cx);
+                    self.flash("Browser import port saved", cx);
+                    return;
+                }
+                _ => {
+                    self.toast(gpui_kit::component::notification::Notification::error("Enter a port from 1 to 65535"), window, cx);
+                    return;
+                }
+            },
             Setting::ExternalEditor if !value.is_empty() => self.config.external_editor = value,
             Setting::Workspace if !value.is_empty() => {
                 let expanded = value.strip_prefix("~/").map_or(value.clone().into(), |rest| dirs::home_dir().unwrap_or_default().join(rest));
@@ -343,7 +384,7 @@ impl Workspace {
                         let value = setting.value(self, cx);
                         let control = match (editing, setting.kind()) {
                             (Some((_, input)), _) => div().w(px(320.)).child(Input::new(input)).into_any_element(),
-                            (None, Kind::Choice) => h_flex()
+                            (None, Kind::Choice | Kind::Toggle) => h_flex()
                                 .gap_2()
                                 .child(div().text_color(theme.muted_foreground).child("‹"))
                                 .child(div().min_w(px(140.)).text_center().child(value))
@@ -409,5 +450,15 @@ mod tests {
         assert!(SettingsTab::for_setting(Setting::Keybinding(0)) == SettingsTab::Keybindings);
         assert!(SettingsTab::for_setting(Setting::Theme) == SettingsTab::Appearance);
         assert!(SettingsTab::for_setting(Setting::LeetCode) == SettingsTab::Accounts);
+        assert!(SettingsTab::for_setting(Setting::Codeforces) == SettingsTab::Provider);
+    }
+
+    #[test]
+    fn codeforces_companion_settings_require_a_configured_account() {
+        assert!(!SettingsTab::Provider.setting_visible(Setting::CompanionEnabled, false));
+        assert!(!SettingsTab::Provider.setting_visible(Setting::CompanionPort, false));
+        assert!(SettingsTab::Provider.setting_visible(Setting::CompanionEnabled, true));
+        assert!(SettingsTab::Provider.setting_visible(Setting::CompanionPort, true));
+        assert!(SettingsTab::Provider.setting_visible(Setting::Codeforces, false));
     }
 }
