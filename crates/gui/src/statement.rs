@@ -14,6 +14,7 @@ pub struct TagsVisible(pub bool);
 impl Global for TagsVisible {}
 pub struct Sections(pub [bool; 3]);
 impl Default for Sections { fn default() -> Self { Self([true, false, false]) } }
+impl Global for Sections {}
 fn tag_icon(topic: &str) -> IconName {
     match topic {
         "Array" | "Hash Table" | "String" => IconName::Brackets,
@@ -43,7 +44,6 @@ pub struct Statement {
     pub slug: SharedString,
     pub title: SharedString,
     pub blocks: Vec<Block>,
-    pub sections: Sections,
     pub language: Language,
     pub db: Option<Arc<Db>>,
     pub topics: Vec<SharedString>,
@@ -124,15 +124,26 @@ impl Statement {
         }))
     }
     fn render_sections(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let sections = cx.global::<Sections>().0;
         v_flex().gap_3().children(["Description", "Examples", "Constraints"].into_iter().enumerate().filter_map(|(section, label)| {
             let exists = self.blocks.iter().any(|block| match block {
                 Block::Markdown(_) => section == 0, Block::Example { .. } => section == 1, Block::Constraints(_) => section == 2,
             });
             exists.then(|| v_flex().gap_3()
                 .child(Button::new(("statement-section", section)).ghost().small().label(label)
-                    .icon(IconName::ChevronDown).selected(self.sections.0[section])
-                    .on_click(cx.listener(move |this, _, _, cx| { this.sections.0[section] = !this.sections.0[section]; cx.notify(); })))
-                .when(self.sections.0[section], |view| view.child(self.render_blocks(section, cx))))
+                    .icon(if sections[section] { IconName::ChevronDown } else { IconName::ChevronRight }).selected(sections[section])
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        let mut sections = cx.global::<Sections>().0;
+                        sections[section] = !sections[section];
+                        let Some(db) = &this.db else { return; };
+                        if let Err(error) = db.save_statement_sections(sections) {
+                            window.push_notification(gpui_kit::component::notification::Notification::error(format!("Section preferences not saved: {error}")), cx);
+                            return;
+                        }
+                        cx.set_global(Sections(sections));
+                        cx.refresh_windows();
+                    })))
+                .when(sections[section], |view| view.child(self.render_blocks(section, cx))))
         }))
     }
     fn render_reference(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -200,7 +211,10 @@ impl Render for Statement {
                 .child(Button::new("statement-solution").ghost().small().selected(self.reference_open).icon(IconName::Lightbulb).accessibility_label("Solution").tooltip_with_action("Solution", &crate::actions::ToggleReference, Some(crate::actions::WORKSPACE))
                     .on_click(cx.listener(|this, _, window, cx| { this.reference_open = true; if this.reference.is_none() { this.load_reference(window, cx); } cx.notify(); })))
                 .when(!self.topics.is_empty(), |row| row.child(Button::new("statement-tags").ghost().small().selected(show_tags).icon(IconName::Tags).accessibility_label("Show or hide tags").tooltip_with_action("Show/hide tags", &crate::actions::ToggleTags, Some(crate::actions::WORKSPACE))
-                    .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::actions::ToggleTags), cx)))))
+                    .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::actions::ToggleTags), cx))))
+                .when_some(self.video.clone(), |row, url| row.child(Button::new("statement-video").ghost().small().icon(IconName::Play)
+                    .accessibility_label("Watch video explanation").tooltip("Watch video explanation")
+                    .on_click(move |_, _, _| { let _ = open::that_detached(&url); }))))
             .child(if self.reference_open { self.render_reference(cx).into_any_element() } else {
                 v_flex().gap_4().when(show_tags, |view| view.child(h_flex().flex_wrap().gap_1().children(self.topics.iter().map(|topic| {
                     h_flex().gap_1().px_1p5().py_0p5().rounded_md().bg(theme.muted).text_xs().text_color(theme.muted_foreground)
@@ -211,9 +225,7 @@ impl Render for Statement {
                             .child(div().text_xs().font_weight(FontWeight::SEMIBOLD).text_color(theme.primary).child(format!("Hint {}", index + 1)))
                             .child(self.markdown(format!("hint-{}-{index}", self.slug), hint.to_string(), theme.primary))
                     })).child(h_flex().gap_3().pt_2().text_xs().text_color(theme.muted_foreground)
-                        .when(self.hints_shown < self.hints.len(), |row| row.child(h_flex().gap_1().child(key("ctrl-alt-h")).child("hint")))
-                        .when_some(self.video.clone(), |row, url| row.child(Button::new("statement-video").ghost().xsmall().icon(IconName::Play).accessibility_label("NeetCode video").tooltip("NeetCode video")
-                            .on_click(move |_, _, _| { let _ = open::that_detached(&url); }))))
+                        .when(self.hints_shown < self.hints.len(), |row| row.child(h_flex().gap_1().child(key("ctrl-alt-h")).child("hint"))))
                     .into_any_element()
             })
     }

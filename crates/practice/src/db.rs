@@ -270,6 +270,14 @@ impl Db {
         self.set(&format!("test-cases:v1:{slug}"), &serde_json::to_string(cases)?)
     }
 
+    pub fn statement_sections(&self) -> Result<[bool; 3]> {
+        Ok(self.get("statement-sections:v1")?.and_then(|value| serde_json::from_str(&value).ok()).unwrap_or([true, false, false]))
+    }
+
+    pub fn save_statement_sections(&self, sections: [bool; 3]) -> Result<()> {
+        self.set("statement-sections:v1", &serde_json::to_string(&sections)?)
+    }
+
     pub fn get(&self, key: &str) -> Result<Option<String>> {
         Ok(kv::table.find(key).select(kv::value).first(&mut *self.conn()).optional()?)
     }
@@ -358,6 +366,23 @@ mod tests {
         let reset = db.test_cases("two-sum").unwrap().unwrap();
         assert_eq!(reset.len(), 1); assert_eq!(reset[0].input, "[2,7]\n9"); assert!(!reset[0].custom);
         assert_eq!(db.question("two-sum").unwrap().unwrap().examples[0], "[2,7,11,15]\n9");
+    }
+
+    #[test]
+    fn statement_expansion_is_shared_and_survives_reopening() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("sections.db");
+        let db = Db::open(&path).unwrap();
+        assert_eq!(db.statement_sections().unwrap(), [true, false, false]);
+        db.save_statement_sections([false, true, true]).unwrap();
+        assert!(db.question("two-sum").unwrap().is_some());
+        assert!(db.question("valid-anagram").unwrap().is_some());
+        assert_eq!(db.statement_sections().unwrap(), [false, true, true]);
+        drop(db);
+        let db = Db::open(&path).unwrap();
+        assert_eq!(db.statement_sections().unwrap(), [false, true, true]);
+        db.set("statement-sections:v1", "[true]").unwrap();
+        assert_eq!(db.statement_sections().unwrap(), [true, false, false]);
     }
 
     #[test]

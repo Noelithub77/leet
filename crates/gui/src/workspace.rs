@@ -250,6 +250,7 @@ impl Workspace {
         // Shortcuts need a focused element inside the workspace from the first frame.
         let (omni, omni_sub) = Omnibar::new(window, cx);
         cx.set_global(crate::statement::TagsVisible(config.show_tags));
+        cx.set_global(crate::statement::Sections(db.statement_sections().unwrap_or([true, false, false])));
         let mut this = Self {
             companion_task: None,
             companion_status: String::new(),
@@ -952,14 +953,15 @@ impl Workspace {
     }
 
     pub fn step_problem(&mut self, delta: isize, window: &mut Window, cx: &mut Context<Self>) {
-        let list: Vec<usize> = self.library.ordered().collect();
-        if list.is_empty() {
-            return;
-        }
-        let current = self.session.as_ref().and_then(|s| roadmap::entry_index(&s.slug)).and_then(|e| list.iter().position(|&x| x == e));
-        let next = current.map_or(0, |i| (i as isize + delta).rem_euclid(list.len() as isize) as usize);
+        let slugs: Vec<String> = self.rows.iter().filter_map(|row| match *row {
+            Row::Problem(index) => Some(ENTRIES[index].slug.clone()),
+            Row::Catalog(index) => self.active_catalog().get(index).map(|item| item.slug.clone()),
+        }).collect();
+        if slugs.is_empty() { return; }
+        let current = self.session.as_ref().and_then(|session| slugs.iter().position(|slug| slug == &session.slug));
+        let next = current.map_or(0, |index| (index as isize + delta).rem_euclid(slugs.len() as isize) as usize);
         self.center = Center::Editor;
-        self.open_problem(ENTRIES[list[next]].slug.clone(), window, cx);
+        self.open_problem(slugs[next].clone(), window, cx);
     }
 
     pub fn save_test_case(&mut self, index: Option<usize>, input: String, expected: String, cx: &mut Context<Self>) {
