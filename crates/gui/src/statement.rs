@@ -193,7 +193,7 @@ impl Render for Statement {
         let theme = cx.theme().clone();
         let show_tags = cx.try_global::<TagsVisible>().is_some_and(|visible| visible.0);
         let focus = self.focus.get_or_insert_with(|| cx.focus_handle()).clone();
-        let body = v_flex().id("statement").key_context("Statement").track_focus(&focus).track_scroll(&self.scroll).size_full().overflow_y_scroll().p_4().gap_4()
+        let body = v_flex().id("statement").key_context("Statement").track_focus(&focus).size_full().min_h_0()
             .on_scroll_wheel(cx.listener(|this, event: &ScrollWheelEvent, window, cx| {
                 this.scroll_by(f32::from(event.delta.pixel_delta(window.line_height()).y) * 2.5, cx);
                 cx.stop_propagation();
@@ -204,7 +204,8 @@ impl Render for Statement {
             .on_action(cx.listener(|this, _: &PageDown, _, cx| this.scroll_by(-520., cx)));
         if self.slug.is_empty() { return body.child(div().text_color(theme.muted_foreground).child("Open a problem from the roadmap or search.")); }
         if let Some(status) = &self.status { return body.child(div().text_color(theme.muted_foreground).child(status.clone())); }
-        body.child(div().text_size(px(24.)).font_weight(FontWeight::BOLD).child(self.title.clone()))
+        body.child(v_flex().id("statement-content").flex_1().min_h_0().track_scroll(&self.scroll).overflow_y_scroll().p_4().gap_4()
+            .child(div().text_size(px(24.)).font_weight(FontWeight::BOLD).child(self.title.clone()))
             .child(h_flex().gap_1()
                 .child(Button::new("statement-question").ghost().small().selected(!self.reference_open).icon(IconName::FileText).accessibility_label("Question").tooltip("Question")
                     .on_click(cx.listener(|this, _, _, cx| { this.reference_open = false; cx.notify(); })))
@@ -224,9 +225,11 @@ impl Render for Statement {
                         v_flex().p_3().gap_1().rounded_md().bg(theme.muted)
                             .child(div().text_xs().font_weight(FontWeight::SEMIBOLD).text_color(theme.primary).child(format!("Hint {}", index + 1)))
                             .child(self.markdown(format!("hint-{}-{index}", self.slug), hint.to_string(), theme.primary))
-                    })).child(h_flex().gap_3().pt_2().text_xs().text_color(theme.muted_foreground)
-                        .when(self.hints_shown < self.hints.len(), |row| row.child(h_flex().gap_1().child(key("ctrl-alt-h")).child("hint"))))
+                    }))
                     .into_any_element()
-            })
+            }))
+            .when(!self.reference_open && self.hints_shown < self.hints.len(), |view| view.child(
+                h_flex().flex_shrink_0().px_4().py_2().border_t_1().border_color(theme.border).text_xs().text_color(theme.muted_foreground)
+                    .child(h_flex().gap_1().child(key("ctrl-alt-h")).child("hint"))))
     }
 }

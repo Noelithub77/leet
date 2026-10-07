@@ -1,6 +1,6 @@
 ## 2026-10-07 · Shared question view preferences
 
-- Video explanations have a compact play button beside the Question, Solution, and Tags toolbar icons.
+- Video explanations have a compact play button beside the Question, Solution, and Tags toolbar icons. Question shortcut hints sit in a fixed footer below the scrolling content.
 - Description, Examples, and Constraints expansion states are shared across every question and tab and saved in the private SQLite cache for future launches. New installs expand only Description.
 - Ctrl+Up / Ctrl+Down open the previous / next question in the current explorer list for NeetCode, LeetCode, and Codeforces. Alt+P / Alt+N remain available; shortcuts are editable in Settings.
 
