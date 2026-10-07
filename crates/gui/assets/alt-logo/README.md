@@ -34,3 +34,5 @@ Unused logo concepts in Vesper peach (`#ffc799`) and mint (`#99ffe4`) on the `#1
 | `28-level-up.svg` | Rank chevrons made of tipped Ls |
 | `29-binary-l.svg` | 1337 in binary (`10100111001`) along an L |
 | `30-streak.svg` | Practice heatmap whose filled cells form an L; today in mint |
+| `31-leet-trail.svg` | 1337: a peach dot (1) and two mint dots (3, 3) lead into a peach `>`, which is a 7 turned 45° |
+| `32-leet-nest.svg` | 1337: the same smaller dots held inside the `>` |
