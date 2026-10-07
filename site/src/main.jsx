@@ -53,7 +53,7 @@ function LandingPage() {
       <span className="brand"><img src={`${import.meta.env.BASE_URL}leet.svg`} alt="" width="40" height="40" />leet</span>
       <div className="intro">
         <p className="eyebrow">Native coding practice</p>
-        <h1>leet for <span>eleet</span></h1>
+        <h1>leet for the <span>eleet</span></h1>
         <p className="description">Fully Rust. Fast. Smooth.</p>
         <p className="providers">NeetCode, LeetCode &amp; Codeforces.</p>
       </div>
