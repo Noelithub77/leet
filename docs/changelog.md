@@ -1,6 +1,13 @@
+## 2026-10-07 · Home contest tab
+
+- Home has separate Recent and Contests tabs, with Contests to the right. The contest list no longer sits below recent questions.
+- Ctrl+/ opens the keyboard-bindings-only help view, including while editing code.
+- Ctrl+Alt+C opens the Contests tab; Left/Right switches Home tabs, and Up/Down plus Enter navigates the active list.
+- Opening a contest or toggling past contests selects the Contests tab. Existing cached-first refresh and contest explorer behavior remain available.
+
 ## 2026-10-07 · Shortcut help, pinned Home, and contests
 
-- Ctrl+F1 opens searchable shortcut help with native keycaps, all active alternatives, custom overrides, and contextual editor/form shortcuts. Select an application shortcut to edit it.
+- Ctrl+/ opens searchable shortcut help with native keycaps, all active alternatives, custom overrides, and contextual editor/form shortcuts. Select an application shortcut to edit it.
 - Ctrl+K searches commands and current key combinations, including contextual bindings. Saving a shortcut refreshes the search index immediately.
 - The clickable hint footer cycles through hints and hides them after the last. A close icon hides partial hints immediately; the displayed shortcut follows custom bindings.
 - Home stays pinned outside the scrolling problem tabs. Tab labels have extra vertical room and line height for letters such as g and y.

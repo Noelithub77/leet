@@ -123,11 +123,13 @@ impl Workspace {
             .on_action(cx.listener(|this, _: &Search, window, cx| this.omni_open(Scope::All, window, cx)))
             .on_action(cx.listener(|this, _: &ShortcutHelp, window, cx| this.omni_open(Scope::Shortcuts, window, cx)))
             .on_action(cx.listener(|this, _: &ShowContests, window, cx| {
-                this.show_home(window, cx); this.home.selected = this.recent_slugs.len();
-                this.home.scroll.scroll_to_item(this.home.selected.min(this.recent_slugs.len())); cx.notify();
+                this.show_home(window, cx);
+                this.select_home_page(crate::home::HomePage::Contests, window, cx);
             }))
             .on_action(cx.listener(|this, _: &TogglePastContests, window, cx| {
-                this.show_home(window, cx); this.contests.past_open = !this.contests.past_open; cx.notify();
+                this.show_home(window, cx);
+                this.select_home_page(crate::home::HomePage::Contests, window, cx);
+                this.contests.past_open = !this.contests.past_open; cx.notify();
             }))
             .on_action(cx.listener(|this, _: &FindProblem, window, cx| this.omni_open(Scope::Problems, window, cx)))
             .on_action(cx.listener(|this, _: &PickTheme, window, cx| this.omni_open(Scope::Themes, window, cx)))
@@ -251,7 +253,7 @@ impl Workspace {
                 _ => this.sidebar_move(1, cx),
             }))
             .on_action(cx.listener(|this, _: &Left, window, cx| match this.focus_area {
-                Focus::Home => {},
+                Focus::Home => this.select_home_page(crate::home::HomePage::Recent, window, cx),
                 Focus::Explorer => this.explorer_move(-1, cx),
                 Focus::Roadmap => this.roadmap_step(-1.0, 0.0, cx),
                 Focus::RoadmapTopic => this.focus_nav(Focus::Roadmap, window, cx),
@@ -260,7 +262,7 @@ impl Workspace {
                 _ => this.sidebar_expand(false, window, cx),
             }))
             .on_action(cx.listener(|this, _: &Right, window, cx| match this.focus_area {
-                Focus::Home => {},
+                Focus::Home => this.select_home_page(crate::home::HomePage::Contests, window, cx),
                 Focus::Explorer => this.explorer_move(1, cx),
                 Focus::Roadmap if this.roadmap.details => this.focus_nav(Focus::RoadmapTopic, window, cx),
                 Focus::Roadmap => this.roadmap_step(1.0, 0.0, cx),

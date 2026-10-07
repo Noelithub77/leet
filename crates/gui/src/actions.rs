@@ -96,7 +96,7 @@ pub const COMMANDS: &[Command] = &[
     cmd!("Previous tab", "ctrl-shift-tab", PreviousTab),
     cmd!("Search everything", "ctrl-k|ctrl-shift-p", Search),
     cmd!("Go to problem", "ctrl-p", FindProblem),
-    cmd!("Keyboard shortcut help", "ctrl-f1", ShortcutHelp),
+    cmd!("Keyboard shortcut help", "ctrl-/", ShortcutHelp),
     cmd!("Codeforces contests", "ctrl-alt-c", ShowContests),
     cmd!("Show/hide past Codeforces contests", "", TogglePastContests),
     cmd!("Settings", "ctrl-,", OpenSettings),
