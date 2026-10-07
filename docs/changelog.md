@@ -1,3 +1,7 @@
+## 2026-10-07 · New logo
+
+- New app and site logo: nested Vesper peach and mint brackets that point to a base case. Concepts that weren't picked are in `crates/gui/assets/alt-logo/`.
+
 ## 2026-10-07 · Cleaner shortcut labels
 
 - Shortcut help and search show action names without the repeated “Shortcut:” prefix.
