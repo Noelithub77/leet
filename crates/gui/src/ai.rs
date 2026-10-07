@@ -164,7 +164,7 @@ impl Render for Picker {
         let theme = cx.theme().clone();
         let Some(workspace) = self.workspace.upgrade() else { return div().into_any_element() };
         let config = workspace.read(cx).config.clone();
-        let missing = match self.assist.read(cx).target(&config) { Target::Agent(agent, _) => !self.assist.read(cx).catalogs.contains_key(&agent.kind), Target::Web(_) => false };
+        let missing = match self.assist.read(cx).target(&config) { Target::Agent(agent, _) => !self.assist.read(cx).catalog_requested(agent.kind), Target::Web(_) => false };
         if missing {
             let picker = cx.entity().downgrade();
             cx.defer(move |cx| { let _ = picker.update(cx, |this, cx| this.ensure_catalog(cx)); });
@@ -208,13 +208,10 @@ impl Render for Picker {
             Target::Agent(agent, selection) => match assist.catalogs.get(&agent.kind) {
                 None | Some(Loadable::Loading) => h_flex().gap_2().text_xs().text_color(theme.muted_foreground)
                     .child(gpui_kit::component::spinner::Spinner::new().xsmall()).child("Loading models").into_any_element(),
-                Some(Loadable::Failed(error)) => {
-                    let kind = agent.kind;
-                    v_flex().gap_1().child(div().text_xs().text_color(theme.danger).child(error.clone()))
-                        .child(Button::new("catalog-retry").ghost().xsmall().icon(IconName::RefreshCw).label("Retry")
-                            .on_click(cx.listener(move |this, _, _, cx| this.assist.update(cx, |assist, cx| assist.reload_catalog(kind, cx)))))
-                        .into_any_element()
-                }
+                Some(Loadable::Failed(error)) => v_flex().gap_1()
+                    .child(div().text_xs().text_color(theme.danger).child(error.clone()))
+                    .child(div().text_xs().text_color(theme.muted_foreground).child("Models refresh on the next app launch"))
+                    .into_any_element(),
                 Some(Loadable::Ready(catalog)) => {
                     let chosen = selection.clone().or_else(|| catalog.default_model.as_ref().map(|model| Selection { agent: agent.kind, model: model.clone(), effort: None, fast: false }));
                     let model = chosen.as_ref().and_then(|s| catalog.models.iter().find(|m| m.id == s.model));
@@ -265,8 +262,8 @@ impl Render for Picker {
             .on_action(cx.listener(|this, _: &CloseAi, window, cx| { let _ = this.chip.update(cx, |chip, cx| chip.close(window, cx)); }))
             .child(h_flex().justify_between().items_center()
                 .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child("AI"))
-                .child(Button::new("agents-refresh").ghost().xsmall().icon(IconName::RefreshCw).tooltip("Detect agents and refresh models")
-                    .on_click(cx.listener(|this, _, _, cx| this.assist.update(cx, |assist, cx| { assist.catalogs.clear(); assist.detect(cx); }) ))))
+                .child(Button::new("agents-refresh").ghost().xsmall().icon(IconName::RefreshCw).tooltip("Detect agents · models refresh on the next app launch")
+                    .on_click(cx.listener(|this, _, _, cx| this.assist.update(cx, |assist, cx| { assist.detect(cx); }) ))))
             .child(agents)
             .child(body)
             .into_any_element()

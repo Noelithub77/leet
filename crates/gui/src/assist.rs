@@ -1,7 +1,7 @@
 //! The Assist panel: an icon grid of AI actions, live run status, and a result card per run.
 //! Runs execute on their own threads and stream events back; cards are kept per problem.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -162,6 +162,8 @@ pub struct Assist {
     pub agents: Vec<Detected>,
     pub detecting: bool,
     pub catalogs: HashMap<AgentKind, Loadable<Catalog>>,
+    catalog_cache: Arc<agents::CatalogCache>,
+    requested_catalogs: HashSet<AgentKind>,
     pub installing: Option<AgentKind>,
     runs: Vec<Run>,
     next_id: u64,
@@ -176,7 +178,9 @@ struct Saved { model: String, agent: Option<AgentKind>, answer: Answer }
 
 impl Assist {
     pub fn new(workspace: WeakEntity<Workspace>, db: Arc<Db>, cx: &mut Context<Self>) -> Self {
-        let mut this = Self { workspace, db, agents: vec![], detecting: false, catalogs: HashMap::new(), installing: None,
+        let catalog_cache = Arc::new(agents::CatalogCache::new(db.clone()));
+        let catalogs = AgentKind::ALL.into_iter().filter_map(|kind| catalog_cache.cached(kind).map(|catalog| (kind, Loadable::Ready(catalog)))).collect();
+        let mut this = Self { workspace, db, agents: vec![], detecting: false, catalogs, catalog_cache, requested_catalogs: HashSet::new(), installing: None,
             runs: vec![], next_id: 0, slug: None, ticker: None, scroll: ScrollHandle::new() };
         this.detect(cx);
         this
@@ -203,23 +207,26 @@ impl Assist {
     }
 
     pub fn load_catalog(&mut self, kind: AgentKind, cx: &mut Context<Self>) {
-        if matches!(self.catalogs.get(&kind), Some(Loadable::Loading | Loadable::Ready(_))) { return; }
+        if self.catalog_requested(kind) { return; }
         let Some(agent) = self.detected(kind).cloned() else { return };
-        self.catalogs.insert(kind, Loadable::Loading);
+        self.requested_catalogs.insert(kind);
+        if self.catalog(kind).is_none() { self.catalogs.insert(kind, Loadable::Loading); }
+        let cache = self.catalog_cache.clone();
         cx.notify();
         cx.spawn(async move |this, cx| {
-            let result = cx.background_spawn(async move { agents::catalog(&agent) }).await;
+            let result = cx.background_spawn(async move { cache.fetch(&agent) }).await;
             let _ = this.update(cx, |this, cx| {
-                this.catalogs.insert(kind, match result { Ok(catalog) => Loadable::Ready(catalog), Err(error) => Loadable::Failed(error.to_string()) });
+                match result {
+                    Ok(catalog) => { this.catalogs.insert(kind, Loadable::Ready(catalog)); }
+                    Err(error) if this.catalog(kind).is_none() => { this.catalogs.insert(kind, Loadable::Failed(error.to_string())); }
+                    Err(_) => {}
+                }
                 cx.notify();
             });
         }).detach();
     }
 
-    pub fn reload_catalog(&mut self, kind: AgentKind, cx: &mut Context<Self>) {
-        self.catalogs.remove(&kind);
-        self.load_catalog(kind, cx);
-    }
+    pub fn catalog_requested(&self, kind: AgentKind) -> bool { self.requested_catalogs.contains(&kind) }
 
     pub fn install(&mut self, kind: AgentKind, window: &mut Window, cx: &mut Context<Self>) {
         if self.installing.is_some() { return; }
@@ -300,6 +307,7 @@ impl Assist {
 
     /// Spawns the agent thread for run `id`, optionally continuing a session with feedback.
     fn launch(&mut self, id: u64, resume: Option<String>, feedback: Option<String>, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(kind) = self.runs.iter().find(|run| run.id == id).and_then(|run| run.agent) { self.load_catalog(kind, cx); }
         let Some(run) = self.runs.iter_mut().find(|run| run.id == id) else { return };
         let (Some(snapshot), Some(Target::Agent(agent, selection))) = (run.snapshot.clone(), run.target.clone()) else { return };
         run.phase = Phase::Starting;
@@ -307,12 +315,13 @@ impl Assist {
         let cancel = run.cancel.clone();
         let action = run.action;
         let fallback = self.catalog(agent.kind).cloned();
+        let cache = self.catalog_cache.clone();
         let (tx, mut rx) = futures::channel::mpsc::unbounded::<Msg>();
         std::thread::spawn(move || {
             let selection = match selection {
                 Some(selection) => selection,
                 None => {
-                    let catalog = match fallback { Some(catalog) => Ok(catalog), None => agents::catalog(&agent) };
+                    let catalog = match fallback { Some(catalog) => Ok(catalog), None => cache.fetch(&agent) };
                     match catalog.and_then(|catalog| default_selection(&catalog).ok_or_else(|| anyhow::anyhow!("{} reported no models", agent.kind.label()))) {
                         Ok(selection) => { let _ = tx.unbounded_send(Msg::Selected(selection.clone())); selection }
                         Err(error) => { let _ = tx.unbounded_send(Msg::Done(Err(error))); return; }

@@ -4,7 +4,12 @@ use serde_json::Value;
 use super::{Access,AgentKind,Cancel,Catalog,Detected,Event,Model,Outcome,Request,ToolKind,transport::{Process,outcome,prompt,usage,extract}};
 fn models(text: &str) -> Catalog {
     let models:Vec<_>=text.lines().filter_map(|line|line.split_once('\t')).map(|(id,label)|Model {id:id.trim().into(),label:label.trim().into(),description:String::new(),efforts:Vec::new(),default_effort:None,fast:false,free:false}).collect();
-    let default=models.iter().find(|m|m.id.to_lowercase().contains("flash")).or_else(||models.first()).map(|m|m.id.clone());
+    let flash = |model: &&Model| model.id.to_lowercase().contains("flash");
+    let version = |model: &&Model| model.id.to_lowercase().split("flash").next().unwrap_or_default()
+        .split(|c: char| !c.is_ascii_digit()).filter_map(|part| part.parse::<u32>().ok()).collect::<Vec<_>>();
+    let low = |model: &&Model| model.id.to_lowercase().ends_with("-low") || model.label.to_lowercase().contains("(low)");
+    let default=models.iter().filter(flash).filter(low).max_by_key(version)
+        .or_else(||models.iter().filter(flash).max_by_key(version)).or_else(||models.first()).map(|m|m.id.clone());
     Catalog {agent:AgentKind::Antigravity,models,default_model:default,sign_in_hint:None}
 }
 pub fn catalog(agent: &Detected) -> Result<Catalog> {
@@ -29,12 +34,24 @@ pub fn run(request: &Request, events: &mut dyn FnMut(Event), cancel: &Cancel) ->
         }
     } bail!("Antigravity closed without a result: {}",process.error())
 }
-#[cfg(test)] mod tests {use super::*;#[test]fn agents_agy_fixture(){let catalog=models(include_str!("fixtures/agy.txt"));assert!(catalog.default_model.unwrap().contains("flash"));assert!(catalog.models.iter().any(|m|m.id.ends_with("-low")));}}
+#[cfg(test)] mod tests {use super::*;#[test]fn agents_agy_fixture(){let catalog=models(include_str!("fixtures/agy.txt"));assert_eq!(catalog.default_model.as_deref(),Some("gemini-3.8-flash-low"));assert!(catalog.models.iter().any(|m|m.id.ends_with("-low")));}}
 
 #[cfg(test)] mod result_tests {
     use super::*;
     #[test] fn agents_agy_answer_precedes_finish_metadata() {
         let result:Value=serde_json::from_str(include_str!("fixtures/agy-result.json")).unwrap();
         assert_eq!(extract(result["response"].as_str().unwrap()),Some(serde_json::json!({"answer":"pong"})));
+    }
+}
+
+#[cfg(test)]
+mod default_tests {
+    use super::*;
+    #[test]
+    fn newest_flash_low_uses_numeric_versions_independent_of_catalog_order() {
+        let catalog = models("gemini-9.11-flash-low\tOld (Low)\ngemini-10.1-flash-high\tNew (High)\ngemini-9.9-flash-low\tOlder (Low)\ngemini-10.1-flash-low\tNew (Low)");
+        assert_eq!(catalog.default_model.as_deref(), Some("gemini-10.1-flash-low"));
+        let catalog = models("gemini-9.11-flash-high\tOld\ngemini-10.1-flash-high\tNew");
+        assert_eq!(catalog.default_model.as_deref(), Some("gemini-10.1-flash-high"));
     }
 }

@@ -2,7 +2,7 @@
 
 ## Decisions
 
-- [CHOSEN] Local agents use each CLI's best native protocol with typed serde messages: Codex `app-server` JSON-RPC (`model/list`, efforts, Fast tier), Claude `-p` stream-json control protocol (`initialize` models, effort, fast mode), Antigravity `agy -p` stream-json + `agy models`, and OpenCode, Gemini CLI, and Cursor Agent through ACP (`agent-client-protocol`). Nothing hardcodes model lists. Defaults: Codex newest Luna, Claude Haiku, OpenCode first free Zen model, Antigravity/Gemini first Flash.
+- [CHOSEN] Local agents use each CLI's best native protocol with typed serde messages: Codex `app-server` JSON-RPC (`model/list`, efforts, Fast tier), Claude `-p` stream-json control protocol (`initialize` models, effort, fast mode), Antigravity `agy -p` stream-json + `agy models`, and OpenCode, Gemini CLI, and Cursor Agent through ACP (`agent-client-protocol`). Nothing hardcodes model lists. Defaults: Codex newest Luna, Claude Haiku, OpenCode first free Zen model, Antigravity newest Flash Low, Gemini first Flash.
 - [CHOSEN] Web mode stays: ChatGPT/Claude/Gemini URLs with the prompt prefilled.
 - [CHOSEN] Structured results: Rust result types derive `schemars` schemas. Claude, Codex, and agy enforce them. ACP agents get the schema in the prompt, and every response is validated with serde, with one repair retry.
 - [CHOSEN] Visuals are native GPUI only. A shared `practice::viz::Structure` model (array, grid, tree, graph, linked list, stack, queue, heap, map, set, intervals, vars) renders AI scenes and debugger frames alike. The schema goes into the agent's prompt context.

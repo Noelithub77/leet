@@ -9,6 +9,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use serde::{Deserialize, Serialize};
 
 mod acp;
+mod catalog_cache;
+pub use catalog_cache::CatalogCache;
 mod antigravity;
 mod claude;
 mod codex;
@@ -104,7 +106,7 @@ pub struct Catalog {
     pub agent: AgentKind,
     pub models: Vec<Model>,
     /// leet's preferred default: newest Luna for Codex, Haiku for Claude,
-    /// a free model for OpenCode, the first Flash for Antigravity and Gemini.
+    /// a free model for OpenCode, the newest Flash Low for Antigravity and the first Flash for Gemini.
     pub default_model: Option<String>,
     /// Shown when the agent is installed but not signed in.
     #[serde(default)]

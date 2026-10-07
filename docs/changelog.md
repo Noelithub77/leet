@@ -5,6 +5,9 @@
 - Run Codex, Claude Code, OpenCode, Antigravity, Gemini CLI, or Cursor Agent locally with live models, reasoning levels, and Fast tier.
 - Install OpenCode or Antigravity from the AI menu to use free models.
 - Solve edits, tests, and retries LeetCode submissions, asking before each submit.
+- Ctrl+` switches between Code and Debug mode.
+- Show cached AI models immediately and refresh once per agent per app session.
+- Antigravity defaults to the latest available Flash model with low reasoning.
 - Syntax highlighting in Debug mode follows the editor theme.
 - Larger array cells and pointer labels with longer stems and smoother movement.
 - Debug mode replays every test case with a seek bar, line heat, and live data structures for Python and C++.
@@ -28,6 +31,8 @@
 
 <details>
 <summary>Fix</summary>
+
+- Show function icons for calls, returns, and stack frames in Debug mode.
 
 - Settings values line up on the right edge.
 - Keep explicit Web mode selected when local agents are installed.

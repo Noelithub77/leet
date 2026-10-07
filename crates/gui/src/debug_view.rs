@@ -363,8 +363,8 @@ impl Debugger {
         };
         let structures = debugger::structures(step, previous);
         let (icon, color, what) = match step.kind {
-            StepKind::Call => (IconName::CornerDownRight, theme.info, format!("call {}", step.function)),
-            StepKind::Return => (IconName::CornerUpLeft, theme.success, format!("return from {}", step.function)),
+            StepKind::Call => (IconName::SquareFunction, theme.info, format!("call {}", step.function)),
+            StepKind::Return => (IconName::SquareFunction, theme.success, format!("return from {}", step.function)),
             StepKind::Exception => (IconName::TriangleAlert, theme.danger, format!("exception in {}", step.function)),
             StepKind::Line => (IconName::ArrowRight, theme.primary, format!("line {} · {}", step.line, step.function)),
         };
@@ -372,8 +372,9 @@ impl Debugger {
             let last = i + 1 == step.stack.len();
             h_flex().gap_1().items_center()
                 .when(i > 0, |el| el.child(Icon::new(IconName::ChevronRight).size_3().text_color(theme.muted_foreground)))
-                .child(div().px_1p5().h(px(20.)).flex().items_center().rounded_md().text_size(px(11.)).font_family(theme.mono_font_family.clone())
+                .child(div().px_1p5().h(px(20.)).flex().items_center().gap_1().rounded_md().text_size(px(11.)).font_family(theme.mono_font_family.clone())
                     .bg(if last { color.opacity(0.14) } else { theme.secondary }).text_color(if last { color } else { theme.muted_foreground })
+                    .child(Icon::new(IconName::SquareFunction).size_3())
                     .child(format!("{}:{}", frame.function, frame.line)))
         }));
         let stdout = trace.map(|t| { let end = step.stdout_len.min(t.stdout.len()); t.stdout.get(..end).unwrap_or_default().to_owned() }).unwrap_or_default();

@@ -145,7 +145,7 @@ pub const COMMANDS: &[Command] = &[
     cmd!("AI: Solve until accepted", "", AssistSolve),
     cmd!("AI: Stop runs", "", StopAssist),
     cmd!("Assist panel", "alt-e", ToggleAssist),
-    cmd!("Debugger", "alt-b", ToggleDebug),
+    cmd!("Debugger", "ctrl-`|alt-b", ToggleDebug),
     cmd!("AI: Choose agent and model", "ctrl-shift-e", ConfigureAi),
     cmd!("AI: Switch agent", "ctrl-alt-a", CycleAgent),
     cmd!("Cycle NeetCode list", "ctrl-alt-l", CycleList),

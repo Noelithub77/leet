@@ -1,6 +1,6 @@
 use gpui_kit::*;
 
-gpui_kit::assets::icon_assets!(HomeIcons, [House, Map, X, Star, ExternalLink, Play, ArrowLeft, ChevronDown, Brackets, ArrowLeftRight, Layers, Search, PanelTop, Link, Network, GitBranch, ListOrdered, Undo2, CalendarRange, Zap, Share2, Workflow, ChartColumn, Grid2x2, Binary, Calculator, FileText, Lightbulb, Copy, Info, RefreshCw, Plus, Pencil, Tags, ArrowDownAZ, Download, PanelLeft, PanelBottom, PanelRight, LifeBuoy, Bug, FlaskConical, Gauge, Rocket, Sparkles, Footprints, Puzzle, BookOpen, WandSparkles, BugPlay, Timer, CircleStop, SkipBack, SkipForward, Pause, ChevronLeft, ChevronRight, Code, Bot, CircleCheck, CircleX, Brain, Globe, Terminal, ArrowUpRight, Send, Undo, Check]);
+gpui_kit::assets::icon_assets!(HomeIcons, [House, Map, X, Star, ExternalLink, Play, ArrowLeft, ChevronDown, Brackets, ArrowLeftRight, Layers, Search, PanelTop, Link, Network, GitBranch, ListOrdered, Undo2, CalendarRange, Zap, Share2, Workflow, ChartColumn, Grid2x2, Binary, Calculator, FileText, Lightbulb, Copy, Info, RefreshCw, Plus, Pencil, Tags, ArrowDownAZ, Download, PanelLeft, PanelBottom, PanelRight, LifeBuoy, Bug, FlaskConical, Gauge, Rocket, Sparkles, Footprints, Puzzle, BookOpen, WandSparkles, BugPlay, Timer, CircleStop, SkipBack, SkipForward, Pause, ChevronLeft, ChevronRight, Code, Bot, CircleCheck, CircleX, Brain, Globe, Terminal, ArrowUpRight, Send, Undo, Check, CornerDownRight, CornerUpLeft, TriangleAlert, ArrowRight, CircleDot, SquareFunction]);
 
 pub struct Assets;
 
@@ -68,4 +68,11 @@ mod tests {
             assert!(!icon.is_empty());
         }
     }
+    #[::core::prelude::v1::test]
+    fn debugger_state_icons_are_embedded() {
+        for name in [gpui_kit::assets::IconName::CornerDownRight, gpui_kit::assets::IconName::CornerUpLeft, gpui_kit::assets::IconName::TriangleAlert, gpui_kit::assets::IconName::ArrowRight, gpui_kit::assets::IconName::CircleDot, gpui_kit::assets::IconName::SquareFunction] {
+            assert!(!HomeIcons.load(&name.path()).unwrap().expect("Debugger icons must be bundled").is_empty());
+        }
+    }
+
 }
