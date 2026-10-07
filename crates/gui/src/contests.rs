@@ -73,9 +73,9 @@ impl Workspace {
                         this.sources.upsert_problems(problems); this.omni.stale = true;
                         if this.contests.selected == Some(id) { this.rebuild_rows(); this.contests.problem_status = None; }
                     }
-                    Err(error) if this.contests.selected == Some(id) => this.contests.problem_status = Some(
-                        if this.contests.list.iter().any(|contest| contest.id == id && contest.phase == "BEFORE") { "Problems appear when the contest starts".into() }
-                        else { format!("Problems unavailable: {error}") }),
+                    Err(error) if this.contests.selected == Some(id) => this.contests.problem_status =
+                        if this.contests.list.iter().any(|contest| contest.id == id && contest.phase == "BEFORE") { None }
+                        else { Some(format!("Problems unavailable: {error}")) },
                     Err(_) => {},
                 }
                 cx.notify();
@@ -101,8 +101,16 @@ impl Workspace {
                     .bg(if self.home.list == crate::home::HomeList::Contests && self.focus_area == Focus::Home && self.home.selected == index { theme.list_active } else { theme.background })
                     .hover(|row| row.bg(theme.list_hover))
                     .child(crate::brand::source_icon(Source::Codeforces).small())
-                    .child(div().flex_1().min_w_0().truncate().child(contest.name.clone()))
-                    .child(div().text_xs().text_color(if contest.past() { theme.muted_foreground } else { theme.primary }).child(contest.timing(now)))
+                    .child(v_flex().flex_1().min_w_0().gap_1()
+                        .child(div().truncate().child(contest.name.clone()))
+                        .child(h_flex().justify_between().gap_2()
+                            .child(div().text_xs().text_color(if contest.past() { theme.muted_foreground } else { theme.primary }).child(contest.timing(now)))
+                            .child(Button::new(("home-contest-web", id)).ghost().small().icon(IconName::ExternalLink).label("Open in web")
+                                .accessibility_label(format!("Open {} in browser", contest.name))
+                                .on_click(move |_, _, cx| {
+                                    cx.stop_propagation();
+                                    let _ = open::that_detached(format!("https://codeforces.com/contest/{id}"));
+                                }))))
                     .on_click(cx.listener(move |this, _, window, cx| this.open_contest(id, window, cx)))
             }))
             .when(self.contests.selected.is_some_and(|id| self.contests.loading.contains(&id)), |view| view.child(div().text_xs().text_color(theme.muted_foreground).child("Refreshing contest problems…")))

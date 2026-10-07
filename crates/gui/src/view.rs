@@ -561,7 +561,9 @@ impl Workspace {
             .bg(theme.title_bar)
             .text_xs()
             .text_color(theme.muted_foreground)
-            .child(div().font_weight(FontWeight::SEMIBOLD).text_color(theme.primary).child("leet"))
+            .child(div().id("status-app-logo").flex_shrink_0()
+                .child(img("leet.svg").size(px(18.)))
+                .tooltip(|window, cx| gpui_kit::component::tooltip::Tooltip::new("leet").build(window, cx)))
             .when(self.syncing, |el| el.child(h_flex().gap_1().child(Spinner::new().xsmall()).child("syncing")))
             .child(div().flex_1())
             .when_some(flash, |el, (label, _)| {

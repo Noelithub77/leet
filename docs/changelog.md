@@ -1,3 +1,9 @@
+## 2026-10-07 · Home spacing and web actions
+
+- Move Contests toward the right edge with a wider gap from Recent and an Open in web button on every contest row.
+- Replace the bottom-left leet label with the bundled app logo.
+- Remove the upcoming-contest explanatory text.
+
 ## 2026-10-07 · Contests beside Recent
 
 - Home always shows Recent on the left and Contests on the right, with independent scrolling.

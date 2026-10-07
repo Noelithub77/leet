@@ -264,7 +264,7 @@ impl Workspace {
         let theme = cx.theme().clone();
         let focused = self.focus_area == Focus::Home && self.nav_focus.is_focused(window);
         v_flex().size_full().min_h_0().items_center().px_6().py_10()
-            .child(h_flex().w_full().max_w(px(1120.)).h_full().min_h_0().gap_8()
+            .child(h_flex().w_full().h_full().min_h_0().gap_16()
                 .child(v_flex().flex_1().min_w_0().h_full().min_h_0().gap_4()
                 .child(h_flex().flex_shrink_0().justify_between()
                     .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).text_color(theme.muted_foreground).child("Recent"))
@@ -297,7 +297,7 @@ impl Workspace {
                             this.open_problem(slug.clone(), window, cx);
                         }))
                     }))))
-                .child(v_flex().flex_1().min_w_0().max_w(px(360.)).h_full().min_h_0().child(self.render_contests(cx))))
+                .child(v_flex().flex_1().min_w_0().max_w(px(440.)).h_full().min_h_0().child(self.render_contests(cx))))
     }
 }
 

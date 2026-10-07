@@ -15,6 +15,7 @@ impl AssetSource for Assets {
         };
         if let Some(bytes) = language { return Ok(Some(std::borrow::Cow::Borrowed(bytes))); }
         let brand: Option<&'static [u8]> = match path {
+            "leet.svg" => Some(include_bytes!("../assets/leet.svg")),
             "providers/neetcode.svg" => Some(include_bytes!("../assets/providers/neetcode.svg")),
             "providers/leetcode.svg" => Some(include_bytes!("../assets/providers/leetcode.svg")),
             "providers/codeforces.svg" => Some(include_bytes!("../assets/providers/codeforces.svg")),
@@ -33,7 +34,7 @@ impl AssetSource for Assets {
     fn list(&self, path: &str) -> Result<Vec<SharedString>> {
         let mut paths = gpui_kit::assets::Assets.list(path)?;
         paths.extend(HomeIcons.list(path)?);
-        paths.extend(["providers/neetcode.svg", "providers/leetcode.svg", "providers/codeforces.svg", "providers/chatgpt.svg", "providers/claude.svg", "providers/gemini.svg", "languages/python.svg", "languages/cpp.svg", "languages/go.svg", "languages/c.svg"].into_iter().filter(|name| name.starts_with(path)).map(Into::into));
+        paths.extend(["leet.svg", "providers/neetcode.svg", "providers/leetcode.svg", "providers/codeforces.svg", "providers/chatgpt.svg", "providers/claude.svg", "providers/gemini.svg", "languages/python.svg", "languages/cpp.svg", "languages/go.svg", "languages/c.svg"].into_iter().filter(|name| name.starts_with(path)).map(Into::into));
         paths.sort();
         paths.dedup();
         Ok(paths)
