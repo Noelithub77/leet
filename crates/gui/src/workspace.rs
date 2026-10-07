@@ -587,6 +587,7 @@ impl Workspace {
         self.center = Center::Editor;
         self.history_mode = false;
         self.settings.editing = None;
+        self.attach_language_server(window, cx);
         self.focus_editor(window, cx);
     }
 
@@ -675,6 +676,7 @@ impl Workspace {
         if self.language_picker.loading { return; }
         let Some(session) = self.session.as_ref() else {
             self.config.preferred_language = language;
+            self.activate_language(language, cx);
             self.save_config(window, cx);
             crate::language_picker::close(self, window, cx);
             return;
@@ -711,6 +713,7 @@ impl Workspace {
                         if let Some(session) = this.session.as_mut() { session.language = language; session.compile_error = None; session.judge = None; }
                         this.new_editor(window, cx);
                         this.apply_loaded(loaded, window, cx);
+                        this.attach_language_server(window, cx);
                         crate::language_picker::close(this, window, cx);
                         this.focus_editor(window, cx);
                     }
@@ -766,7 +769,6 @@ impl Workspace {
             cx.notify();
         });
         self.editor.update(cx, |e, cx| e.set_value(l.code, window, cx));
-        self.attach_language_server(window, cx);
         if self.focus_area == Focus::Editor {
             self.focus_editor(window, cx);
         }
@@ -783,6 +785,7 @@ impl Workspace {
         let saved_cases = self.db.test_cases(&q.slug)?;
         self.apply_loaded(Loaded { q, rel, path, code, mtime, custom: vec![], saved_cases,
             history: vec![], statement, hints: vec![] }, window, cx);
+        self.attach_language_server(window, cx);
         Ok(())
     }
 

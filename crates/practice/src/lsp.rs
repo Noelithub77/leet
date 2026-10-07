@@ -1,5 +1,5 @@
 //! Shared language-server processes and versioned documents, independent of GPUI.
-use std::{collections::HashMap, ops::ControlFlow, path::{Path, PathBuf}, process::Stdio, sync::{Arc, Mutex}, time::Duration};
+use std::{collections::HashMap, ops::ControlFlow, path::{Path, PathBuf}, process::Stdio, sync::{Arc, Mutex, atomic::{AtomicU64, Ordering}}, time::Duration};
 use anyhow::{Context, Result, bail};
 use async_lsp::{MainLoop, ServerSocket, router::Router};
 use futures::future::{Either, select};
@@ -8,6 +8,23 @@ use crate::language::Language;
 
 fn lock<T>(value: &Mutex<T>) -> std::sync::MutexGuard<'_, T> { value.lock().unwrap_or_else(|error| error.into_inner()) }
 struct Stop;
+
+static JAVA_WORKSPACE: AtomicU64 = AtomicU64::new(0);
+struct JavaWorkspace(PathBuf);
+impl JavaWorkspace {
+    fn new() -> Result<Self> {
+        loop {
+            let path = std::env::temp_dir().join(format!("leet-jdtls-{}-{}", std::process::id(), JAVA_WORKSPACE.fetch_add(1, Ordering::Relaxed)));
+            match std::fs::create_dir(&path) {
+                Ok(()) => return Ok(Self(path)),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => return Err(error.into()),
+            }
+        }
+    }
+}
+impl Drop for JavaWorkspace { fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); } }
+
 #[derive(Clone, Debug)] pub enum Status { Starting, Ready, Failed(String) }
 struct State {
     status: Status,
@@ -24,9 +41,27 @@ async fn deadline<T>(future: impl std::future::Future<Output = Result<T>>, secon
     match select(future, timer).await { Either::Left((result, _)) => result, Either::Right(_) => bail!("Language server request timed out") }
 }
 fn executable(name: &str) -> Option<PathBuf> {
-    std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()).map(|dir| dir.join(name)).find(|path| path.is_file())
+    std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()).find_map(|dir| {
+        let path = dir.join(name);
+        if executable_file(&path) { return Some(path); }
+        #[cfg(windows)]
+        for extension in ["exe", "cmd", "bat"] {
+            let path = dir.join(format!("{name}.{extension}"));
+            if executable_file(&path) { return Some(path); }
+        }
+        None
+    })
 }
-fn command(language: Language) -> Result<(PathBuf, Vec<String>, String)> {
+fn executable_file(path: &Path) -> bool {
+    let Ok(metadata) = path.metadata() else { return false; };
+    if !metadata.is_file() { return false; }
+    #[cfg(unix)] {
+        use std::os::unix::fs::PermissionsExt;
+        if metadata.permissions().mode() & 0o111 == 0 { return false; }
+    }
+    true
+}
+pub(crate) fn command(language: Language) -> Result<(PathBuf, Vec<String>, String)> {
     match language {
         Language::Python => {
             for name in ["basedpyright-langserver", "pyright-langserver"] {
@@ -39,14 +74,19 @@ fn command(language: Language) -> Result<(PathBuf, Vec<String>, String)> {
             bail!("Install basedpyright and put basedpyright-langserver in PATH")
         }
         Language::Cpp | Language::C => Ok((executable("clangd").context("Install clangd and put it in PATH")?, vec!["--background-index".into()], "clangd".into())),
+        Language::Java => Ok((executable("jdtls").context("Install Eclipse JDT LS and put jdtls in PATH; use JDK 21 or newer")?, vec![], "jdtls".into())),
         Language::Go => Ok((executable("gopls").context("Install gopls and put it in PATH")?, vec![], "gopls".into())),
     }
 }
 impl Server {
+    pub fn stop(&self) { let _ = self.socket.emit(Stop); }
+
     pub fn supports_completion_resolve(&self) -> bool { lock(&self.state).completion_resolve }
 
     pub fn start(language: Language, root: &Path) -> Result<Arc<Self>> {
-        let (binary, args, name) = command(language)?;
+        let (binary, mut args, name) = command(language)?;
+        let java_workspace = if language == Language::Java { Some(JavaWorkspace::new()?) } else { None };
+        if let Some(workspace) = &java_workspace { args.extend(["-data".into(), workspace.0.to_string_lossy().into_owned()]); }
         let root = root.to_path_buf();
         let uri = lsp::Url::from_directory_path(&root).map_err(|_| anyhow::anyhow!("Invalid workspace directory"))?;
         let state = Arc::new(Mutex::new(State { status: Status::Starting, diagnostics: HashMap::new(), sequence: 0, completion_resolve: false, subscribers: HashMap::new() }));
@@ -73,6 +113,7 @@ impl Server {
         });
         let server = Arc::new(Self { socket: socket.clone(), state: state.clone(), name });
         std::thread::Builder::new().name(format!("leet-lsp-{}", language.id())).spawn(move || {
+            let _java_workspace = java_workspace;
             let outcome: Result<()> = async_io::block_on(async {
                 let mut child = async_process::Command::new(binary).args(args).current_dir(&root)
                     .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).kill_on_drop(true).spawn()?;
@@ -170,6 +211,25 @@ impl Drop for Document { fn drop(&mut self) { let _ = self.server.socket.notify:
 
 #[cfg(test)] mod tests {
     use super::*;
+    #[test]
+    #[ignore = "requires basedpyright or pyright"]
+    fn explicit_stop_terminates_a_server_retained_by_a_document() {
+        async_io::block_on(async {
+            let root = tempfile::tempdir().unwrap();
+            let path = root.path().join("main.py");
+            std::fs::write(&path, "print(1)\n").unwrap();
+            let server = Server::start(Language::Python, root.path()).unwrap();
+            let document = server.open(&path, Language::Python, "print(1)\n".into()).await.unwrap();
+            server.stop();
+            for _ in 0..100 {
+                if matches!(server.status(), Status::Failed(_)) { break; }
+                async_io::Timer::after(Duration::from_millis(20)).await;
+            }
+            assert!(matches!(server.status(), Status::Failed(_)));
+            assert!(document.server.ready().await.is_err());
+        });
+    }
+
     #[test]
     #[ignore = "requires basedpyright or pyright"]
     fn live_python_contest_prelude_and_syntax_only_diagnostics() {

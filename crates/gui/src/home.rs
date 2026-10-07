@@ -35,6 +35,9 @@ pub struct HomeState {
 }
 
 impl Workspace {
+    pub(crate) fn clear_tab_language_adapters(&self, cx: &mut App) {
+        for tab in self.tabs.iter().flatten() { crate::language_server::clear_editor_adapters(&tab.editor, cx); }
+    }
     pub fn park_tab(&mut self) {
         if let (Some(index), Some(session)) = (self.active_tab, self.session.take()) {
             self.tabs[index] = Some(ProblemTab {
@@ -56,6 +59,7 @@ impl Workspace {
     }
 
     pub fn new_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.activate_language(self.config.preferred_language, cx);
         self.editor = cx.new(|cx| EditorState::new(window, cx).language(self.config.preferred_language.id())
             .line_number(true).indent_guides(true).folding(true).soft_wrap(false)
             .tab_size(TabSize { tab_size: 4, hard_tabs: false }));
@@ -124,6 +128,7 @@ impl Workspace {
             else { self.active_tab = None; }
             self.focus_area = focus;
         }
+        if !background { self.attach_language_server(window, cx); }
         cx.notify();
     }
 

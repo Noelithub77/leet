@@ -44,6 +44,8 @@ jobs:
           rustup default stable
       - name: Use runner capacity
         run: echo "CARGO_BUILD_JOBS=$(nproc)" >> "$GITHUB_ENV"
+      - name: Install Java test compiler
+        run: sudo apt-get install -y --no-install-recommends openjdk-17-jdk-headless
       - name: Cache test dependencies
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:

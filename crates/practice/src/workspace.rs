@@ -35,7 +35,7 @@ mod tests {
         std::fs::write(&path, "my solution").unwrap();
         ensure_solution(dir.path(), &python, "replacement").unwrap();
         assert_eq!(std::fs::read_to_string(path).unwrap(), "my solution");
-        for language in [Language::Cpp, Language::Go, Language::C] {
+        for language in [Language::Cpp, Language::Go, Language::C, Language::Java] {
             let rel = solution_rel(1, "two-sum", language);
             assert_ne!(rel, python);
             assert_eq!(rel.extension().unwrap(), language.extension());

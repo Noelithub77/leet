@@ -132,7 +132,7 @@ impl Workspace {
             }))
     }
 }
-fn version_language(language:&str)->Option<Language>{match language.to_lowercase().as_str(){"python"|"python3"=>Some(Language::Python),"cpp"|"c++"=>Some(Language::Cpp),"go"|"golang"=>Some(Language::Go),"c"=>Some(Language::C),_=>None}}
+fn version_language(language:&str)->Option<Language>{match language.to_lowercase().as_str(){"python"|"python3"=>Some(Language::Python),"cpp"|"c++"=>Some(Language::Cpp),"go"|"golang"=>Some(Language::Go),"c"=>Some(Language::C),"java"=>Some(Language::Java),_=>None}}
 fn saved_versions(data:&serde_json::Value)->Vec<RemoteVersion>{
     fn collect(data:&serde_json::Value,language:&str,out:&mut Vec<RemoteVersion>){
         if let Some(object)=data.as_object(){

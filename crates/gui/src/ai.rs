@@ -147,10 +147,7 @@ impl Render for AiForm {
                 })))
                 .child(v_flex().flex_1().gap_1().child(div().text_xs().text_color(muted).child("Prompt style")).child(Select::new(&self.style))))
             .child(v_flex().gap_1().child(div().text_xs().text_color(muted).child("Instructions")).child(Textarea::new(&self.instructions)))
-            .child(h_flex().items_center().justify_between()
-                .child(h_flex().gap_2().text_xs().text_color(muted)
-                    .child(crate::view::key("ctrl-enter")).child("Save")
-                    .child(crate::view::key("escape")).child("Close"))
+            .child(h_flex().items_center().justify_end()
                 .child(Button::new("save-ai").primary().icon(gpui_kit::assets::IconName::Check).accessibility_label("Save AI preferences").tooltip("Save · Ctrl+Enter").on_click(cx.listener(|this, _, window, cx| this.save(window, cx)))))
     }
 }

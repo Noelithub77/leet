@@ -10,6 +10,7 @@ impl AssetSource for Assets {
             "languages/python.svg" => Some(include_bytes!("../assets/languages/python.svg")),
             "languages/cpp.svg" => Some(include_bytes!("../assets/languages/cpp.svg")),
             "languages/go.svg" => Some(include_bytes!("../assets/languages/go.svg")),
+            "languages/java.svg" => Some(include_bytes!("../assets/languages/java.svg")),
             "languages/c.svg" => Some(include_bytes!("../assets/languages/c.svg")),
             _ => None,
         };
@@ -34,7 +35,7 @@ impl AssetSource for Assets {
     fn list(&self, path: &str) -> Result<Vec<SharedString>> {
         let mut paths = gpui_kit::assets::Assets.list(path)?;
         paths.extend(HomeIcons.list(path)?);
-        paths.extend(["leet.svg", "providers/neetcode.svg", "providers/leetcode.svg", "providers/codeforces.svg", "providers/chatgpt.svg", "providers/claude.svg", "providers/gemini.svg", "languages/python.svg", "languages/cpp.svg", "languages/go.svg", "languages/c.svg"].into_iter().filter(|name| name.starts_with(path)).map(Into::into));
+        paths.extend(["leet.svg", "providers/neetcode.svg", "providers/leetcode.svg", "providers/codeforces.svg", "providers/chatgpt.svg", "providers/claude.svg", "providers/gemini.svg", "languages/python.svg", "languages/cpp.svg", "languages/go.svg", "languages/c.svg", "languages/java.svg"].into_iter().filter(|name| name.starts_with(path)).map(Into::into));
         paths.sort();
         paths.dedup();
         Ok(paths)
@@ -43,8 +44,16 @@ impl AssetSource for Assets {
 
 #[cfg(test)]
 mod tests {
-    use super::HomeIcons;
+    use super::{Assets, HomeIcons};
     use gpui_kit::AssetSource;
+
+    #[::core::prelude::v1::test]
+    fn every_selectable_language_icon_is_bundled() {
+        for language in practice::language::Language::ALL {
+            let icon = Assets.load(&format!("languages/{}.svg", language.id())).unwrap().expect("Language icon must be bundled");
+            assert!(!icon.is_empty());
+        }
+    }
 
     #[::core::prelude::v1::test]
     fn update_icon_is_embedded_without_a_runtime_download() {

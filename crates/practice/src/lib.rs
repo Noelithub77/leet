@@ -29,3 +29,5 @@ pub mod contests;
 pub mod updates;
 
 pub mod release_notes;
+
+pub mod toolchain;

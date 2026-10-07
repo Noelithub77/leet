@@ -2,7 +2,7 @@
 use gpui_kit::*;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::assets::IconName;
-use gpui_kit::component::{ActiveTheme as _, Disableable as _, Selectable as _, Sizable as _, h_flex, v_flex};
+use gpui_kit::component::{Disableable as _, Selectable as _, Sizable as _, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::popover::Popover;
 use practice::language::Language;
@@ -95,9 +95,5 @@ impl Render for LanguagePicker {
                         let _ = this.workspace.update(cx, |ws, cx| ws.switch_language(language, window, cx));
                     }))
             }))
-            .child(h_flex().pt_2().gap_2().text_xs().text_color(cx.theme().muted_foreground)
-                .child(crate::view::key("up down"))
-                .child(crate::view::key("enter")).child("Select")
-                .child(crate::view::key("escape")).child("Close"))
     }
 }

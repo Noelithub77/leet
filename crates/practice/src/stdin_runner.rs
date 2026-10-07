@@ -48,12 +48,19 @@ fn execute(mut command: Command, input: String, timeout: Duration, scratch: &Pat
 pub fn run(language: Language, python: &str, path: &Path, cases: &[Case], timeout: Duration, mut result: impl FnMut(CaseResult)) -> Result<Option<String>> {
     let scratch = Scratch::new()?;
     let binary = scratch.0.join(format!("solution{}", std::env::consts::EXE_SUFFIX));
-    if language != Language::Python {
+    if language == Language::Java {
+        let source = scratch.0.join("Main.java");
+        fs::copy(path, &source)?;
+        let mut compiler = Command::new("javac");
+        compiler.arg("-encoding").arg("UTF-8").arg("-d").arg(&scratch.0).arg(&source);
+        let output = execute(compiler, String::new(), Duration::from_secs(60), &scratch.0)?;
+        if !output.success { return Ok(Some(if output.timeout { "Compilation timed out".into() } else { output.stderr })); }
+    } else if language != Language::Python {
         let mut compiler = match language {
             Language::Cpp => { let mut cmd = Command::new("g++"); cmd.args(["-std=c++20", "-O2"]); cmd },
             Language::C => { let mut cmd = Command::new("gcc"); cmd.args(["-std=c17", "-O2"]); cmd },
             Language::Go => { let mut cmd = Command::new("go"); cmd.arg("build"); cmd },
-            Language::Python => unreachable!(),
+            Language::Python | Language::Java => unreachable!(),
         };
         compiler.arg("-o").arg(&binary).arg(path);
         let output = execute(compiler, String::new(), Duration::from_secs(60), &scratch.0)?;
@@ -63,6 +70,9 @@ pub fn run(language: Language, python: &str, path: &Path, cases: &[Case], timeou
         let mut command = if language == Language::Python {
             let mut cmd = Command::new(python);
             cmd.args(["-u", "-c"]).arg(format!("{}\nimport runpy\nrunpy.run_path(sys.argv[1], run_name='__main__', init_globals=globals())", crate::python::PRELUDE)).arg(path); cmd
+        } else if language == Language::Java {
+            let mut cmd = Command::new("java");
+            cmd.args(["-Dfile.encoding=UTF-8", "-cp"]).arg(&scratch.0).arg("Main"); cmd
         } else { Command::new(&binary) };
         command.current_dir(path.parent().unwrap_or(Path::new(".")));
         let output = execute(command, format!("{}\n", case.input.trim_end_matches('\n')), timeout, &scratch.0)?;
@@ -88,6 +98,23 @@ pub fn run(language: Language, python: &str, path: &Path, cases: &[Case], timeou
             run(language, "python3", &path, &[case], Duration::from_secs(2), |r| results.push(r)).unwrap();
             assert_eq!(results[0].verdict, Verdict::Pass, "{}: {}", language.label(), results[0].error);
         }
+    }
+    #[test] fn java_runs_saved_filenames_and_reports_failures_without_writing_classes_beside_solutions() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("0001-saved-solution.java");
+        let case = Case { id: 0, input: "3".into(), expected: Some("6".into()), custom: false };
+        fs::write(&path, "import java.util.*; public class Main { public static void main(String[] args) { System.out.print(new Scanner(System.in).nextInt()*2); } }").unwrap();
+        let mut results = Vec::new();
+        assert!(run(Language::Java, "python3", &path, &[case.clone()], Duration::from_secs(2), |r| results.push(r)).unwrap().is_none());
+        assert_eq!(results[0].verdict, Verdict::Pass);
+        assert!(!dir.path().join("Main.class").exists());
+        assert!(!dir.path().join("Main.java").exists());
+        fs::write(&path, "public class Main { broken syntax }").unwrap();
+        assert!(run(Language::Java, "python3", &path, &[case.clone()], Duration::from_secs(2), |_| {}).unwrap().is_some());
+        fs::write(&path, "public class Main { public static void main(String[] args) { while (true) {} } }").unwrap();
+        results.clear();
+        run(Language::Java, "python3", &path, &[case], Duration::from_millis(150), |r| results.push(r)).unwrap();
+        assert_eq!(results[0].verdict, Verdict::Timeout);
     }
     #[test] fn python_samples_compare_whitespace_and_enforce_timeout() {
         let dir = tempfile::tempdir().unwrap(); let path = dir.path().join("main.py");

@@ -15,7 +15,7 @@ fn loader(key: &str) -> Arc<Mutex<()>> {
 #[derive(Clone, Debug, Serialize, Deserialize)] pub struct Reference { pub code: String, pub url: String, pub language: Language }
 #[derive(Deserialize)] struct Entry {
     link: String, code: String,
-    #[serde(default)] python: bool, #[serde(default)] cpp: bool, #[serde(default)] go: bool, #[serde(default)] c: bool,
+    #[serde(default)] python: bool, #[serde(default)] cpp: bool, #[serde(default)] go: bool, #[serde(default)] c: bool, #[serde(default)] java: bool,
 }
 fn fetch(url: &str) -> Result<String> {
     let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(Duration::from_secs(30))).build().into();
@@ -33,7 +33,7 @@ pub fn get(db: &Db, slug: &str, language: Language) -> Result<Reference> {
     let loader = loader(&key); let _guard = loader.lock().unwrap_or_else(|error| error.into_inner());
     if let Some(raw) = db.get(&key)? { if let Ok(reference) = serde_json::from_str(&raw) { return Ok(reference); } }
     let entry = index(db)?.into_iter().find(|entry| entry.link.trim_matches('/') == slug).context("No public NeetCode solution for this problem")?;
-    let supported = match language { Language::Python => entry.python, Language::Cpp => entry.cpp, Language::Go => entry.go, Language::C => entry.c };
+    let supported = match language { Language::Python => entry.python, Language::Cpp => entry.cpp, Language::Go => entry.go, Language::C => entry.c, Language::Java => entry.java };
     if !supported { bail!("No {} reference; select another language", language.label()); }
     if entry.code.is_empty() || !entry.code.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_') { bail!("Invalid reference filename"); }
     let folder = if language == Language::Cpp { "cpp" } else { language.id() };

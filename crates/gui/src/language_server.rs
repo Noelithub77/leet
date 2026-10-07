@@ -1,5 +1,5 @@
 //! Adapt maintained LSP clients to the editor's existing providers and overlays.
-use std::{collections::HashMap, rc::Rc, sync::{Arc, Weak}};
+use std::{collections::{HashMap, HashSet}, rc::Rc, sync::{Arc, Weak}};
 use anyhow::Result;
 use futures::StreamExt as _;
 use gpui_kit::*;
@@ -7,10 +7,12 @@ use gpui_kit::component::input::{CodeActionProvider, CompletionProvider, Definit
 use lsp_wire::{self as wire, request};
 use ropey::Rope;
 use practice::{language::Language, lsp::{Document, Server, Status}};
-use crate::workspace::Workspace;
+use crate::workspace::{Center, Workspace};
 
 #[derive(Default)]
 pub struct Intelligence {
+    active: Option<Language>,
+    pending: HashSet<EntityId>,
     servers: HashMap<Language, Arc<Server>>,
     documents: HashMap<EntityId, Weak<Document>>,
     errors: HashMap<Language, String>,
@@ -137,13 +139,27 @@ impl CodeActionProvider for Provider {
 fn location_link(location: wire::Location) -> wire::LocationLink { wire::LocationLink { origin_selection_range: None, target_uri: location.uri, target_range: location.range, target_selection_range: location.range } }
 
 impl Workspace {
+    pub(crate) fn activate_language(&mut self, language: Language, cx: &mut Context<Self>) {
+        if self.intelligence.active == Some(language) { return; }
+        self.suspend_language_servers(cx);
+        self.intelligence.active = Some(language);
+    }
+
+    pub(crate) fn suspend_language_servers(&mut self, cx: &mut Context<Self>) {
+        for (_, server) in self.intelligence.servers.drain() { server.stop(); }
+        self.intelligence.documents.clear();
+        self.intelligence.pending.clear();
+        self.intelligence.errors.clear();
+        for generation in self.intelligence.generations.values_mut() { *generation = generation.wrapping_add(1); }
+        clear_editor_adapters(&self.editor, cx);
+        self.clear_tab_language_adapters(cx);
+        self.intelligence.active = None;
+    }
     pub fn restart_language_server(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(session) = self.session.as_ref() else { return; };
-        self.intelligence.servers.remove(&session.language);
-        self.intelligence.documents.remove(&self.editor.entity_id());
-        self.editor.update(cx, |editor, cx| {
-            editor.lsp_mut().completion_provider = None; editor.lsp_mut().hover_provider = None; editor.lsp_mut().definition_provider = None; editor.lsp_mut().code_action_providers.clear(); editor.refresh(cx);
-        });
+        let language = session.language;
+        self.intelligence.active = None;
+        self.activate_language(language, cx);
         self.attach_language_server(window, cx);
     }
     pub fn language_document_saved(&self) {
@@ -153,9 +169,12 @@ impl Workspace {
         if let Some(doc) = self.intelligence.documents.get(&editor.entity_id()).and_then(Weak::upgrade) { let _ = doc.sync(editor.read(cx).value().to_string()); }
     }
     pub fn attach_language_server(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(session) = &self.session else { return; };
+        if self.center != Center::Editor { return; }
+        let Some(session) = self.session.as_ref().filter(|session| session.question.is_some()) else { return; };
         let language = session.language; let path = session.path.clone();
+        self.activate_language(language, cx);
         if self.intelligence.documents.get(&self.editor.entity_id()).and_then(Weak::upgrade).is_some() { self.sync_language_document(&self.editor, cx); return; }
+        if self.intelligence.pending.contains(&self.editor.entity_id()) { return; }
         let server = if let Some(server) = self.intelligence.servers.get(&language).filter(|server| !matches!(server.status(), Status::Failed(_))) { server.clone() }
             else {
                 match Server::start(language, &self.config.workspace) {
@@ -165,18 +184,20 @@ impl Workspace {
             };
         let generation = self.intelligence.generations.entry(self.editor.entity_id()).or_default(); *generation += 1; let generation = *generation;
         let editor_id = self.editor.entity_id();
+        self.intelligence.pending.insert(editor_id);
         let editor = self.editor.downgrade(); let text = self.editor.read(cx).value().to_string();
         cx.spawn_in(window, async move |this, cx| {
             let result = cx.background_spawn(async move { server.open(&path, language, text).await }).await;
             let document = match result {
                 Ok(document) => document,
-                Err(error) => { let _ = this.update(cx, |ws, cx| { if ws.intelligence.generations.get(&editor_id) == Some(&generation) { ws.intelligence.errors.insert(language, error.to_string()); cx.notify(); } }); return; },
+                Err(error) => { let _ = this.update(cx, |ws, cx| { if ws.intelligence.generations.get(&editor_id) == Some(&generation) { ws.intelligence.pending.remove(&editor_id); } if ws.intelligence.active == Some(language) && ws.editor.entity_id() == editor_id && ws.intelligence.generations.get(&editor_id) == Some(&generation) { ws.intelligence.errors.insert(language, error.to_string()); cx.notify(); } }); return; },
             };
             let weak_doc = Arc::downgrade(&document);
             let mut updates = document.subscribe();
             let mut last = 0;
             let attached = this.update_in(cx, |ws, _, cx| {
-                if ws.intelligence.generations.get(&editor_id) != Some(&generation) { return false; }
+                if ws.intelligence.generations.get(&editor_id) == Some(&generation) { ws.intelligence.pending.remove(&editor_id); }
+                if ws.intelligence.active != Some(language) || ws.editor.entity_id() != editor_id || ws.intelligence.generations.get(&editor_id) != Some(&generation) { return false; }
                 let Some(editor) = editor.upgrade() else { return false; };
                 ws.intelligence.documents.retain(|_, doc| doc.strong_count() > 0);
                 ws.intelligence.documents.insert(editor.entity_id(), Arc::downgrade(&document));
@@ -215,7 +236,7 @@ impl Workspace {
                 let converted: Result<Vec<lsp_types::Diagnostic>> = convert(diagnostics);
                 let Ok(diagnostics) = converted else { continue; };
                 if this.update(cx, |ws, cx| {
-                    if ws.intelligence.generations.get(&editor_id) != Some(&generation) { return false; }
+                    if ws.intelligence.active != Some(language) || ws.editor.entity_id() != editor_id || ws.intelligence.generations.get(&editor_id) != Some(&generation) { return false; }
                     let Some(editor) = editor.upgrade() else { return false; };
                     editor.update(cx, |editor, cx| {
                         let text = editor.text().clone();
@@ -228,3 +249,16 @@ impl Workspace {
     }
 }
 gpui_kit::actions!(intelligence, [Complete]);
+
+pub(crate) fn clear_editor_adapters(editor: &Entity<EditorState>, cx: &mut App) {
+    editor.update(cx, |editor, cx| {
+        editor.lsp_mut().completion_provider = None;
+        editor.lsp_mut().hover_provider = None;
+        editor.lsp_mut().definition_provider = None;
+        editor.lsp_mut().code_action_providers.clear();
+        editor.lsp_mut().show_document = None;
+        let text = editor.text().clone();
+        if let Some(diagnostics) = editor.diagnostics_mut() { diagnostics.reset(&text); }
+        editor.refresh(cx);
+    });
+}

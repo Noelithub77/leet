@@ -15,7 +15,7 @@ ropey = "=2.0.0-beta.1"
 lsp-wire = { package = "lsp-types", version = "0.95" }
 dirs = "6"
 futures = "0.3"
-gpui-kit = { version = "0.7.1", features = ["tree-sitter-python", "tree-sitter-cpp", "tree-sitter-c", "tree-sitter-go"] }
+gpui-kit = { version = "0.7.1", features = ["tree-sitter-python", "tree-sitter-cpp", "tree-sitter-c", "tree-sitter-go", "tree-sitter-java"] }
 open = "5"
 serde_json = "1"
 serde = "1"
