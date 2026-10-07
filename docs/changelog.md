@@ -1,3 +1,8 @@
+## 2026-10-07 · Contests beside Recent
+
+- Home always shows Recent on the left and Contests on the right, with independent scrolling.
+- Left/Right moves keyboard focus between lists; Ctrl+Alt+C focuses Contests without hiding recent questions.
+
 ## 2026-10-07 · New logo
 
 - New app and site logo: nested Vesper peach and mint brackets that point to a base case. Concepts that weren't picked are in `crates/gui/assets/alt-logo/`.

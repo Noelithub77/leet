@@ -54,7 +54,7 @@ impl Workspace {
         let problems = practice::contests::cached_problems(&self.db, id).unwrap_or_default();
         self.sources.upsert_problems(problems);
         self.rebuild_rows(); self.sidebar_sel = 0;
-        self.home.page = crate::home::HomePage::Contests;
+        self.home.list = crate::home::HomeList::Contests;
         self.center = Center::Home; self.left = true; self.home.sidebar = true; self.history_mode = false;
         self.focus_nav(Focus::Sidebar, window, cx);
         self.refresh_contest_problems(id, window, cx);
@@ -87,9 +87,9 @@ impl Workspace {
         let theme = cx.theme().clone();
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
         let visible = self.contests.visible();
-        v_flex().id("home-contests").flex_1().min_h_0().overflow_y_scroll().track_scroll(&self.home.scroll).gap_2()
-            .child(h_flex().justify_between()
-                .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child("Codeforces"))
+        v_flex().id("home-contests").flex_1().min_h_0().overflow_y_scroll().track_scroll(&self.home.contest_scroll).gap_2()
+            .child(h_flex().h_9().flex_shrink_0().items_center().justify_between()
+                .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child("Contests"))
                 .child(Button::new("past-contests").ghost().small().icon(if self.contests.past_open { IconName::ChevronDown } else { IconName::ChevronRight })
                     .accessibility_label("Show or hide past contests").tooltip("Past contests")
                     .on_click(cx.listener(|this, _, _, cx| { this.contests.past_open = !this.contests.past_open; cx.notify(); }))))
@@ -97,8 +97,8 @@ impl Workspace {
                 .child(if self.contests.list_loading { "Loading contests…" } else { "No upcoming contests" })))
             .children(visible.iter().enumerate().map(|(index, contest)| {
                 let id = contest.id;
-                h_flex().id(("home-contest", id)).gap_3().px_3().py_2().rounded_lg().cursor_pointer()
-                    .bg(if self.home.selected == index { theme.list_active } else { theme.background })
+                h_flex().id(("home-contest", id)).flex_shrink_0().gap_3().px_3().py_2().rounded_lg().cursor_pointer()
+                    .bg(if self.home.list == crate::home::HomeList::Contests && self.focus_area == Focus::Home && self.home.selected == index { theme.list_active } else { theme.background })
                     .hover(|row| row.bg(theme.list_hover))
                     .child(crate::brand::source_icon(Source::Codeforces).small())
                     .child(div().flex_1().min_w_0().truncate().child(contest.name.clone()))

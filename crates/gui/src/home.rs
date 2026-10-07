@@ -21,14 +21,15 @@ pub struct ProblemTab {
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
-pub enum HomePage { #[default] Recent, Contests }
+pub enum HomeList { #[default] Recent, Contests }
 
 #[derive(Default)]
 pub struct HomeState {
-    pub page: HomePage,
+    pub list: HomeList,
     pub selected: usize,
     pub sidebar: bool,
     pub scroll: ScrollHandle,
+    pub contest_scroll: ScrollHandle,
     pub tabs_scroll: ScrollHandle,
 }
 
@@ -137,7 +138,7 @@ impl Workspace {
         cx.on_next_frame(window, |this, window, cx| {
             if this.center == Center::Home && !this.omni.open && this.focus_area == Focus::Home {
                 this.focus_nav(Focus::Home, window, cx);
-                this.home.scroll.scroll_to_item(this.home_scroll_index());
+                this.home_active_scroll().scroll_to_item(this.home_scroll_index());
                 this.home.tabs_scroll.scroll_to_item(0);
                 cx.notify();
             }
@@ -149,30 +150,34 @@ impl Workspace {
         if count > 0 {
             self.home.selected = (self.home.selected as isize + delta)
                 .clamp(0, count as isize - 1) as usize;
-            self.home.scroll.scroll_to_item(self.home_scroll_index());
+            self.home_active_scroll().scroll_to_item(self.home_scroll_index());
             cx.notify();
         }
     }
 
     fn home_item_count(&self) -> usize {
-        match self.home.page { HomePage::Recent => self.recent_slugs.len(), HomePage::Contests => self.contests.visible().len() }
+        match self.home.list { HomeList::Recent => self.recent_slugs.len(), HomeList::Contests => self.contests.visible().len() }
     }
 
-    fn home_scroll_index(&self) -> usize { self.home.selected + usize::from(self.home.page == HomePage::Contests) }
+    fn home_active_scroll(&self) -> &ScrollHandle {
+        match self.home.list { HomeList::Recent => &self.home.scroll, HomeList::Contests => &self.home.contest_scroll }
+    }
 
-    pub fn select_home_page(&mut self, page: HomePage, window: &mut Window, cx: &mut Context<Self>) {
-        self.home.page = page;
+    fn home_scroll_index(&self) -> usize { self.home.selected + usize::from(self.home.list == HomeList::Contests) }
+
+    pub fn select_home_list(&mut self, list: HomeList, window: &mut Window, cx: &mut Context<Self>) {
+        self.home.list = list;
         self.home.selected = 0;
-        self.home.scroll.scroll_to_item(0);
-        if page == HomePage::Contests { self.refresh_contests(window, cx); }
+        self.home_active_scroll().scroll_to_item(0);
+        if list == HomeList::Contests { self.refresh_contests(window, cx); }
         self.focus_nav(Focus::Home, window, cx);
         cx.notify();
     }
 
     pub fn home_open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        match self.home.page {
-            HomePage::Recent => if let Some(slug) = self.recent_slugs.get(self.home.selected).cloned() { self.open_problem(slug, window, cx); },
-            HomePage::Contests => if let Some(contest) = self.contests.visible().get(self.home.selected) { self.open_contest(contest.id, window, cx); },
+        match self.home.list {
+            HomeList::Recent => if let Some(slug) = self.recent_slugs.get(self.home.selected).cloned() { self.open_problem(slug, window, cx); },
+            HomeList::Contests => if let Some(contest) = self.contests.visible().get(self.home.selected) { self.open_contest(contest.id, window, cx); },
         }
     }
 
@@ -259,16 +264,10 @@ impl Workspace {
         let theme = cx.theme().clone();
         let focused = self.focus_area == Focus::Home && self.nav_focus.is_focused(window);
         v_flex().size_full().min_h_0().items_center().px_6().py_10()
-            .child(v_flex().w_full().max_w(px(660.)).h_full().min_h_0().gap_4()
+            .child(h_flex().w_full().max_w(px(1120.)).h_full().min_h_0().gap_8()
+                .child(v_flex().flex_1().min_w_0().h_full().min_h_0().gap_4()
                 .child(h_flex().flex_shrink_0().justify_between()
-                    .child(Tabs::new("home-pages").flex().gap_1()
-                        .children([(HomePage::Recent, "Recent"), (HomePage::Contests, "Contests")].into_iter().enumerate().map(|(index, (page, label))| {
-                            Tab::new(("home-page", index)).selected(self.home.page == page).set_position(index + 1, 2)
-                                .h_9().px_3().rounded_lg().text_sm().accessibility_label(label)
-                                .styles(|styles| styles.selected(|style| style.bg(theme.list_active).text_color(theme.primary)))
-                                .child(div().line_height(relative(1.4)).py_1().child(label))
-                                .on_click(cx.listener(move |this, _, window, cx| this.select_home_page(page, window, cx)))
-                        })))
+                    .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).text_color(theme.muted_foreground).child("Recent"))
                     .child(h_flex().gap_1()
                         .child(Button::new("home-find").ghost().small().icon(IconName::Search)
                             .accessibility_label("Find problem").tooltip_with_action("Find problem", &actions::FindProblem, Some(actions::WORKSPACE))
@@ -277,7 +276,7 @@ impl Workspace {
                         .when(!self.home.sidebar, |row| row.child(Button::new("home-roadmap").ghost().small().icon(IconName::Map)
                             .accessibility_label("Roadmap").tooltip_with_action("Roadmap", &actions::ToggleRoadmap, Some(actions::WORKSPACE))
                             .on_click(cx.listener(|this, _, window, cx| this.show_roadmap(window, cx)))))))
-                .child(if self.home.page == HomePage::Contests { self.render_contests(cx).into_any_element() } else { v_flex().id("home-recents").flex_1().min_h_0().overflow_y_scroll().track_scroll(&self.home.scroll).gap_1()
+                .child(v_flex().id("home-recents").flex_1().min_h_0().overflow_y_scroll().track_scroll(&self.home.scroll).gap_1()
                     .when(self.recent_slugs.is_empty(), |list| list.child(div().py_4().text_sm().text_color(theme.muted_foreground).child("No recent problems")))
                     .children(self.recent_slugs.iter().enumerate().map(|(i, slug)| {
                         let item = self.item(slug);
@@ -286,17 +285,19 @@ impl Workspace {
                         let slug = slug.clone();
                         let row = h_flex().id(("home-recent", i)).flex_shrink_0().h_10().px_3().gap_3().rounded_md()
                             .hover(|style| style.bg(theme.list_hover))
-                            .when(focused && i == self.home.selected, |row| row.bg(theme.list_active))
+                            .when(focused && self.home.list == HomeList::Recent && i == self.home.selected, |row| row.bg(theme.list_active))
                             .child(div().flex_1().min_w_0().truncate().child(title))
                             .when_some(item, |row, item| {
                                 let (label, color) = crate::view::difficulty(item.level, cx);
                                 row.child(div().text_xs().text_color(color).child(label))
                             });
                         row.on_click(cx.listener(move |this, _, window, cx| {
+                            this.home.list = HomeList::Recent;
                             this.home.selected = i;
                             this.open_problem(slug.clone(), window, cx);
                         }))
-                    })).into_any_element() }))
+                    }))))
+                .child(v_flex().flex_1().min_w_0().max_w(px(360.)).h_full().min_h_0().child(self.render_contests(cx))))
     }
 }
 
