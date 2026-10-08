@@ -87,6 +87,34 @@ mod tests {
         assert!(validate_handle("a;another-user").is_err());
         assert!(validate_handle("a&handles=b").is_err());
     }
+    #[test]
+    fn curl_fallback_accepts_only_validated_problem_urls_and_bounds_requests() {
+        assert!(curl_command("cf:1:../../submit").is_err());
+        assert!(curl_command("cc:START01").is_err());
+        let command = curl_command("cf:2275:G").unwrap();
+        let args: Vec<_> = command.get_args().map(|arg| arg.to_str().unwrap()).collect();
+        assert_eq!(args[0], "--disable");
+        for pair in [["--proto", "=https"], ["--proto-redir", "=https"], ["--max-time", "30"], ["--max-filesize", "8388608"]] {
+            assert!(args.windows(2).any(|args| args == pair));
+        }
+        assert_eq!(args.last().unwrap(), &"https://codeforces.com/problemset/problem/2275/G");
+    }
+    #[test]
+    #[ignore = "Requires installed curl and live Codeforces access"]
+    fn live_curl_upgrades_copper_squander_import() {
+        let dir = tempfile::tempdir().unwrap(); let db = crate::db::Db::open_unseeded(&dir.path().join("cache.db")).unwrap();
+        let import: crate::companion::Import = serde_json::from_value(serde_json::json!({"name":"Copper Squanderer","group":"CodeChef","url":"https://codeforces.com/problemset/problem/2275/G","tests":[{"input":"browser input","output":"browser output"}]})).unwrap();
+        let slug = import.cache(&db).unwrap();
+        let full = cached_question_with(&db, &slug, curl_question).unwrap();
+        assert_eq!(full.title, "Copper Squander");
+        assert!(full.content.contains("input-specification"));
+        assert!(full.content.contains("output-specification"));
+        assert!(full.content.len() > 5000);
+        assert_eq!(full.meta["source"], "codeforces");
+        assert_eq!(full.meta["statementSource"], "codeforces-curl");
+        assert!(!full.examples.is_empty());
+        assert_eq!(db.test_cases(&slug).unwrap().unwrap()[0].input, "browser input");
+    }
 }
 
 
@@ -184,8 +212,11 @@ pub fn parse_statement(slug: &str, html: &str) -> Result<crate::leetcode::Questi
 pub fn question(slug: &str) -> Result<crate::leetcode::Question> {
     match live_question(slug) {
         Ok(question) => Ok(question),
-        Err(live) => crate::codeforces_snapshot::question(slug)
-            .map_err(|snapshot| anyhow::anyhow!("Codeforces statement unavailable ({live}). Snapshot fallback: {snapshot}")),
+        Err(live) => match curl_question(slug) {
+            Ok(question) => Ok(question),
+            Err(curl) => crate::codeforces_snapshot::question(slug)
+                .map_err(|snapshot| anyhow::anyhow!("Codeforces statement unavailable ({live}). Curl fallback: {curl:#}. Snapshot fallback: {snapshot}")),
+        },
     }
 }
 
@@ -207,4 +238,29 @@ fn live_question(slug: &str) -> Result<crate::leetcode::Question> {
     let mut response = agent.get(&url).header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36").call()?;
     let html = response.body_mut().with_config().limit(8 << 20).read_to_string()?;
     parse_statement(slug, &html)
+}
+
+fn curl_command(slug: &str) -> Result<std::process::Command> {
+    let url = problem_url(slug)?;
+    let mut command = std::process::Command::new("curl");
+    // Ignore personal curl configuration; fetch only bounded public HTTPS statements.
+    command.args(["--disable", "--silent", "--show-error", "--fail", "--location",
+        "--max-redirs", "5", "--connect-timeout", "10", "--max-time", "30",
+        "--max-filesize", "8388608", "--proto", "=https", "--proto-redir", "=https",
+        "--user-agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36",
+        "--url", &url]);
+    command.stdin(std::process::Stdio::null());
+    Ok(command)
+}
+
+fn curl_question(slug: &str) -> Result<crate::leetcode::Question> {
+    let output = curl_command(slug)?.output().context("Run optional installed curl client")?;
+    if !output.status.success() {
+        bail!("curl exited with {}: {}", output.status, String::from_utf8_lossy(&output.stderr).trim());
+    }
+    if output.stdout.len() > 8 << 20 { bail!("Codeforces statement exceeds 8 MiB"); }
+    let html = String::from_utf8(output.stdout).context("Read curl statement as UTF-8")?;
+    let mut question = parse_statement(slug, &html)?;
+    question.meta["statementSource"] = serde_json::json!("codeforces-curl");
+    Ok(question)
 }
