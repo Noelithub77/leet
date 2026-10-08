@@ -1,0 +1,51 @@
+{
+  "stills": [
+    "ai",
+    "debugger",
+    "flow",
+    "home",
+    "palette",
+    "problem",
+    "roadmap",
+    "settings"
+  ],
+  "videos": [
+    {
+      "name": "ai",
+      "duration": 8,
+      "fps": [
+        60
+      ],
+      "bytes": {
+        "ai.webm": 319376,
+        "ai.mp4": 280593
+      }
+    },
+    {
+      "name": "debugger",
+      "duration": 8.566667,
+      "fps": [
+        60,
+        120
+      ],
+      "bytes": {
+        "debugger.webm": 274930,
+        "debugger.mp4": 346358,
+        "debugger-120.webm": 250372
+      }
+    },
+    {
+      "name": "flow",
+      "duration": 8.5,
+      "fps": [
+        60,
+        120
+      ],
+      "bytes": {
+        "flow.webm": 399044,
+        "flow.mp4": 420351,
+        "flow-120.webm": 327549
+      }
+    }
+  ]
+}

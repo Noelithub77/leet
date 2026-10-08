@@ -39,6 +39,22 @@ Every panel has one toggle, and a spring animation shows or hides it. Drag the b
 
 `alt+z` hides everything but the editor. The status bar briefly shows each shortcut you use.
 
+## Landing page
+
+`site/index.html` is fully pre-rendered; the hero's CSS is inlined so the install command paints first. `src/main.js` (about 2.5 KB gzipped) owns platform tabs, copy, and Ctrl/Cmd+C. After the first animation frame, an idle callback requests `src/enhance.js`, which loads GSAP (ScrollTrigger, SplitText, DrawSVG, ScrambleText) and Lenis for the scroll scenes. OGL shaders and the particle logo load separately; React and Sonner load on idle or first feedback. `src/debugger.js` replays `src/trace.js`, a deterministic copy of leet's 46-step Container With Most Water recording. Loops pause offscreen, videos attach near the viewport, and reduced motion or Save-Data get static posters. Content remains visible if enhancement cannot load. The live Hz meter estimates browser animation-frame cadence, rather than querying monitor hardware.
+
+Liberation Sans is self-hosted from `site/public/fonts/` (OFL). Regenerate each weight with `pyftsubset /usr/share/fonts/liberation/LiberationSans-Regular.ttf --unicodes="U+0020-007E,U+00A0-00FF,U+2013,U+2014,U+2018,U+2019,U+201C,U+201D,U+2022,U+2026,U+2192,U+2193,U+21B5,U+2318,U+2726,U+00B7,U+00D7" --layout-features='kern,liga' --flavor=woff2`.
+
+All titles use a self-hosted Nunito bold subset; its source and OFL notice are documented in `site/public/fonts/README.md`. The hero continuously morphs 1337 into the logo while visible, with a quick GSAP SplitText transition between Leeting and 1337ing. Reduced motion retains the static title and mark.
+
+## Landing media
+
+Run `pnpm --dir site ops media --help` for prerequisites and scenes. `pnpm --dir site ops media:capture --json` records the installed app in a disposable, invisible OmaBox at 2560×1600, scale 2, 120 Hz. Use `--scene flow` (or another listed scene) to replace one capture. The box has a fresh HOME, an onboarding-complete config, OpenCode selected, copied Zed language-server data, and an unreachable keyring bus; no personal leet state or AI credentials are copied. Only the task's box is torn down.
+
+Full-resolution losslessly compressed PNGs, high-quality H.264 120 fps masters, measured unique-frame cadence, and an encoded asset inventory are retained in `site/media/captures/`. Temporary recorder files live in ignored `site/media/.scratch/`. Capture uses OpenCode's MiMo V2.6 Flash Free model; it waits up to 120 seconds and records exhausted retries as a failure. When the free models are rate limited, `--scene ai --codex-home PATH` uses Codex instead: only that home's `auth.json` is copied into the disposable box, and it is deleted with the box. Inspect every still for personal information and confirm the live AI response before publishing; encoding omits an unsuccessful AI video while retaining its still and source master.
+
+`pnpm --dir site ops media:encode --json` regenerates AVIF/WebP stills at 1600×1000 and 800×500, 60 fps AV1/H.264 clips, and 1280×800 120 fps AV1 variants for Flow and Debugger, plus `site/public/media/manifest.json`, using only the tracked captures and system FFmpeg. JSON results identify `environment: "omabox"` and enumerate file sizes. Encoding does not launch an app. Run `pnpm --dir site ops check --json` after operator changes.
+
 ## Keys
 
 Modifier shortcuts follow the user's VS Code bindings. Bare arrows, `enter` and `escape` navigate only the focused Home, sidebar, Settings, or roadmap. `ctrl+shift+p` lists every command with its key.

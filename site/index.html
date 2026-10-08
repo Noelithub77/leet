@@ -2,15 +2,337 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#101010" />
-    <meta name="description" content="leet for the eleet. A fast, smooth, native coding-practice IDE built with Rust. Get leet for Linux, macOS, or Windows." />
-    <link rel="icon" href="/leet/leet.svg" type="image/svg+xml" />
-    <title>leet for the eleet — landing page</title>
-    <style>html{background:#101010;color:#e6e6e6}body{margin:0}.splash{display:grid;place-items:center;min-height:100svh}</style>
+    <meta name="color-scheme" content="dark" />
+    <meta name="description" content="leet for the eleet. A native GPUI coding-practice IDE in idiomatic Rust with a deterministic visual debugger, local AI agents, and Competitive Companion imports — leeting at 120Hz." />
+    <meta property="og:title" content="leet — leeting at 120Hz" />
+    <meta property="og:description" content="Native coding practice in idiomatic Rust, powered by GPUI. Visual debugger, local AI agents, contests. 1337 @ 120Hz." />
+    <meta property="og:image" content="https://noelithub77.github.io/leet/media/debugger.webp" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="%BASE_URL%leet.svg" type="image/svg+xml" />
+    <title>leet — leeting at 120Hz</title>
+    <script>document.documentElement.classList.add('js')</script>
+    <link rel="preload" href="%BASE_URL%fonts/liberation-sans-regular.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="%BASE_URL%fonts/liberation-sans-bold.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="%BASE_URL%fonts/nunito-bold.woff2" as="font" type="font/woff2" crossorigin />
+    <style>
+      @font-face{font-family:"Liberation Sans";src:url(%BASE_URL%fonts/liberation-sans-regular.woff2) format("woff2");font-weight:400;font-display:swap}
+      @font-face{font-family:"Liberation Sans";src:url(%BASE_URL%fonts/liberation-sans-bold.woff2) format("woff2");font-weight:700;font-display:swap}
+      @font-face{font-family:"Nunito";src:url(%BASE_URL%fonts/nunito-bold.woff2) format("woff2");font-weight:700;font-display:swap}
+      :root{--bg:#101010;--fg:#ededed;--muted:#9a9a9a;--line:#232323;--card:#151515;--mint:#99ffe4;--peach:#ffc799;--ink:#0f211c;--radius:22px;--shadow:0 1px 0 #ffffff0a inset,0 24px 60px -30px #000c,0 2px 6px -2px #0008;font-family:"Liberation Sans",Arimo,Arial,sans-serif;color:var(--fg);background:var(--bg);color-scheme:dark;-webkit-text-size-adjust:100%;-webkit-font-smoothing:antialiased}
+      *{box-sizing:border-box}body{margin:0;overflow-x:clip}a{color:inherit;text-decoration:none}
+      .bar{position:fixed;inset:0 0 auto;z-index:20;display:flex;align-items:center;justify-content:space-between;padding:max(14px,env(safe-area-inset-top)) clamp(16px,4vw,40px) 14px}
+      .brand{display:inline-flex;align-items:center;gap:10px;font-weight:700;font-size:19px;letter-spacing:-.03em}
+      .hero{position:relative;min-height:100svh;display:grid;place-items:center;padding:110px 20px 130px;text-align:center;isolation:isolate;overflow:hidden}
+      .hero-canvas{position:absolute;inset:0;z-index:-2;width:100%;height:100%;opacity:0;transition:opacity 1.2s ease}
+      .hero-canvas.is-live{opacity:1}.hero-particles{position:absolute;inset:0;z-index:0;width:100%;height:100%;pointer-events:none}.hero-inner{position:relative;z-index:1}
+      .hero-backdrop{position:absolute;inset:0;z-index:-3;background:radial-gradient(60% 50% at 30% 30%,#99ffe41a,transparent 70%),radial-gradient(50% 45% at 75% 75%,#ffc79914,transparent 70%)}
+      .hero-inner{width:min(100%,860px);display:grid;justify-items:center}
+      .mark{width:clamp(96px,13vw,150px);height:auto;margin-top:34px;overflow:visible}
+      .hero .mark{width:clamp(160px,28vw,320px);margin-top:0}
+      .mark polyline{fill:none;stroke-linecap:round;stroke-linejoin:round}
+      h1{margin:26px 0 0;font-family:"Nunito","Liberation Sans",sans-serif;font-size:clamp(46px,9vw,112px);line-height:1.08;font-weight:700;letter-spacing:-.045em}
+      .hz{color:var(--mint)}
+      .lede{max-width:580px;margin:24px auto 0;color:#bdbdbd;font-size:clamp(16px,1.9vw,19px);line-height:1.6}
+      .install{width:min(100%,780px);margin-top:38px;padding:8px;border:1px solid var(--line);border-radius:var(--radius);background:var(--card);box-shadow:var(--shadow);text-align:left}
+      .install-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 4px 10px 10px}
+      .install-head span{color:var(--muted);font-size:13px}
+      .platforms{display:inline-flex;gap:2px;padding:3px;border-radius:999px;background:#0f0f0f;border:1px solid #222}
+      .platforms button{border:0;border-radius:999px;padding:6px 13px;background:none;color:var(--muted);font:inherit;font-size:13px;cursor:pointer}
+      .platforms [aria-selected=true]{background:#262626;color:var(--fg);box-shadow:0 1px 2px #0006}
+      .command-row{display:flex;align-items:center;gap:12px;padding:8px 8px 8px 16px;border-radius:16px;background:#0e0e0e;border:1px solid #1f1f1f}
+      .command-row code{flex:1;min-width:0;font:13px/1.6 ui-monospace,"SF Mono","JetBrains Mono","Liberation Mono",Consolas,monospace;color:#d6eee7;white-space:nowrap;overflow-x:auto;scrollbar-width:none}
+      .prompt{color:var(--peach);font-family:ui-monospace,monospace}
+      .copy,.download{display:inline-flex;align-items:center;gap:10px;border:0;border-radius:999px;padding:10px 12px 10px 16px;background:var(--mint);color:var(--ink);font:700 14px/1 inherit;cursor:pointer;white-space:nowrap;box-shadow:0 6px 20px -8px #99ffe499}
+      .download{justify-content:space-between;width:100%;padding:16px 20px;border-radius:16px}
+      kbd{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 6px;border-radius:7px;font:700 11px/1 inherit}
+      .copy kbd{background:#0f211c14;border:1px solid #0f211c2e}
+      .marks{display:flex;gap:18px;justify-content:center;margin:26px 0 0;padding:0;list-style:none;color:#6f6f6f}
+      .marks i{display:block;width:20px;height:20px;background:currentColor;mask:var(--icon) center/contain no-repeat;-webkit-mask:var(--icon) center/contain no-repeat}
+      [hidden]{display:none!important}
+      @media (max-width:640px){.command-row{flex-direction:column;align-items:stretch;padding:12px}.command-row code{white-space:normal;overflow-wrap:anywhere}.copy{justify-content:center;padding:13px}.copy kbd,.install-head span,.command-row .prompt{display:none}}
+    </style>
+    <script type="module" src="/src/main.js"></script>
   </head>
   <body>
-    <div id="root"><div class="splash" role="status" aria-label="Loading leet"><img src="/leet/leet.svg" alt="leet" width="96" height="96" /></div></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <header class="bar">
+      <a class="brand" href="#top" aria-label="leet home"><img src="%BASE_URL%leet.svg" alt="" width="30" height="30" />leet</a>
+      <nav class="nav" aria-label="Sections">
+        <a href="#debugger">Debugger</a><a href="#ai">AI</a><a href="#contests">Contests</a><a href="#rust">Rust</a>
+      </nav>
+      <i class="bar-progress" aria-hidden="true"></i>
+      <a class="github" href="https://github.com/Noelithub77/leet" aria-label="leet on GitHub">
+        <svg width="22" height="22" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.71 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg>
+      </a>
+    </header>
+
+    <main>
+      <section class="hero" id="top">
+        <div class="hero-backdrop" aria-hidden="true"></div>
+        <canvas class="hero-canvas" data-shader aria-hidden="true"></canvas>
+        <canvas class="hero-particles" data-particles aria-hidden="true"></canvas>
+        <div class="hero-dots" aria-hidden="true"></div>
+        <div class="hero-inner" data-hero>
+          <svg class="mark" data-mark viewBox="0 0 64 64" role="img" aria-label="The leet logo, which reads 1337">
+            <polyline points="8,23.5 10.5,20.75 13,18 13,32 13,46" stroke="#ffc799" stroke-width="4.6" />
+            <polyline points="18.5,18 27.5,18 21.5,29.5 28,37 19.5,46" stroke="#99ffe4" stroke-width="4.6" />
+            <polyline points="31.5,18 40.5,18 34.5,29.5 41,37 32.5,46" stroke="#99ffe4" stroke-width="4.6" />
+            <polyline points="45.5,18 50.5,18 55.5,18 51.75,32 48,46" stroke="#ffc799" stroke-width="4.6" />
+          </svg>
+          <h1 data-split aria-label="Leeting at 120Hz"><span class="hero-word" data-hero-word aria-hidden="true"><span data-spelling="leet">Leeting</span><span data-spelling="1337">1337ing</span></span> at <span class="hz">120Hz</span></h1>
+          <p class="lede">A GPUI coding-practice IDE in idiomatic Rust. Deterministic debugging, your local AI agents, and contest imports at your screen’s full refresh rate.</p>
+          <div class="install" data-install>
+            <div class="install-head">
+              <div class="platforms" role="tablist" aria-label="Platform">
+                <button type="button" role="tab" aria-selected="true" data-platform="unix">Linux &amp; macOS</button>
+                <button type="button" role="tab" aria-selected="false" data-platform="windows">Windows</button>
+              </div>
+              <span>Installs and launches leet</span>
+            </div>
+            <div class="command-row" data-panel="unix">
+              <span class="prompt" aria-hidden="true">$</span>
+              <code data-command>curl -fsSL https://noelithub77.github.io/leet/install.sh | sh</code>
+              <button class="copy" type="button" data-copy aria-keyshortcuts="Control+C Meta+C"><span class="copy-label" data-copy-label aria-live="polite">Copy</span><kbd data-mod>Ctrl</kbd><kbd>C</kbd></button>
+            </div>
+            <a class="download" data-panel="windows" hidden href="https://github.com/Noelithub77/leet/releases/latest/download/leet-windows-x86_64.exe">Download for Windows <span aria-hidden="true">.exe ↓</span></a>
+          </div>
+          <ul class="marks" aria-label="NeetCode, LeetCode, Codeforces, CodeChef">
+            <li><i style="--icon:url(%BASE_URL%brand/neetcode.svg)"></i></li><li><i style="--icon:url(%BASE_URL%brand/leetcode.svg)"></i></li><li><i style="--icon:url(%BASE_URL%brand/codeforces.svg)"></i></li><li><i style="--icon:url(%BASE_URL%brand/codechef.svg)"></i></li>
+          </ul>
+        </div>
+        <a class="scroll-cue" href="#stage" aria-label="Scroll to features">
+          <svg viewBox="0 0 24 34" aria-hidden="true"><path d="M5 4l7 7 7-7"/><path d="M5 14l7 7 7-7"/><path d="M5 24l7 7 7-7"/></svg>
+          <span>Scroll</span>
+        </a>
+      </section>
+
+      <section class="stage" id="stage" data-stage>
+        <figure class="window stage-window" data-stage-window>
+          <div class="chrome" aria-hidden="true"><i></i><i></i><i></i><span>leet</span></div>
+          <div class="media" data-media="flow" data-video data-hfr>
+            <picture><source type="image/avif" srcset="%BASE_URL%media/flow-800.avif 800w, %BASE_URL%media/flow.avif 1600w" sizes="(min-width: 1180px) 1100px, 94vw" /><img src="%BASE_URL%media/flow.webp" srcset="%BASE_URL%media/flow-800.webp 800w, %BASE_URL%media/flow.webp 1600w" sizes="(min-width: 1180px) 1100px, 94vw" width="1600" height="1000" loading="lazy" decoding="async" alt="leet searching for Two Sum, opening it, and passing every test case." /></picture>
+          </div>
+        </figure>
+      </section>
+
+      <section class="hz-section" id="hz">
+        <div class="marquee" aria-hidden="true">
+          <div class="marquee-track">
+            <span>1337 @ 120Hz</span><b>✦</b><span>leeting at 120Hz</span><b>✦</b><span>1337 @ 120Hz</span><b>✦</b><span>leeting at 120Hz</span><b>✦</b>
+            <span>1337 @ 120Hz</span><b>✦</b><span>leeting at 120Hz</span><b>✦</b><span>1337 @ 120Hz</span><b>✦</b><span>leeting at 120Hz</span><b>✦</b>
+          </div>
+        </div>
+        <div class="wrap split">
+          <div class="section-head" data-reveal>
+            <p class="kicker"><span>01</span> Ultra smooth</p>
+            <h2>1337 @ 120Hz.</h2>
+            <p>GPUI draws leet on your GPU. Search, tabs, panes, and debugger playback keep pace with every frame your display shows.</p>
+          </div>
+          <div class="meter" data-meter data-reveal>
+            <div class="meter-readout"><span data-hz>120</span><small>Hz</small></div>
+            <p class="meter-label">Your display, measured live. Each cell is one frame.</p>
+            <div class="frames" data-frames aria-hidden="true"></div>
+            <div class="lanes" data-lanes aria-hidden="true">
+              <div class="lane" data-fps="30"><span>30 fps</span><b><i></i></b></div>
+              <div class="lane" data-fps="60"><span>60 fps</span><b><i></i></b></div>
+              <div class="lane is-native" data-fps="0"><span data-native-label>leet</span><b><i></i></b></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="debugger" data-debugger-scene>
+        <div class="wrap">
+          <div class="section-head center" data-reveal>
+            <p class="kicker"><span>02</span> Visual debugger</p>
+            <h2>Deterministic.<br />Frame by frame.</h2>
+            <p>Every test case is recorded once, then replayed like a video. Same input, same frames. Scrub, step, and watch your data structures move.</p>
+          </div>
+          <p class="scrub-hint" data-scrub-hint>Scroll to step through the recording</p>
+          <div class="dbg" data-debugger tabindex="0" aria-label="Interactive replay of Container With Most Water. Arrow keys step, space plays.">
+            <div class="dbg-top">
+              <span class="dbg-case is-on"><i></i>Case 1</span><span class="dbg-case"><i></i>Case 2</span>
+              <span class="dbg-title">11. Container With Most Water</span>
+              <span class="dbg-steps"><b data-step>1</b> / <span data-total>46</span></span>
+            </div>
+            <div class="dbg-body">
+              <ol class="dbg-code" data-code aria-hidden="true"></ol>
+              <div class="dbg-state">
+                <p class="dbg-label">height <span>array</span></p>
+                <svg class="dbg-viz" data-viz viewBox="0 0 380 230" aria-hidden="true"></svg>
+                <p class="dbg-label">Variables</p>
+                <div class="dbg-vars" data-vars></div>
+              </div>
+            </div>
+            <div class="dbg-player">
+              <button type="button" class="dbg-play" data-play aria-label="Pause"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="i-pause" d="M4 3h3v10H4zM9 3h3v10H9z"/><path class="i-play" d="M4 2.5v11l9-5.5z"/></svg></button>
+              <input type="range" min="0" max="45" value="0" step="1" data-seek aria-label="Seek through the recording" />
+              <span class="dbg-speed">1×</span>
+            </div>
+          </div>
+          <ul class="chips" data-reveal aria-label="Supported">
+            <li>Python</li><li>C++</li><li>stdin programs</li><li>arrays</li><li>grids</li><li>trees</li><li>graphs</li><li>linked lists</li><li>stacks</li><li>queues</li><li>heaps</li><li>maps</li><li>sets</li><li>intervals</li>
+          </ul>
+          <div class="trio">
+            <article data-reveal><h3>Line heat</h3><p>The gutter shows how often each line ran, up to the current step.</p></article>
+            <article data-reveal><h3>Every case</h3><p>All samples and your custom cases are recorded, including Codeforces and CodeChef stdin.</p></article>
+            <article data-reveal><h3>Explain</h3><p>Ask the agent to mark the step where a failing case first goes wrong.</p></article>
+          </div>
+          <figure class="window">
+            <div class="chrome" aria-hidden="true"><i></i><i></i><i></i><span>leet · Debug</span></div>
+            <div class="media" data-media="debugger" data-video data-hfr>
+              <picture><source type="image/avif" srcset="%BASE_URL%media/debugger-800.avif 800w, %BASE_URL%media/debugger.avif 1600w" sizes="(min-width: 1180px) 1100px, 94vw" /><img src="%BASE_URL%media/debugger.webp" srcset="%BASE_URL%media/debugger-800.webp 800w, %BASE_URL%media/debugger.webp 1600w" sizes="(min-width: 1180px) 1100px, 94vw" width="1600" height="1000" loading="lazy" decoding="async" alt="leet's Debug mode replaying Container With Most Water with l and r pointers over the height array." /></picture>
+            </div>
+            <figcaption>The real thing: leet replaying the same solution.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="section" id="ai">
+        <div class="wrap">
+          <div class="section-head center" data-reveal>
+            <p class="kicker"><span>03</span> AI, locally</p>
+            <h2>Your agents.<br />Your problem.</h2>
+            <p>leet runs the coding agents you already have, with the statement, your code, and tests attached. Ask for a nudge, or let Quick Solve take a first pass.</p>
+          </div>
+          <ul class="agents" data-reveal aria-label="Supported agents">
+            <li><i style="--icon:url(%BASE_URL%brand/codex.svg)"></i>Codex</li>
+            <li><i style="--icon:url(%BASE_URL%brand/claude-code.svg)"></i>Claude Code</li>
+            <li><i style="--icon:url(%BASE_URL%brand/opencode.svg)"></i>OpenCode</li>
+            <li><i style="--icon:url(%BASE_URL%brand/antigravity.svg)"></i>Antigravity</li>
+            <li><i style="--icon:url(%BASE_URL%brand/gemini-cli.svg)"></i>Gemini CLI</li>
+            <li><i style="--icon:url(%BASE_URL%brand/cursor.svg)"></i>Cursor Agent</li>
+          </ul>
+          <div class="ai-grid">
+            <ol class="actions" data-actions data-reveal aria-label="Assist actions">
+              <li><span>Hints</span><kbd>1</kbd></li><li><span>I’m stuck</span><kbd>2</kbd></li><li><span>Find bugs</span><kbd>3</kbd></li><li><span>Edge cases</span><kbd>4</kbd></li>
+              <li><span>Complexity</span><kbd>5</kbd></li><li><span>Optimize</span><kbd>6</kbd></li><li><span>Visualize</span><kbd>7</kbd></li><li><span>Dry run</span><kbd>8</kbd></li>
+              <li><span>Pattern</span><kbd>9</kbd></li><li><span>Explain</span><kbd>0</kbd></li><li class="solve"><span>Quick Solve</span><kbd>↵</kbd></li>
+            </ol>
+            <figure class="window">
+              <div class="chrome" aria-hidden="true"><i></i><i></i><i></i><span>leet · Assist</span></div>
+              <div class="media" data-media="ai" data-video>
+                <picture><source type="image/avif" srcset="%BASE_URL%media/ai-800.avif 800w, %BASE_URL%media/ai.avif 1600w" sizes="(min-width: 1180px) 700px, 94vw" /><img src="%BASE_URL%media/ai.webp" srcset="%BASE_URL%media/ai-800.webp 800w, %BASE_URL%media/ai.webp 1600w" sizes="(min-width: 1180px) 700px, 94vw" width="1600" height="1000" loading="lazy" decoding="async" alt="leet's AI pane answering a Complexity request beside the editor." /></picture>
+              </div>
+            </figure>
+          </div>
+          <p class="footnote" data-reveal><kbd>Ctrl</kbd><kbd>Alt</kbd> + number runs an action. Free models through OpenCode · live model lists, reasoning levels, Fast tier · chats per problem with forks and undo.</p>
+        </div>
+      </section>
+
+      <section class="section" id="contests">
+        <div class="wrap">
+          <div class="section-head center" data-reveal>
+            <p class="kicker"><span>04</span> Competitive</p>
+            <h2>Browser to editor.<br />One click.</h2>
+            <p>Competitive Companion sends a Codeforces or CodeChef problem, samples included, straight into an open leet tab.</p>
+          </div>
+          <div class="cph" data-cph data-reveal aria-hidden="true">
+            <div class="cph-card cph-browser">
+              <div class="cph-url"><i></i>codeforces.com/contest/1950/problem/A</div>
+              <p class="cph-title">A. Stair, Peak, or Neither?</p>
+              <span class="cph-line w80"></span><span class="cph-line w60"></span><span class="cph-line w70"></span>
+              <span class="cph-button"><b>+</b>Competitive Companion</span>
+            </div>
+            <svg class="cph-beam" viewBox="0 0 200 80" preserveAspectRatio="none"><path d="M0 60 C 60 60, 80 18, 200 18" /><path class="cph-pulse" data-beam d="M0 60 C 60 60, 80 18, 200 18" /></svg>
+            <div class="cph-card cph-leet">
+              <div class="cph-tab"><img src="%BASE_URL%leet.svg" alt="" width="16" height="16" />1950A · Stair, Peak, or Neither?</div>
+              <div class="cph-case"><span>Case 1</span><code>1 2 3</code><b>STAIR</b></div>
+              <div class="cph-case"><span>Case 2</span><code>3 2 1</code><b>NONE</b></div>
+              <div class="cph-case"><span>Case 3</span><code>1 5 3</code><b>PEAK</b></div>
+            </div>
+          </div>
+          <ul class="providers" data-reveal>
+            <li><i style="--icon:url(%BASE_URL%brand/neetcode.svg)"></i><b>NeetCode</b><span>150 · 250 · All</span></li>
+            <li><i style="--icon:url(%BASE_URL%brand/leetcode.svg)"></i><b>LeetCode</b><span>4,073 problems · weekly &amp; biweekly</span></li>
+            <li><i style="--icon:url(%BASE_URL%brand/codeforces.svg)"></i><b>Codeforces</b><span>11,911 problems · contests</span></li>
+            <li><i style="--icon:url(%BASE_URL%brand/codechef.svg)"></i><b>CodeChef</b><span>100 offline problems</span></li>
+          </ul>
+          <figure class="window">
+            <div class="chrome" aria-hidden="true"><i></i><i></i><i></i><span>leet · Home</span></div>
+            <div class="media" data-media="home">
+              <picture><source type="image/avif" srcset="%BASE_URL%media/home-800.avif 800w, %BASE_URL%media/home.avif 1600w" sizes="(min-width: 1180px) 1100px, 94vw" /><img src="%BASE_URL%media/home.webp" srcset="%BASE_URL%media/home-800.webp 800w, %BASE_URL%media/home.webp 1600w" sizes="(min-width: 1180px) 1100px, 94vw" width="1600" height="1000" loading="lazy" decoding="async" alt="leet Home with recent problems and upcoming contests." /></picture>
+            </div>
+          </figure>
+        </div>
+      </section>
+
+      <section class="section" id="rust">
+        <div class="wrap split">
+          <div class="section-head" data-reveal>
+            <p class="kicker"><span>05</span> Idiomatic Rust</p>
+            <h2>Idiomatic Rust,<br />end to end.</h2>
+            <p>No Electron, no web view. A GPUI desktop app and a UI-free practice core, both forbidding unsafe code.</p>
+          </div>
+          <pre class="code" data-type data-reveal aria-label="Illustrative Rust application entry point"><code><span class="c">// Native UI, safe Rust</span>
+<span class="a">#![forbid(unsafe_code)]</span>
+
+<span class="k">fn</span> <span class="f">main</span>() {
+    gpui_kit::<span class="f">application</span>()
+        .<span class="f">with_assets</span>(assets::Assets)
+        .<span class="f">run</span>(<span class="k">move</span> |cx| { <span class="c">/* open the workspace */</span> });
+}</code></pre>
+        </div>
+        <div class="wrap">
+          <dl class="stats" data-reveal>
+            <div><dt data-count="0">0</dt><dd>unsafe blocks</dd></div>
+            <div><dt data-count="250">250</dt><dd>statements offline</dd></div>
+            <div><dt data-count="120">120</dt><dd>Hz rendering</dd></div>
+            <div><dt data-count="3">3</dt><dd>native platforms</dd></div>
+          </dl>
+        </div>
+      </section>
+
+      <section class="section" id="tour">
+        <div class="wrap">
+          <div class="section-head center" data-reveal>
+            <p class="kicker"><span>06</span> Keyboard-first</p>
+            <h2>Every view,<br />one shortcut away.</h2>
+          </div>
+        </div>
+        <div class="gallery" data-gallery tabindex="0" aria-label="Screens">
+          <div class="gallery-track" data-gallery-track>
+          <figure><div class="media" data-media="palette"><picture><source type="image/avif" srcset="%BASE_URL%media/palette-800.avif 800w, %BASE_URL%media/palette.avif 1600w" sizes="(min-width: 900px) 760px, 86vw" /><img src="%BASE_URL%media/palette.webp" srcset="%BASE_URL%media/palette-800.webp 800w, %BASE_URL%media/palette.webp 1600w" sizes="(min-width: 900px) 760px, 86vw" width="1600" height="1000" loading="lazy" decoding="async" alt="The command palette." /></picture></div><figcaption><kbd>Ctrl</kbd><kbd>K</kbd> Commands, problems, settings, themes</figcaption></figure>
+          <figure><div class="media" data-media="problem"><picture><source type="image/avif" srcset="%BASE_URL%media/problem-800.avif 800w, %BASE_URL%media/problem.avif 1600w" sizes="(min-width: 900px) 760px, 86vw" /><img src="%BASE_URL%media/problem.webp" srcset="%BASE_URL%media/problem-800.webp 800w, %BASE_URL%media/problem.webp 1600w" sizes="(min-width: 900px) 760px, 86vw" width="1600" height="1000" loading="lazy" decoding="async" alt="A problem with statement cards, the editor, and passing tests." /></picture></div><figcaption><kbd>Ctrl</kbd><kbd>↵</kbd> Run every case locally</figcaption></figure>
+          <figure><div class="media" data-media="roadmap"><picture><source type="image/avif" srcset="%BASE_URL%media/roadmap-800.avif 800w, %BASE_URL%media/roadmap.avif 1600w" sizes="(min-width: 900px) 760px, 86vw" /><img src="%BASE_URL%media/roadmap.webp" srcset="%BASE_URL%media/roadmap-800.webp 800w, %BASE_URL%media/roadmap.webp 1600w" sizes="(min-width: 900px) 760px, 86vw" width="1600" height="1000" loading="lazy" decoding="async" alt="The NeetCode roadmap with per-topic progress." /></picture></div><figcaption><kbd>Alt</kbd><kbd>R</kbd> The NeetCode roadmap</figcaption></figure>
+          <figure><div class="media" data-media="settings"><picture><source type="image/avif" srcset="%BASE_URL%media/settings-800.avif 800w, %BASE_URL%media/settings.avif 1600w" sizes="(min-width: 900px) 760px, 86vw" /><img src="%BASE_URL%media/settings.webp" srcset="%BASE_URL%media/settings-800.webp 800w, %BASE_URL%media/settings.webp 1600w" sizes="(min-width: 900px) 760px, 86vw" width="1600" height="1000" loading="lazy" decoding="async" alt="Settings." /></picture></div><figcaption><kbd>Ctrl</kbd><kbd>,</kbd> Settings and every keybinding</figcaption></figure>
+          <figure><div class="media" data-media="flow"><picture><source type="image/avif" srcset="%BASE_URL%media/flow-800.avif 800w, %BASE_URL%media/flow.avif 1600w" sizes="(min-width: 900px) 760px, 86vw" /><img src="%BASE_URL%media/flow.webp" srcset="%BASE_URL%media/flow-800.webp 800w, %BASE_URL%media/flow.webp 1600w" sizes="(min-width: 900px) 760px, 86vw" width="1600" height="1000" loading="lazy" decoding="async" alt="Problem search." /></picture></div><figcaption><kbd>Ctrl</kbd><kbd>P</kbd> Find any problem</figcaption></figure>
+          </div>
+        </div>
+      </section>
+
+      <section class="get" id="get">
+        <div class="wrap get-inner">
+          <svg class="mark mark-lg" data-mark data-mark-final viewBox="0 0 64 64" aria-hidden="true">
+            <polyline points="13.1,32 13.1,32 13.1,32 13.1,32 13.1,32.01" stroke="#ffc799" stroke-width="6.4" />
+            <polyline points="17.6,21 23.1,26.5 28.6,32 23.1,37.5 17.6,43" stroke="#99ffe4" stroke-width="5" />
+            <polyline points="29.1,21 34.6,26.5 40.1,32 34.6,37.5 29.1,43" stroke="#99ffe4" stroke-width="5" />
+            <polyline points="25.1,5.5 38.35,18.75 51.6,32 38.35,45.25 25.1,58.5" stroke="#ffc799" stroke-width="5" />
+          </svg>
+          <h2>Get leet.</h2>
+          <p class="press" data-press-hint>Press <kbd data-mod>Ctrl</kbd><kbd>C</kbd> anywhere to copy.</p>
+          <div class="install" data-install>
+            <div class="platforms" role="tablist" aria-label="Platform">
+              <button type="button" role="tab" aria-selected="true" data-platform="unix">Linux &amp; macOS</button>
+              <button type="button" role="tab" aria-selected="false" data-platform="windows">Windows</button>
+            </div>
+            <div class="command-row" data-panel="unix">
+              <span class="prompt" aria-hidden="true">$</span>
+              <code data-command>curl -fsSL https://noelithub77.github.io/leet/install.sh | sh</code>
+              <button class="copy" type="button" data-copy aria-keyshortcuts="Control+C Meta+C"><span class="copy-label" data-copy-label aria-live="polite">Copy</span><kbd data-mod>Ctrl</kbd><kbd>C</kbd></button>
+            </div>
+            <a class="download" data-panel="windows" hidden href="https://github.com/Noelithub77/leet/releases/latest/download/leet-windows-x86_64.exe">Download for Windows <span aria-hidden="true">.exe ↓</span></a>
+          </div>
+          <p class="after">Then launch <code>leet</code> — or <code>1337</code>.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <span><img src="%BASE_URL%leet.svg" alt="" width="20" height="20" /> leet · MIT</span>
+      <nav aria-label="Project"><a href="https://github.com/Noelithub77/leet">GitHub</a><a href="https://github.com/Noelithub77/leet/releases">Releases</a><a href="https://github.com/Noelithub77/leet/blob/main/docs/changelog.md">Changelog</a></nav>
+      <span class="egg">psst — type <kbd>1</kbd><kbd>3</kbd><kbd>3</kbd><kbd>7</kbd></span>
+    </footer>
   </body>
 </html>

@@ -1,6 +1,8 @@
 <details open>
 <summary>Feat</summary>
 
+- New landing page with real app footage, an interactive debugger replay, and keyboard copy with feedback.
+
 - Keep Description, Examples, and Constraints visible as pastel-bordered cards with one section open at a time.
 
 - Replay Python and C++ Codeforces and CodeChef programs in Debug, including CPH samples.

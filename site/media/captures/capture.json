@@ -1,0 +1,58 @@
+{
+  "environment": "omabox",
+  "source": "installed leet, isolated HOME and blocked keyring",
+  "recordings": [
+    {
+      "name": "flow",
+      "width": 2560,
+      "height": 1600,
+      "fps": 120,
+      "duration": 9.15,
+      "cadence": {
+        "filter": "mpdecimate=hi=64:lo=32:frac=0.001",
+        "uniqueFrames": 758,
+        "intervalsNear120Hz": 417,
+        "minimumUniqueIntervalMs": 7.999999999999119,
+        "intervalNear120HzMedianMs": 8.000000000000007
+      }
+    },
+    {
+      "name": "debugger",
+      "width": 2560,
+      "height": 1600,
+      "fps": 120,
+      "duration": 8.558333,
+      "rawDuration": 8.55,
+      "recordingWallDuration": 8.805464889000003,
+      "cadence": {
+        "filter": "mpdecimate=hi=64:lo=32:frac=0.001",
+        "uniqueFrames": 764,
+        "intervalsNear120Hz": 500,
+        "minimumUniqueIntervalMs": 7.999999999999119,
+        "intervalNear120HzMedianMs": 8.000000000000007
+      }
+    },
+    {
+      "name": "ai",
+      "width": 2560,
+      "height": 1600,
+      "fps": 120,
+      "duration": 30.683333,
+      "rawDuration": 30.675,
+      "recordingWallDuration": 30.896588273000006,
+      "cadence": {
+        "filter": "mpdecimate=hi=64:lo=32:frac=0.001",
+        "uniqueFrames": 2556,
+        "intervalsNear120Hz": 1429,
+        "minimumUniqueIntervalMs": 7.999999999999119,
+        "intervalNear120HzMedianMs": 8.000000000000007
+      }
+    }
+  ],
+  "ai": {
+    "completed": true,
+    "provider": "Codex",
+    "model": "gpt-6-luna"
+  },
+  "warnings": []
+}

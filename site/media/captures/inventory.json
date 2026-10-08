@@ -1,0 +1,266 @@
+{
+  "environment": "omabox",
+  "assets": [
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/ai.webp",
+      "bytes": 86854,
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/ai.avif",
+      "bytes": 50245,
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/ai-800.webp",
+      "bytes": 30036,
+      "width": 800,
+      "height": 500
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/ai-800.avif",
+      "bytes": 19056,
+      "width": 800,
+      "height": 500
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/debugger.webp",
+      "bytes": 40334,
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/debugger.avif",
+      "bytes": 22004,
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/debugger-800.webp",
+      "bytes": 14862,
+      "width": 800,
+      "height": 500
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/debugger-800.avif",
+      "bytes": 9381,
+      "width": 800,
+      "height": 500
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/flow.webp",
+      "bytes": 45482,
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/flow.avif",
+      "bytes": 26324,
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/flow-800.webp",
+      "bytes": 15820,
+      "width": 800,
+      "height": 500
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/flow-800.avif",
+      "bytes": 10206,
+      "width": 800,
+      "height": 500
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/home.webp",
+      "bytes": 28780,
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/home.avif",
+      "bytes": 16103,
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/home-800.webp",
+      "bytes": 10116,
+      "width": 800,
+      "height": 500
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/home-800.avif",
+      "bytes": 6741,
+      "width": 800,
+      "height": 500
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/palette.webp",
+      "bytes": 47228,
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/palette.avif",
+      "bytes": 27892,
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/palette-800.webp",
+      "bytes": 16230,
+      "width": 800,
+      "height": 500
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/palette-800.avif",
+      "bytes": 10661,
+      "width": 800,
+      "height": 500
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/problem.webp",
+      "bytes": 54562,
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/problem.avif",
+      "bytes": 31371,
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/problem-800.webp",
+      "bytes": 19340,
+      "width": 800,
+      "height": 500
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/problem-800.avif",
+      "bytes": 12238,
+      "width": 800,
+      "height": 500
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/roadmap.webp",
+      "bytes": 30038,
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/roadmap.avif",
+      "bytes": 15910,
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/roadmap-800.webp",
+      "bytes": 10928,
+      "width": 800,
+      "height": 500
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/roadmap-800.avif",
+      "bytes": 6600,
+      "width": 800,
+      "height": 500
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/settings.webp",
+      "bytes": 22406,
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/settings.avif",
+      "bytes": 12300,
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/settings-800.webp",
+      "bytes": 7722,
+      "width": 800,
+      "height": 500
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/settings-800.avif",
+      "bytes": 5356,
+      "width": 800,
+      "height": 500
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/ai.webm",
+      "bytes": 319376,
+      "width": 1600,
+      "height": 1000,
+      "fps": 60,
+      "duration": 8
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/ai.mp4",
+      "bytes": 280593,
+      "width": 1600,
+      "height": 1000,
+      "fps": 60,
+      "duration": 8
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/debugger.webm",
+      "bytes": 274930,
+      "width": 1600,
+      "height": 1000,
+      "fps": 60,
+      "duration": 8.567
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/debugger.mp4",
+      "bytes": 346358,
+      "width": 1600,
+      "height": 1000,
+      "fps": 60,
+      "duration": 8.566667
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/debugger-120.webm",
+      "bytes": 250372,
+      "width": 1280,
+      "height": 800,
+      "fps": 120,
+      "duration": 8.558
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/flow.webm",
+      "bytes": 399044,
+      "width": 1600,
+      "height": 1000,
+      "fps": 60,
+      "duration": 8.5
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/flow.mp4",
+      "bytes": 420351,
+      "width": 1600,
+      "height": 1000,
+      "fps": 60,
+      "duration": 8.5
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/flow-120.webm",
+      "bytes": 327549,
+      "width": 1280,
+      "height": 800,
+      "fps": 120,
+      "duration": 8.5
+    },
+    {
+      "path": "/home/noel/Projects/hobby/leet/site/public/media/manifest.json",
+      "bytes": 777
+    }
+  ],
+  "webBytes": 3382476
+}
