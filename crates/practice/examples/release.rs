@@ -41,19 +41,19 @@ fn package() -> Result<()> {
     if parts.len() != 3 || parts.iter().any(|part| part.is_empty() || !part.bytes().all(|b| b.is_ascii_digit())) {
         bail!("Tag must be vX.Y.Z");
     }
-    let (os, arch) = match target {
-        "x86_64-unknown-linux-gnu" => ("linux", "x86_64"),
-        "aarch64-unknown-linux-gnu" => ("linux", "aarch64"),
-        "x86_64-apple-darwin" => ("macos", "x86_64"),
-        "aarch64-apple-darwin" => ("macos", "aarch64"),
-        "x86_64-pc-windows-msvc" => ("windows", "x86_64"),
+    let (os, platform) = match target {
+        "x86_64-unknown-linux-gnu" => ("linux", "linux"),
+        "aarch64-unknown-linux-gnu" => ("linux", "linux-arm"),
+        "x86_64-apple-darwin" => ("macos", "mac-intel"),
+        "aarch64-apple-darwin" => ("macos", "mac-arm"),
+        "x86_64-pc-windows-msvc" => ("windows", "windows"),
         _ => bail!("Unsupported target {target}"),
     };
     if os != std::env::consts::OS { bail!("Package {target} on its native OS"); }
     let binary = PathBuf::from("target").join(target).join("release").join(if os == "windows" { "leet.exe" } else { "leet" });
     if !binary.is_file() { bail!("Build {} first", binary.display()); }
     std::fs::create_dir_all(&output)?;
-    let name = format!("leet-{os}-{arch}");
+    let name = format!("leet-{platform}-{tag}");
     let artifact = if os == "windows" {
         let path = output.join(format!("{name}.exe"));
         std::fs::copy(&binary, &path)?;
@@ -84,17 +84,17 @@ fn package() -> Result<()> {
     };
     println!("{}", json!({"environment":"release-artifact", "target":target, "tag":tag, "artifact":artifact, "bytes":std::fs::metadata(&artifact)?.len(), "developer_signed":false}));
     if os == "linux" && std::env::var_os("LEET_LINUXDEPLOY").is_some() {
-        appimage(&binary, &output, arch, version)?;
+        appimage(&binary, &output, platform, version)?;
     }
     Ok(())
 }
 
-fn appimage(binary: &Path, output: &Path, arch: &str, version: &str) -> Result<()> {
+fn appimage(binary: &Path, output: &Path, platform: &str, version: &str) -> Result<()> {
     let tool = |name| std::env::var_os(name).map(PathBuf::from).with_context(|| format!("{name} is required for AppImage packaging"));
     let linuxdeploy = tool("LEET_LINUXDEPLOY")?;
     let appimagetool = tool("LEET_APPIMAGETOOL")?;
     let runtime = tool("LEET_APPIMAGE_RUNTIME")?;
-    let appdir = output.join(format!(".leet-{arch}.AppDir"));
+    let appdir = output.join(format!(".{platform}.AppDir"));
     if appdir.exists() { std::fs::remove_dir_all(&appdir)?; }
     std::fs::create_dir_all(&appdir)?;
     let desktop = output.join(".leet.desktop");
@@ -121,10 +121,10 @@ fn appimage(binary: &Path, output: &Path, arch: &str, version: &str) -> Result<(
             }
         }
     }
-    let artifact = output.join(format!("leet-linux-{arch}.AppImage"));
+    let artifact = output.join(format!("leet-{platform}-v{version}.AppImage"));
     let status = Command::new(appimagetool).arg("--appimage-extract-and-run")
         .arg("--no-appstream").arg("--runtime-file").arg(runtime)
-        .arg(&appdir).arg(&artifact).env("ARCH", arch).env("VERSION", version).status()?;
+        .arg(&appdir).arg(&artifact).env("ARCH", if platform == "linux-arm" { "aarch64" } else { "x86_64" }).env("VERSION", version).status()?;
     if !status.success() { bail!("AppImage creation failed: {status}"); }
     let probe = Command::new(&artifact).args(["--appimage-extract-and-run", "--version"]).output()?;
     if !probe.status.success() || !String::from_utf8_lossy(&probe.stdout).starts_with("leet ") {

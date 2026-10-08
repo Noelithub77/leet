@@ -10,7 +10,7 @@ curl -fsSL https://noelithub77.github.io/leet/install.sh | sh
 
 The installer selects the native architecture, downloads one stable release, verifies its archive against that release's `SHA256SUMS`, installs a versioned build, creates `leet` and `1337` launch commands, and opens the app. Run the same command again to upgrade. It preserves settings, cache, accounts, and solutions. Checksums detect corrupted downloads; they are distributed by the same GitHub release and are not independent publisher signatures.
 
-Windows users download [the portable x64 executable](https://github.com/Noelithub77/leet/releases/latest/download/leet-windows-x86_64.exe) and open it. There is no installation wizard or Rust requirement. Settings and solutions live in the normal user folders, rather than beside the executable. On each launch, leet checks the latest stable GitHub release with one metadata request. Hover or click the bottom-right icon to open the changelog above the status line. Its single Update button downloads, verifies, and installs the release, then becomes Restart. Click Restart when ready. Feat starts expanded and Fix collapsed; both contain concise change lists. Editor state is saved before restart. Installation replaces only the executable or macOS application bundle. Failed checksum or version checks preserve the installed app. The same Restart action launches the stable installed command after a local deployment, including when the previous versioned binary has been removed. If the release check is unavailable, the hover view shows the bundled changelog.
+Windows users download the versioned portable executable (`leet-windows-vX.Y.Z.exe`) from the [latest release](https://github.com/Noelithub77/leet/releases/latest) and open it. There is no installation wizard or Rust requirement. Settings and solutions live in the normal user folders, rather than beside the executable. On each launch, leet checks the latest stable GitHub release with one metadata request. Hover or click the bottom-right icon to open the changelog above the status line. Its single Update button downloads, verifies, and installs the release, then becomes Restart. Click Restart when ready. Feat starts expanded and Fix collapsed; both contain concise change lists. Editor state is saved before restart. Installation replaces only the executable or macOS application bundle. Failed checksum or version checks preserve the installed app. The same Restart action launches the stable installed command after a local deployment, including when the previous versioned binary has been removed. If the release check is unavailable, the hover view shows the bundled changelog.
 
 ## Requirements
 
@@ -37,22 +37,24 @@ Linux retains the existing Secret Service and private-file credential behavior. 
 
 The [release workflow](../.github/workflows/release.yml) builds all five native targets on GitHub-hosted runners. A separate Linux x86_64 job runs the full workspace and installer tests alongside the native builds; publishing requires both tests and every platform build to pass. All targets build the executable and packaging tool together, then check the workspace and examples in the same release profile and check the executable's version. Packaging invokes the compiled Rust tool directly, avoiding a separate development build or another Cargo invocation with a different dependency feature selection. Thin LTO and the app's release optimization remain enabled. The Rust packaging operator produces Unix archives or a single Windows executable:
 
+Release downloads include their version in the filename: `leet-linux-vX.Y.Z`, `leet-linux-arm-vX.Y.Z`, `leet-mac-intel-vX.Y.Z`, `leet-mac-arm-vX.Y.Z`, and `leet-windows-vX.Y.Z.exe`. Unix archives use `.tar.gz`; Linux also publishes `.AppImage` files for both Linux architectures. The old `leet-windows-x86_64.exe` download name remains as a landing-page compatibility link.
+
 ```sh
 cargo build --locked --release -p gui --target x86_64-unknown-linux-gnu
-./ops release:package --target x86_64-unknown-linux-gnu --tag v0.1.0 --output dist
+./ops release:package --target x86_64-unknown-linux-gnu --tag v0.2.0 --output dist
 ```
 
 On Windows, invoke the same Rust operator directly:
 
 ```powershell
-cargo run --locked --release -p practice --example release --target x86_64-pc-windows-msvc -- --target x86_64-pc-windows-msvc --tag v0.1.0 --output dist
+cargo run --locked --release -p practice --example release --target x86_64-pc-windows-msvc -- --target x86_64-pc-windows-msvc --tag v0.2.0 --output dist
 ```
 
 Push a version tag to release it:
 
 ```sh
-git tag -a v0.1.0 -m "leet v0.1.0"
-git push origin v0.1.0
+git tag -a v0.2.0 -m "leet v0.2.0"
+git push origin v0.2.0
 ```
 
 Use the GitHub Actions **Release → Run workflow** button with an existing `vX.Y.Z` tag to retry/rebuild that release. The selected tag must exist; every build checks out that tag. Publishing waits for every target, uploads archives, the executable, installer, and SHA-256 manifest to a draft, and then publishes it. Failed builds do not publish an incomplete release. Workflow tokens need `contents: write` only in the publishing job. Never put personal credentials or data into build artifacts.

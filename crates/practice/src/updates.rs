@@ -41,15 +41,23 @@ pub fn current_version(display: &str) -> &str {
         .unwrap_or_else(|| display.split_whitespace().next().unwrap_or(display))
 }
 
-fn asset_name(os: &str, arch: &str, appimage: bool) -> Result<String> {
-    let arch = match arch { "x86_64" => "x86_64", "aarch64" => "aarch64", _ => bail!("Unsupported update architecture") };
+fn asset_name(os: &str, arch: &str, appimage: bool, tag: &str) -> Result<String> {
+    let platform = match (os, arch) {
+        ("linux", "x86_64") => "linux",
+        ("linux", "aarch64") => "linux-arm",
+        ("macos", "x86_64") => "mac-intel",
+        ("macos", "aarch64") => "mac-arm",
+        ("windows", "x86_64") => "windows",
+        ("linux" | "macos" | "windows", _) => bail!("Unsupported update architecture"),
+        _ => bail!("Unsupported update platform"),
+    };
     let extension = match os {
         "linux" if appimage => "AppImage",
         "linux" | "macos" => "tar.gz",
-        "windows" if arch == "x86_64" => "exe",
+        "windows" => "exe",
         _ => bail!("Unsupported update platform"),
     };
-    Ok(format!("leet-{os}-{arch}.{extension}"))
+    Ok(format!("leet-{platform}-{tag}.{extension}"))
 }
 
 pub fn check(display: &str, appimage: bool) -> Result<Latest> {
@@ -71,7 +79,7 @@ fn select(metadata: Metadata, current: &str, os: &str, arch: &str, appimage: boo
     if metadata.draft || metadata.prerelease { return Ok(None); }
     let version = metadata.tag_name.strip_prefix('v').context("Invalid release tag")?;
     if !self_update::version::bump_is_greater(current, version)? { return Ok(None); }
-    let name = asset_name(os, arch, appimage)?;
+    let name = asset_name(os, arch, appimage, &metadata.tag_name)?;
     let asset = metadata.assets.into_iter().find(|a| a.name == name).context("Release has no build for this platform")?;
     let digest = asset.digest.context("Release is missing its checksum")?;
     let hex = digest.strip_prefix("sha256:").context("Release checksum is not SHA-256")?;
@@ -147,8 +155,8 @@ mod tests {
     use super::*;
     fn metadata(digest: Option<&str>) -> Metadata {
         Metadata { tag_name: "v0.2.0".into(), body: None, draft: false, prerelease: false, assets: vec![Asset {
-            name: "leet-linux-x86_64.tar.gz".into(),
-            browser_download_url: "https://github.com/Noelithub77/leet/releases/download/v0.2.0/leet-linux-x86_64.tar.gz".into(),
+            name: "leet-linux-v0.2.0.tar.gz".into(),
+            browser_download_url: "https://github.com/Noelithub77/leet/releases/download/v0.2.0/leet-linux-v0.2.0.tar.gz".into(),
             digest: digest.map(str::to_owned),
         }] }
     }
@@ -159,7 +167,10 @@ mod tests {
         assert!(select(metadata(None), "0.2.0", "linux", "x86_64", false).unwrap().is_none());
         assert!(select(metadata(None), "0.3.0", "linux", "x86_64", false).unwrap().is_none());
         assert!(select(metadata(None), "0.1.0", "macos", "aarch64", false).is_err());
-        assert_eq!(asset_name("linux", "aarch64", true).unwrap(), "leet-linux-aarch64.AppImage");
+        assert_eq!(asset_name("linux", "aarch64", true, "v0.2.0").unwrap(), "leet-linux-arm-v0.2.0.AppImage");
+        assert_eq!(asset_name("macos", "aarch64", false, "v0.2.0").unwrap(), "leet-mac-arm-v0.2.0.tar.gz");
+        assert_eq!(asset_name("macos", "x86_64", false, "v0.2.0").unwrap(), "leet-mac-intel-v0.2.0.tar.gz");
+        assert_eq!(asset_name("windows", "x86_64", false, "v0.2.0").unwrap(), "leet-windows-v0.2.0.exe");
     }
     #[test]
     fn missing_or_invalid_checksums_and_untrusted_urls_are_rejected() {

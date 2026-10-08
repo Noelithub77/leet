@@ -22,8 +22,13 @@ if [ "$os" = macos ]; then
   if [ "$(sysctl -in sysctl.proc_translated 2>/dev/null || true)" = 1 ]; then arch=aarch64; fi
   major=$(sw_vers -productVersion | cut -d. -f1)
   [ "$major" -ge 13 ] || fail 'macOS 13 or later is required.'
+  if [ "$arch" = aarch64 ]; then platform=mac-arm; else platform=mac-intel; fi
 elif [ -z "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
   fail 'Run this command inside a Linux graphical desktop to install and open leet.'
+elif [ "$arch" = aarch64 ]; then
+  platform=linux-arm
+else
+  platform=linux
 fi
 
 tmp=$(mktemp -d)
@@ -32,7 +37,7 @@ repo=https://github.com/Noelithub77/leet
 latest=$(curl -fsSL --retry 3 -o /dev/null -w '%{url_effective}' "$repo/releases/latest")
 tag=${latest##*/}
 printf '%s\n' "$tag" | LC_ALL=C grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' || fail 'No stable release is available yet.'
-asset=leet-$os-$arch.tar.gz
+asset=leet-$platform-$tag.tar.gz
 base=$repo/releases/download/$tag
 printf 'Getting leet %s for %s %s…\n' "$tag" "$os" "$arch"
 curl -fSL --retry 3 "$base/$asset" -o "$tmp/$asset"

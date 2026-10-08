@@ -57,7 +57,7 @@ fi''')
         path.chmod(0o755)
 
     def release(self, mac=False):
-        asset = self.root / ("leet-macos-aarch64.tar.gz" if mac else "leet-linux-x86_64.tar.gz")
+        asset = self.root / ("leet-mac-arm-v0.1.0.tar.gz" if mac else "leet-linux-v0.1.0.tar.gz")
         with tarfile.open(asset, "w:gz") as archive:
             entries = {"leet.app/Contents/MacOS/leet" if mac else "leet": b'#!/bin/sh\necho "leet 0.1.0"\n'}
             if not mac:
