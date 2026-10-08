@@ -17,3 +17,5 @@ Release the focused checkpoint with `./ops local:deploy --json`; keep concurrent
 Threaded chat storage, global and per-question threads, forks, editing, undo, deletion, and action request cards are owned by the separate Threaded AI conversations and history chat.
 
 Verified follow-up in isolated native Wayland: centered General and analysis placeholders, in-place analysis result, vertical results drag and toggle restoration, and pinned Constraints after expanding Examples. Focused check passed 31 GUI tests, 121 practice tests, doc tests, and five installer regressions.
+
+[CHOSEN] General shortcuts use a fixed three-column, two-row grid with larger icons. AI tabs use normal-size labels and more spacing within the single navigation row.
