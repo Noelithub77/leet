@@ -43,6 +43,8 @@
 <details>
 <summary>Fix</summary>
 
+- Keep each problem’s AI instructions when launching actions with chat hidden.
+
 - Keep global shortcuts working when returning to Debug from Roadmap or Settings.
 - Show account names or emails without internal IDs or authentication metadata.
 - Show debugger step and case shortcuts in their tooltips.

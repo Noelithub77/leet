@@ -1091,6 +1091,11 @@ fn growth_chart(yours: Growth, best: Growth, theme: &Theme) -> AnyElement {
 impl Workspace {
     /// Runs an Assist action on the open problem. Dry run uses the native debugger when it can.
     pub fn run_assist(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
+        let slug = self.session.as_ref().map(|session| session.slug.clone());
+        self.assist.update(cx, |assist, cx| {
+            assist.set_problem(slug.as_deref(), cx);
+            assist.sync_composer(window, cx);
+        });
         if action == Action::DryRun && !self.assist.read(cx).has_instructions(cx) && self.session.as_ref().is_some_and(|s| practice::debugger::supported(s.language) && !s.slug.starts_with("cf:")) {
             self.set_debug(true, window, cx);
             return;
