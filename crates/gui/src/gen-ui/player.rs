@@ -70,7 +70,9 @@ pub fn controls(id: &str, playback: &Playback, markers: &[Marker], on: impl Fn(C
     let on = Rc::new(on);
     let button = |key: &str, icon: IconName, tip: &'static str, control: fn() -> Control| {
         let on = on.clone();
-        Button::new(SharedString::from(format!("{id}-{key}"))).ghost().xsmall().icon(icon).tooltip(tip).accessibility_label(tip)
+        let shortcut = if id == "debugger" { match key { "first" => "Home", "prev" => "←", "play" => "Space", "next" => "→", "last" => "End", _ => "" } } else { "" };
+        let hint = if shortcut.is_empty() { tip.to_owned() } else { format!("{tip} · {shortcut}") };
+        Button::new(SharedString::from(format!("{id}-{key}"))).ghost().xsmall().icon(icon).tooltip(hint).accessibility_label(tip)
             .on_click(move |_, window, cx| on(control(), window, cx))
     };
     let len = playback.len.max(1);

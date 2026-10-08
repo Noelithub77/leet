@@ -223,6 +223,7 @@ pub struct Workspace {
     pub assist_open: bool,
     /// The center shows the debugger instead of the editor.
     pub debug_mode: bool,
+    pub tour: Option<crate::tour::Tour>,
     pub language_picker: crate::language_picker::State,
     pub case_edit: Option<crate::case_editor::Draft>,
     /// Last shortcut, shown briefly in the status bar.
@@ -316,6 +317,7 @@ impl Workspace {
             debugger,
             assist_open: false,
             debug_mode: false,
+            tour: None,
             language_picker: crate::language_picker::State::default(),
             case_edit: None,
             flash: None,

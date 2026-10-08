@@ -27,6 +27,7 @@ mod omnibar;
 mod settings;
 mod statement;
 mod theme;
+mod tour;
 mod update;
 mod view;
 mod workspace;
@@ -67,6 +68,7 @@ fn main() {
         accounts::bind_keys(cx);
         ai::bind_keys(cx);
         debug_view::bind_keys(cx);
+        tour::bind_keys(cx);
         case_editor::bind_keys(cx);
         onboarding::bind_keys(cx);
         statement::bind_keys(cx);

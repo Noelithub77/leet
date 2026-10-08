@@ -90,7 +90,12 @@ impl Render for Workspace {
             .text_color(theme.foreground)
             .text_sm()
             .track_focus(&self.focus);
-        Workspace::register(root, cx).on_key_down(cx.listener(|this, event, window, cx| this.home_type(event, window, cx))).child(tabs).child(
+        Workspace::register(root, cx)
+            .when(self.tour.is_some(), |el| el.key_context("Workspace GuidedTour"))
+            .on_action(cx.listener(|this, _: &crate::tour::Next, window, cx| this.tour_move(1, window, cx)))
+            .on_action(cx.listener(|this, _: &crate::tour::Back, window, cx| this.tour_move(-1, window, cx)))
+            .on_action(cx.listener(|this, _: &crate::tour::Skip, window, cx| this.end_tour(window, cx)))
+            .on_key_down(cx.listener(|this, event, window, cx| this.home_type(event, window, cx))).child(tabs).child(
             h_flex().flex_1().min_h_0().mx_2().gap_2().track_focus(&self.nav_focus)
                 .when(self.nav_focus.is_focused(window), |view| Workspace::register_nav(view, cx))
             .child(self.render_left(left_w, window, cx))
@@ -108,6 +113,7 @@ impl Render for Workspace {
         .child(self.render_status(window, cx))
         .children(omnibar)
         .children(crate::update::panel(self, window, cx))
+        .children(crate::tour::panel(self, cx))
     }
 }
 
@@ -587,6 +593,7 @@ impl Workspace {
             .child(if self.client.signed_in() { "LeetCode ✓" } else { "LeetCode signed out" })
             .child(h_flex().gap_1().child(key(crate::actions::key_for("Search", &self.config))).child("commands"))
             .child(crate::update::button(self, cx))
+            .child(crate::tour::button(self, cx))
     }
 }
 

@@ -2,6 +2,8 @@
 <summary>Feat</summary>
 
 - Reset app settings and reopen onboarding while keeping solutions, accounts, progress, and cache.
+- Optional keyboard tour of problems, editor, tests, Assist, and debugger, with Skip available throughout.
+- Collapse Assist result cards while keeping run status and recovery controls visible.
 - LeetCode weekly and biweekly contests alongside Codeforces, with native problem explorers.
 - Continue stopped solves or retry interrupted AI actions from their result cards.
 - Assist panel with hints, I'm stuck, find bugs, edge cases, complexity, optimize, visualize, dry run, pattern, explain, and solve.
@@ -36,6 +38,7 @@
 <details>
 <summary>Fix</summary>
 
+- Show debugger step and case shortcuts in their tooltips.
 - Prevent onboarding requirements checks from crashing when opened from Settings.
 - Provider icons and a hover submenu for the active NeetCode list.
 - Show function icons for calls, returns, and stack frames in Debug mode.

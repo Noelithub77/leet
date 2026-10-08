@@ -143,6 +143,7 @@ pub struct Run {
     snapshot: Option<Snapshot>,
     target: Option<Target>,
     generation: u64,
+    collapsed: bool,
 }
 
 impl Run {
@@ -628,7 +629,7 @@ impl Run {
     fn new(id: u64, slug: String, action: Action, agent: Option<AgentKind>, model: String, snapshot: Option<Snapshot>, target: Option<Target>) -> Self {
         Self { id, slug, action, agent, model, started: Instant::now(), elapsed: None, phase: Phase::Starting, thinking: String::new(), tokens: 0,
             answer: None, cancel: Cancel::default(), hints_shown: 1, playback: Playback::new(0), last_frame: Instant::now(), reveal: false,
-            added: vec![], solve: None, snapshot, target, generation: 0 }
+            added: vec![], solve: None, snapshot, target, generation: 0, collapsed: false }
     }
 
     fn set_answer(&mut self, answer: Option<Answer>) {
@@ -742,6 +743,12 @@ impl Assist {
         let id = run.id;
         let active = run.phase.active();
         let header = h_flex().gap_2().items_center()
+            .child(Button::new(("assist-collapse", id)).ghost().xsmall().icon(if run.collapsed { IconName::ChevronRight } else { IconName::ChevronDown })
+                .tooltip(if run.collapsed { "Expand result" } else { "Collapse result" }).accessibility_label(if run.collapsed { "Expand result" } else { "Collapse result" })
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    if let Some(run) = this.runs.iter_mut().find(|run| run.id == id) { run.collapsed = !run.collapsed; if run.collapsed { run.playback.playing = false; } }
+                    cx.notify();
+                })))
             .child(div().size(px(24.)).rounded_lg().flex().items_center().justify_center().bg(color.opacity(0.14)).child(Icon::new(icon(run.action)).size_3p5().text_color(color)))
             .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(run.action.label()))
             .when_some(run.agent, |el, agent| el.child(crate::brand::agent_icon(agent).xsmall()))
@@ -770,8 +777,8 @@ impl Assist {
                     .when(run.tokens > 0, |el| el.child(div().text_color(theme.muted_foreground).child(format!("· {} tok", run.tokens)))))
                 .when(active && !thinking.is_empty(), |el| el.child(div().pl_6().text_xs().italic().text_color(theme.muted_foreground).truncate().child(thinking)))
         });
-        let body = run.answer.as_ref().map(|answer| self.body(run, answer, window, cx));
-        let solve = run.solve.as_ref().map(|solve| self.solve_body(run, solve, cx));
+        let body = run.answer.as_ref().filter(|_| !run.collapsed).map(|answer| self.body(run, answer, window, cx));
+        let solve = run.solve.as_ref().filter(|_| !run.collapsed || run.phase == Phase::Confirm).map(|solve| self.solve_body(run, solve, cx));
         v_flex().id(("assist-card", id)).p_3().gap_2p5().rounded_lg().bg(theme.background.opacity(0.55)).border_1()
             .border_color(if active { color.opacity(0.45) } else { theme.border })
             .child(header)

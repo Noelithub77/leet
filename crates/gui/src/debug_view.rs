@@ -103,6 +103,7 @@ pub struct Debugger {
     /// Bumped per recording so stale results are dropped.
     generation: u64,
     unsupported: Option<String>,
+    preview: bool,
     code_scroll: ScrollHandle,
     _observe: Subscription,
 }
@@ -111,17 +112,26 @@ impl Debugger {
     pub fn new(workspace: WeakEntity<Workspace>, assist: Entity<Assist>, cx: &mut Context<Self>) -> Self {
         let observe = cx.observe(&assist, |_, _, cx| cx.notify());
         Self { workspace, assist, _observe: observe, focus: cx.focus_handle(), snapshot: None, lines: vec![], highlighter: SyntaxHighlighter::new("python"), traces: vec![], selected: 0, playback: Playback::new(0),
-            last_frame: Instant::now(), ticker: None, generation: 0, unsupported: None, code_scroll: ScrollHandle::new() }
+            last_frame: Instant::now(), ticker: None, generation: 0, unsupported: None, preview: false, code_scroll: ScrollHandle::new() }
     }
 
     pub fn focus(&self, window: &mut Window, cx: &mut App) { self.focus.focus(window, cx); }
 
     /// Records every case unless the same code and cases were already recorded.
     pub fn load(&mut self, snapshot: Snapshot, selected: usize, cx: &mut Context<Self>) {
+        self.load_mode(snapshot, selected, false, cx);
+    }
+
+    pub fn preview(&mut self, snapshot: Snapshot, selected: usize, cx: &mut Context<Self>) {
+        self.load_mode(snapshot, selected, true, cx);
+    }
+
+    fn load_mode(&mut self, snapshot: Snapshot, selected: usize, preview: bool, cx: &mut Context<Self>) {
         let same = self.snapshot.as_ref().is_some_and(|old| old.slug == snapshot.slug && old.code == snapshot.code && old.starter == snapshot.starter && old.language == snapshot.language
             && old.cases.iter().map(|c| (&c.input, &c.expected)).eq(snapshot.cases.iter().map(|c| (&c.input, &c.expected))));
-        if same && !self.traces.iter().any(|t| matches!(t, Recording::Failed(_))) { self.select(selected.min(self.traces.len().saturating_sub(1)), cx); return; }
+        if same && (preview || !self.preview) && !self.traces.iter().any(|t| matches!(t, Recording::Failed(_))) { self.select(selected.min(self.traces.len().saturating_sub(1)), cx); return; }
         self.generation += 1;
+        self.preview = preview;
         let source = snapshot.code.replace('\t', "    ");
         self.lines = source_lines(&source);
         self.highlighter = SyntaxHighlighter::new(snapshot.language.id());
@@ -131,7 +141,7 @@ impl Debugger {
         self.selected = selected.min(snapshot.cases.len().saturating_sub(1));
         self.playback = Playback::new(0);
         self.snapshot = Some(snapshot.clone());
-        if !snapshot.has_attempt() || self.unsupported.is_some() { cx.notify(); return; }
+        if preview || !snapshot.has_attempt() || self.unsupported.is_some() { cx.notify(); return; }
         let generation = self.generation;
         // Record the selected case first so it is ready soonest.
         let mut order: Vec<usize> = (0..snapshot.cases.len()).collect();
@@ -236,7 +246,7 @@ impl Render for Debugger {
         let chips = h_flex().gap_1p5().children(self.traces.iter().enumerate().map(|(index, recording)| {
             let active = index == self.selected;
             let (icon, color) = match (recording, self.verdict(index)) {
-                _ if template => (Some(IconName::CircleDot), theme.muted_foreground),
+                _ if template || self.preview => (Some(IconName::CircleDot), theme.muted_foreground),
                 (Recording::Running | Recording::Waiting, _) => (None, theme.muted_foreground),
                 (Recording::Failed(_), _) => (Some(IconName::TriangleAlert), theme.danger),
                 (_, Some(true)) => (Some(IconName::CircleCheck), theme.success),
@@ -248,6 +258,7 @@ impl Render for Debugger {
                 .when(active, |el| el.border_1().border_color(color.opacity(0.6)))
                 .child(match icon { Some(icon) => Icon::new(icon).size_3p5().text_color(color).into_any_element(), None => Spinner::new().xsmall().into_any_element() })
                 .child(format!("Case {}", index + 1))
+                .tooltip(|window, cx| gpui_kit::component::tooltip::Tooltip::new("Switch cases · ↑ / ↓").build(window, cx))
                 .on_click(cx.listener(move |this, _, _, cx| this.select(index, cx)))
         }));
         let trace = self.trace();
@@ -273,11 +284,11 @@ impl Render for Debugger {
             .child(Button::new("debug-rerecord").ghost().xsmall().icon(IconName::RefreshCw).tooltip("Record again").accessibility_label("Record again")
                 .on_click(cx.listener(|this, _, _, cx| { if let Some(snapshot) = this.snapshot.take() { let selected = this.selected; this.load(snapshot, selected, cx); } })));
 
-        let state: AnyElement = if template {
+        let state: AnyElement = if template || self.preview {
             v_flex().flex_1().min_w_0().h_full().p_4().gap_4()
                 .child(h_flex().gap_2().items_center().text_sm()
                     .child(Icon::new(IconName::Code).size_4().text_color(theme.muted_foreground))
-                    .child("Just a template"))
+                    .child(if template { "Just a template" } else { "Ready to debug" }))
                 .children([("Call stack", "No calls yet"), ("Variables", "No variables yet"), ("Data structures", "No data yet")].into_iter().map(|(title, text)| {
                     v_flex().gap_2()
                         .child(div().text_xs().font_weight(FontWeight::MEDIUM).text_color(theme.muted_foreground).child(title))
@@ -437,6 +448,14 @@ fn empty(icon: IconName, title: &str, detail: &str, theme: &gpui_kit::component:
 }
 
 impl Workspace {
+    pub fn preview_debug(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(snapshot) = self.debug_snapshot(cx) else { return };
+        let selected = self.session.as_ref().map_or(0, |session| session.selected_case);
+        self.debug_mode = true;
+        self.debugger.update(cx, |debugger, cx| { debugger.preview(snapshot, selected, cx); debugger.focus(window, cx); });
+        cx.notify();
+    }
+
     /// Switches the center between the editor and the debugger, recording cases on entry.
     pub fn set_debug(&mut self, on: bool, window: &mut Window, cx: &mut Context<Self>) {
         if on {
