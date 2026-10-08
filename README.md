@@ -14,7 +14,7 @@
 
 A native, keyboard-first coding-practice IDE in **idiomatic Rust**, powered by **GPUI**. Practice, debug, ask your local AI agents, and prepare for contests in one calm workspace.
 
-**Leeting @ 120Hz.** Built to follow your display’s refresh rate; actual frame cadence depends on your hardware and workload.
+Built to follow your display’s refresh rate; actual frame cadence depends on your hardware and workload.
 
 ## Quick install
 
