@@ -80,7 +80,8 @@ impl Workspace {
         self.left = layout.left; self.right = layout.right; self.bottom = layout.bottom;
         self.zen = layout.zen; self.assist_open = layout.assist; self.history_mode = layout.history;
         self.center = if !layout.had_problem && self.session.is_some() { Center::Editor } else { layout.center };
-        self.set_debug(layout.debug && self.session.is_some(), window, cx);
+        if layout.debug && self.session.is_some() { self.preview_debug(window, cx); }
+        else { self.set_debug(false, window, cx); }
         if self.center != Center::Editor { self.focus.focus(window, cx); }
         cx.notify();
     }
