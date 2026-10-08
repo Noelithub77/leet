@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { shouldCopyInstallCommand } from './shortcut.js';
+import { shouldCopyInstallCommand } from './shortcut';
 
 const shortcut = { key: 'c', ctrlKey: true, metaKey: false, altKey: false, shiftKey: false, repeat: false, editable: false, selection: '', platform: 'linux' };
 

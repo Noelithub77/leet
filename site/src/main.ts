@@ -1,6 +1,6 @@
 import './style.css';
-import { detectPlatform, installCommand } from './platform.js';
-import { shouldCopyInstallCommand } from './shortcut.js';
+import { detectPlatform, installCommand } from './platform';
+import { shouldCopyInstallCommand } from './shortcut';
 
 const detected = detectPlatform(navigator.userAgentData?.platform ?? navigator.platform, navigator.userAgent);
 const modifier = detected === 'macos' ? '⌘' : 'Ctrl';
@@ -14,7 +14,7 @@ for (const key of document.querySelectorAll('[data-mod]')) {
 // Phones and tablets have no Ctrl+C to advertise.
 if (!detected) document.querySelector('[data-press-hint]')?.setAttribute('hidden', '');
 
-const notices = () => import('./toast.jsx');
+const notices = () => import('./toast');
 
 function setPlatform(next) {
   platform = next;
@@ -101,7 +101,7 @@ document.addEventListener('keydown', event => {
 setPlatform(platform);
 // Let the command paint before requesting the motion libraries.
 requestAnimationFrame(() => {
-  (window.requestIdleCallback ?? (callback => setTimeout(callback, 100)))(() => void import('./enhance.js'), { timeout: 1800 });
+  (window.requestIdleCallback ?? (callback => setTimeout(callback, 100)))(() => void import('./enhance'), { timeout: 1800 });
 });
 // Toasts need React; warm them up on idle unless the device is constrained.
 if (!navigator.connection?.saveData && (navigator.hardwareConcurrency ?? 4) >= 4) {

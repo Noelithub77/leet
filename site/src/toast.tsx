@@ -2,7 +2,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { Toaster, toast } from 'sonner';
-import { colors, logo, pointsAttribute } from './logo.js';
+import { colors, logo, pointsAttribute } from './logo';
 
 function Mark() {
   return (

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createHeroCycle } from './hero-motion.js';
+import { createHeroCycle } from './hero-motion';
 
 test('hero shape and spelling stay paired through repeated cycles and pauses', () => {
   const glyphs = () => Array.from({ length: 7 }, () => ({ yPercent: 0, rotationX: 0, opacity: 1, filter: 'blur(0px)' }));

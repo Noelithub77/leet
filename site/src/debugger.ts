@@ -1,5 +1,5 @@
 import { gsap } from 'gsap';
-import { lineHeat, maxAreaTrace, sample, source } from './trace.js';
+import { lineHeat, maxAreaTrace, sample, source } from './trace';
 
 const SVG = 'http://www.w3.org/2000/svg';
 const STEP_SECONDS = 0.42;

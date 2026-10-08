@@ -6,10 +6,10 @@ import { DrawSVGPlugin } from 'gsap/DrawSVGPlugin';
 import { ScrambleTextPlugin } from 'gsap/ScrambleTextPlugin';
 import Lenis from 'lenis';
 import 'lenis/dist/lenis.css';
-import { mountDebugger } from './debugger.js';
-import { colors, pointsAttribute, strokeAt } from './logo.js';
-import { snapRefreshRate } from './refresh.js';
-import { createHeroCycle } from './hero-motion.js';
+import { mountDebugger } from './debugger';
+import { colors, pointsAttribute, strokeAt } from './logo';
+import { snapRefreshRate } from './refresh';
+import { createHeroCycle } from './hero-motion';
 
 gsap.registerPlugin(ScrollTrigger, SplitText, DrawSVGPlugin, ScrambleTextPlugin);
 
@@ -87,7 +87,7 @@ const marks = $$('[data-mark]').map(svg => {
 /* Hero shader with an eased pointer light, in its own chunk */
 const hero = $('.hero');
 const canvas = $('[data-shader]');
-const shaderReady = !reduced && !saveData && canvas ? import('./shader.js').then(({ mountShader }) => {
+const shaderReady = !reduced && !saveData && canvas ? import('./shader').then(({ mountShader }) => {
   const shader = mountShader(canvas);
   if (!shader) return null;
   const render = time => shader.render(time);
@@ -103,7 +103,7 @@ const shaderReady = !reduced && !saveData && canvas ? import('./shader.js').then
 }) : Promise.resolve(null);
 
 /* GPU particle mark: flows logo ⇄ 1337, dodges the pointer, scatters on scroll */
-const particlesReady = !reduced && !saveData && marks[0] ? import('./particles.js').then(({ mountParticles }) => {
+const particlesReady = !reduced && !saveData && marks[0] ? import('./particles').then(({ mountParticles }) => {
   const canvas = $('[data-particles]');
   const particles = mountParticles(canvas, marks[0].svg);
   if (!particles) { root.classList.remove('hero-pending'); return null; }
@@ -378,7 +378,7 @@ document.addEventListener('keydown', event => {
       { x: () => gsap.utils.random(0, innerWidth), y: -40, rotation: 0, opacity: 1 },
       { y: () => innerHeight + 60, rotation: () => gsap.utils.random(-300, 300), opacity: 0.2, duration: () => gsap.utils.random(1.1, 2), ease: 'power1.in', stagger: 0.02, onComplete: () => glyphs.forEach(glyph => glyph.remove()) });
   }
-  void import('./toast.jsx').then(toast => toast.eleet(on));
+  void import('./toast').then(toast => toast.eleet(on));
 });
 
 /* Soft spotlight follows the pointer across cards */

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { detectPlatform } from './platform.js';
+import { detectPlatform } from './platform';
 
 test('detects desktop platforms without offering a desktop download to mobile devices', () => {
   assert.equal(detectPlatform('Win32', 'Windows NT 10.0'), 'windows');

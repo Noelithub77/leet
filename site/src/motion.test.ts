@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { digits, logo, strokeAt } from './logo.js';
-import { lineHeat, maxAreaTrace, sample } from './trace.js';
-import { snapRefreshRate } from './refresh.js';
+import { digits, logo, strokeAt } from './logo';
+import { lineHeat, maxAreaTrace, sample } from './trace';
+import { snapRefreshRate } from './refresh';
 
 test('morph starts at the logo and lands exactly on 1337', () => {
   assert.deepEqual(logo.map((_, index) => strokeAt(index, 0).points), logo.map(stroke => stroke.points));

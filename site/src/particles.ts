@@ -1,5 +1,5 @@
 import { Geometry, Mesh, Program, Renderer } from 'ogl';
-import { colors, digits, logo } from './logo.js';
+import { colors, digits, logo } from './logo';
 
 // Each stroke is sampled as dots and paired by position along the stroke,
 // so morphing makes particles flow along their own path (1 → dot, 3 → chevron, 7 → bracket).
