@@ -46,6 +46,8 @@ Modifier shortcuts follow the user's VS Code bindings. Bare arrows, `enter` and 
 | `ctrl+tab` / `ctrl+shift+tab` | Next / previous tab |
 | `ctrl+w` | Close current problem tab |
 | `ctrl+shift+t` | Reopen the last closed problem tab |
+| `ctrl+shift+w` | Close all problem tabs and return Home |
+| `alt+t` | Show/hide problem tags |
 | `ctrl+p` | Find any free LeetCode problem (fuzzy, by name or number) |
 | `ctrl+enter` | Run tests locally |
 | `ctrl+shift+enter` | Run on the LeetCode judge |
@@ -76,7 +78,7 @@ Modifier shortcuts follow the user's VS Code bindings. Bare arrows, `enter` and 
 
 Shortcut settings use one field: primary first, then optional alternatives separated by `|`. The primary appears in tooltips. Clear the field to restore defaults, or enter `none` to disable a command. Existing `[keybindings]` overrides keep the same format: primary first, then alternatives separated by `|`.
 
-`ctrl+shift+t` restores closed tabs from newest to oldest during the current app session, retaining their solution, language, cursor, and undo history. Problem tags remain available through global search.
+`ctrl+shift+t` restores closed tabs from newest to oldest during the current app session, retaining their solution, language, cursor, and undo history. `ctrl+shift+w` closes all problem tabs after saving them; an active run or save failure keeps the tabs open. `alt+t` toggles problem tags.
 
 ## Contests
 

@@ -2,6 +2,7 @@
 <summary>Feat</summary>
 
 - Reopen closed problem tabs with Ctrl+Shift+T, preserving their editor state.
+- Close all problem tabs with Ctrl+Shift+W and toggle tags with Alt+T.
 
 - Open global search with Ctrl+T as an alternative shortcut.
 - Label primary and alternative shortcuts; Home uses Ctrl+H with Ctrl+. as an alternative.

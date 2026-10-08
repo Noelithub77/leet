@@ -205,20 +205,25 @@ impl Workspace {
         self.omni.input.update(cx, |input, cx| input.set_value(text.clone(), window, cx));
     }
 
-    pub fn close_problem(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(session) = &self.session else { return; };
+    fn save_before_close(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let Some(session) = &self.session else { return false; };
         if session.running || matches!(session.judge, Some(Judge::Running { .. })) {
             self.toast(gpui_kit::component::notification::Notification::warning("Wait for the current run to finish"), window, cx);
-            return;
+            return false;
         }
         self.save_now(cx);
         if let Some(session) = &self.session {
             if session.question.is_some() && std::fs::read_to_string(&session.path).ok().as_deref()
                 != Some(self.editor.read(cx).value().as_ref()) {
                 self.toast(gpui_kit::component::notification::Notification::error("Solution could not be saved; tab kept open"), window, cx);
-                return;
+                return false;
             }
         }
+        true
+    }
+
+    pub fn close_problem(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.save_before_close(window, cx) { return; }
         self.park_tab();
         if let Some(index) = self.active_tab.take() {
             if let Some(tab) = self.tabs.remove(index) { self.home.closed_tabs.push((index, tab)); }
@@ -227,6 +232,32 @@ impl Workspace {
                 self.back_to_editor(window, cx);
                 return;
             }
+        }
+        self.show_home(window, cx);
+    }
+
+    pub fn close_all_problems(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.tabs.is_empty() { return; }
+        if self.session.iter().chain(self.tabs.iter().flatten().map(|tab| &tab.session))
+            .any(|session| session.running || matches!(session.judge, Some(Judge::Running { .. }))) {
+            self.toast(gpui_kit::component::notification::Notification::warning("Wait for the current run to finish"), window, cx);
+            return;
+        }
+        self.park_tab();
+        self.active_tab = None;
+        // Verify every save before removing any tabs.
+        for index in 0..self.tabs.len() {
+            self.take_tab(index);
+            if !self.save_before_close(window, cx) {
+                self.back_to_editor(window, cx);
+                return;
+            }
+            self.park_tab();
+            self.active_tab = None;
+        }
+        self.assist.update(cx, |assist, cx| assist.stop_solves(cx));
+        while let Some(tab) = self.tabs.pop() {
+            if let Some(tab) = tab { self.home.closed_tabs.push((self.tabs.len(), tab)); }
         }
         self.show_home(window, cx);
     }
@@ -390,6 +421,18 @@ mod tests {
         assert_eq!(reopen_target("cf:2:A", 1, &open), ReopenTarget::Restore(1));
         assert_eq!(reopen_target("cc:FLOW001", 9, &open), ReopenTarget::Restore(3));
         assert_eq!(reopen_target("two-sum", 2, &[]), ReopenTarget::Restore(0));
+    }
+
+    #[::core::prelude::v1::test]
+    fn reopening_after_close_all_restores_original_order() {
+        let original = ["two-sum", "cf:1:A", "cc:START01"];
+        let mut closed: Vec<_> = original.iter().copied().enumerate().rev().collect();
+        let mut open = Vec::new();
+        while let Some((index, slug)) = closed.pop() {
+            let ReopenTarget::Restore(index) = reopen_target(slug, index, &open) else { panic!("tab was closed"); };
+            open.insert(index, Some(slug));
+        }
+        assert_eq!(open, original.map(Some));
     }
 
     #[::core::prelude::v1::test]
