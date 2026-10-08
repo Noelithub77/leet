@@ -63,7 +63,7 @@ Changes to Rust sources, manifests, native configuration, tests, the operator, o
 
 For a manual cache warm-up, select **main** in **Release → Run workflow** and leave **tag** empty. To test release packaging without replacing published assets, enter an existing tag and disable **publish**. GitHub scopes caches to the workflow's branch: caches saved on main are available to future tags; caches saved on one tag cannot be read by another tag. Only main runs save Rust caches to avoid filling storage with redundant tag caches. The first run is cold. New compiler versions or native build changes can require a fresh cache.
 
-The Vite landing page lives in `site/`, with React and Tailwind for the requested shadcn `Kbd`/`KbdGroup` components. The adapted upstream component and its MIT license live in `site/src/components/ui/`. Platform detection and copying use browser APIs. The page uses Vesper's `#99FFE4` accent and a 130% desktop type scale, with responsive sizing on mobile. Its logo splash is initial HTML and disappears when React is ready, with no timed delay. The GitHub Pages workflow publishes changes pushed to main; Pages must use **GitHub Actions** as its source.
+The Vite landing page lives in `site/`. Static HTML and inline hero CSS paint the install command first; platform tabs and copying use browser APIs. GSAP, Lenis, and OGL load lazily for motion, with React/Sonner used only for feedback. Titles use Nunito and the page follows Vesper’s peach and mint palette. Videos load near the viewport; reduced motion and Save-Data retain posters. The GitHub Pages workflow publishes changes pushed to main; Pages must use **GitHub Actions** as its source.
 
 ```sh
 cd site
@@ -71,6 +71,7 @@ pnpm install --frozen-lockfile
 pnpm ops --help
 pnpm ops check --json
 pnpm dev
+# http://localhost:1337/leet/
 ```
 
 The Pages workflow caches pnpm's package store using `site/pnpm-lock.yaml`; installation still uses the frozen lockfile, and checks/builds run on every deployment. Release uploads skip redundant ZIP compression and expire after three days; the published GitHub Release assets are retained independently.

@@ -47,6 +47,7 @@ logger.warnOnce = logger.warn;
 
 export default defineConfig({
   base: '/leet/',
+  server: { port: 1337, strictPort: true },
   customLogger: logger,
   plugins: [appAssets],
   build: {

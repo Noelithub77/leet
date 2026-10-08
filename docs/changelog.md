@@ -1,6 +1,8 @@
 <details open>
 <summary>Feat</summary>
 
+- Vesper-themed README with an animated logo, real demos, and quick installation.
+- Contribution and security guidance; current source uses GNU AGPL v3.
 - New landing page with real app footage, an interactive debugger replay, and keyboard copy with feedback.
 - Synchronize the hero logo and title, add breathing room, and refine installation keycaps and Windows download.
 

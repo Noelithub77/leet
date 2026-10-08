@@ -41,6 +41,8 @@ Every panel has one toggle, and a spring animation shows or hides it. Drag the b
 
 ## Landing page
 
+Run `pnpm --dir site dev` for `http://localhost:1337/leet/` (strict port 1337).
+
 `site/index.html` is fully pre-rendered; the hero's CSS is inlined so the install command paints first. `src/main.js` (about 2.5 KB gzipped) owns platform tabs, copy, and Ctrl/Cmd+C. After the first animation frame, an idle callback requests `src/enhance.js`, which loads GSAP (ScrollTrigger, SplitText, DrawSVG, ScrambleText) and Lenis for the scroll scenes. OGL shaders and the particle logo load separately; React and Sonner load on idle or first feedback. `src/debugger.js` replays `src/trace.js`, a deterministic copy of leet's 46-step Container With Most Water recording. Loops pause offscreen, videos attach near the viewport, and reduced motion or Save-Data get static posters. Content remains visible if enhancement cannot load. The live Hz meter estimates browser animation-frame cadence, rather than querying monitor hardware.
 
 Liberation Sans is self-hosted from `site/public/fonts/` (OFL). Regenerate each weight with `pyftsubset /usr/share/fonts/liberation/LiberationSans-Regular.ttf --unicodes="U+0020-007E,U+00A0-00FF,U+2013,U+2014,U+2018,U+2019,U+201C,U+201D,U+2022,U+2026,U+2192,U+2193,U+21B5,U+2318,U+2726,U+00B7,U+00D7" --layout-features='kern,liga' --flavor=woff2`.

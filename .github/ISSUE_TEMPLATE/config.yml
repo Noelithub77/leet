@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability privately
+    url: https://github.com/Noelithub77/leet/security/advisories/new
+    about: Do not disclose credentials or vulnerabilities in public issues.
+  - name: Installation and platform requirements
+    url: https://github.com/Noelithub77/leet/blob/main/docs/releases.md
+    about: Supported platforms, updates, and local language toolchains.
