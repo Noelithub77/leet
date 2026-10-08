@@ -499,9 +499,21 @@ impl Assist {
                     ws.flash("Wait for the current run to finish", cx);
                     return;
                 }
+                // An agent edit can arrive before the file watcher refreshes the editor.
+                let reload = ws.assist.read(cx).runs.iter().find(|run| run.id == id)
+                    .filter(|run| run.action == Action::Solve && ws.session.as_ref().is_some_and(|session| session.slug == run.slug))
+                    .and_then(|run| run.snapshot.as_ref())
+                    .filter(|snapshot| ws.editor.read(cx).value().as_ref() == snapshot.code)
+                    .map(|snapshot| snapshot.slug.clone());
+                if let Some(slug) = reload { ws.reload_solution(&slug, window, cx); }
                 ws.save_now(cx);
                 let Some(snapshot) = ws.assist_snapshot(cx) else { return };
                 ws.assist.update(cx, |assist, cx| {
+                    if continue_run {
+                        let others: Vec<_> = assist.runs.iter().filter(|run| run.id != id && run.slug == snapshot.slug && run.action == Action::Solve
+                            && (run.phase.active() || run.phase == Phase::Confirm)).map(|run| run.id).collect();
+                        for other in others { assist.stop(other, cx); }
+                    }
                     let Some(run) = assist.runs.iter_mut().find(|run| run.id == id && matches!(run.phase, Phase::Stopped | Phase::Failed(_))) else { return };
                     if run.slug != snapshot.slug || run.snapshot.as_ref().is_some_and(|old| old.language != snapshot.language) { return; }
                     if run.action.needs_attempt() && !snapshot.has_attempt() { return; }
