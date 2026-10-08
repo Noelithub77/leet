@@ -81,6 +81,12 @@ impl Db {
         query = if let Some(problem) = problem { query.filter(chat_threads::problem.eq(problem)) } else { query.filter(chat_threads::problem.is_null()) };
         Ok(query.order((chat_threads::updated_at.desc(), chat_threads::id.desc())).select(ThreadRow::as_select()).load::<ThreadRow>(&mut *self.conn())?.into_iter().map(Into::into).collect())
     }
+    /// Chats visible from a problem include its own threads and shared Root threads.
+    pub fn visible_chat_threads(&self, problem: Option<&str>, query: &str) -> Result<Vec<Thread>> {
+        let mut threads = if let Some(problem) = problem { self.search_chat_threads(Some(problem), query)? } else { vec![] };
+        threads.extend(self.search_chat_threads(None, query)?);
+        Ok(threads)
+    }
     pub fn search_chat_threads(&self, problem: Option<&str>, query: &str) -> Result<Vec<Thread>> {
         if query.trim().is_empty() { return self.chat_threads(problem); }
         #[derive(QueryableByName)]
@@ -208,6 +214,10 @@ mod tests {
         db.append_chat(root.id, &turn("two-sum", "Global complement")).unwrap();
         assert_eq!(db.search_chat_threads(Some("two-sum"), "complement").unwrap()[0].id, local.id);
         assert_eq!(db.search_chat_threads(None, "complement").unwrap()[0].id, root.id);
+        let visible = db.visible_chat_threads(Some("two-sum"), "complement").unwrap();
+        assert_eq!(visible.iter().map(|thread| thread.id).collect::<Vec<_>>(), vec![local.id, root.id]);
+        assert_eq!(db.visible_chat_threads(Some("other"), "complement").unwrap()[0].id, root.id);
+        assert_eq!(db.visible_chat_threads(None, "complement").unwrap().len(), 1);
         assert_eq!(db.search_chat_threads(Some("two-sum"), "%").unwrap().len(), 1);
         assert!(db.search_chat_threads(Some("two-sum"), "_").unwrap().is_empty());
         assert!(db.search_chat_threads(Some("other"), "complement").unwrap().is_empty());

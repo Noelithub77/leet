@@ -12,7 +12,7 @@
 - Background CPH listener opens Leet when closed and reuses tabs in its existing window.
 
 - Multiple problem and shared Root chat threads with saved drafts, message forks, branch edits, deletion, and undo.
-- Search chat titles and messages with automatic search focus.
+- List problem and Root chats together, with automatic search focus.
 - Use every prompt shortcut in ordinary chats, with readable prompts on hover and shared native agent capabilities.
 - Let agents write and revise native visualization artifacts directly in private files.
 - Native resizable Explorer on Alt+S, Description on Alt+A, and AI on Alt+D.
@@ -63,6 +63,7 @@
 <details>
 <summary>Fix</summary>
 
+- Retry blocked Codeforces statements with installed curl before the snapshot fallback.
 - Automatically acquire three free Companion ports, retry occupied ports, and avoid VS Code CPH’s default port.
 - Remove CPH settings and suppress duplicate browser deliveries.
 - Fetch complete statements after CPH imports and select the provider from the problem URL.

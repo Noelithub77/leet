@@ -57,8 +57,9 @@ single compact header: Sparkles, General / Analysis / Chats, model, close.
 
 ## Verification
 
-Chat search covers readable titles, requests, and response text within the selected
-scope. Opening Chats or expanding its list focuses search; Up/Down, Enter, and
+Chat search covers readable titles, requests, and response text in one list of
+problem and shared Root threads. Scope filters are replaced by small row labels;
+the plus menu creates either kind of thread. Opening Chats or expanding its list focuses search; Up/Down, Enter, and
 Escape navigate results and return to the composer. SQL JSON property names are
 excluded from message search, and LIKE wildcards are escaped.
 
