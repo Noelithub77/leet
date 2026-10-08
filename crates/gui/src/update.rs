@@ -13,6 +13,7 @@ use gpui_kit::component::{ActiveTheme as _, Sizable as _, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::text::TextView;
 use gpui_kit::component::accordion::Accordion;
+use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::assets::IconName;
 use gpui_kit::prelude::FluentBuilder as _;
 
@@ -40,11 +41,9 @@ enum UpdateAction { Update, Downloading, Restart, UpToDate }
 
 pub struct State {
     open: bool,
-    pinned: bool,
     trigger_hovered: bool,
-    panel_hovered: bool,
-    hide_epoch: u64,
     categories: Vec<usize>,
+    scroll: ScrollHandle,
     pub latest: Option<practice::updates::Latest>,
     pub checking: bool,
     pub downloading: bool,
@@ -56,8 +55,8 @@ pub struct State {
 
 impl Default for State {
     fn default() -> Self {
-        Self { open: false, pinned: false, trigger_hovered: false, panel_hovered: false, hide_epoch: 0,
-            categories: vec![0], latest: None, checking: false, downloading: false, error: None,
+        Self { open: false, trigger_hovered: false,
+            categories: vec![0], scroll: ScrollHandle::new(), latest: None, checking: false, downloading: false, error: None,
             progress: Arc::default(), restart_path: None, local_build_ready: false }
     }
 }
@@ -90,7 +89,6 @@ fn install(this: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace
     if this.release_update.restart_path.is_none() {
         this.release_update.restart_path = Some(launcher());
     }
-    this.release_update.pinned = true;
     this.release_update.downloading = true;
     this.release_update.error = None;
     this.release_update.progress.store(0, Ordering::Relaxed);
@@ -128,6 +126,11 @@ fn install(this: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace
 }
 
 impl State {
+    #[cfg(feature = "gui-test")]
+    pub(crate) fn is_open(&self) -> bool { self.open }
+    #[cfg(feature = "gui-test")]
+    pub(crate) fn scroll_offset(&self) -> Pixels { self.scroll.offset().y }
+
     fn action(&self, ready: bool) -> UpdateAction {
         if self.downloading { UpdateAction::Downloading }
         else if ready { UpdateAction::Restart }
@@ -137,36 +140,17 @@ impl State {
 
     pub(crate) fn close(&mut self) {
         self.open = false;
-        self.pinned = false;
-        self.panel_hovered = false;
-        self.hide_epoch = self.hide_epoch.wrapping_add(1);
     }
 }
 
-fn hover(this: &mut Workspace, panel: bool, entered: bool, window: &mut Window, cx: &mut Context<Workspace>) {
-    let state = &mut this.release_update;
-    if panel { state.panel_hovered = entered; } else { state.trigger_hovered = entered; }
-    state.hide_epoch = state.hide_epoch.wrapping_add(1);
-    if entered { state.open = true; cx.notify(); return; }
-    if state.pinned || state.trigger_hovered || state.panel_hovered { return; }
-    let epoch = state.hide_epoch;
-    // Allow the pointer to cross the small gap from the footer into the panel.
-    cx.spawn_in(window, async move |this, cx| {
-        cx.background_executor().timer(Duration::from_millis(180)).await;
-        let _ = this.update(cx, |this, cx| {
-            let state = &mut this.release_update;
-            if state.hide_epoch == epoch && !state.pinned && !state.trigger_hovered && !state.panel_hovered {
-                state.close();
-                cx.notify();
-            }
-        });
-    }).detach();
+fn trigger_hover(this: &mut Workspace, entered: bool, _: &mut Window, _: &mut Context<Workspace>) {
+    this.release_update.trigger_hovered = entered;
 }
 
 pub fn button(this: &Workspace, cx: &mut Context<Workspace>) -> impl IntoElement {
     let available = this.update_ready || this.release_update.latest.as_ref().is_some_and(|latest| latest.available.is_some());
     div().id("release-update-hover").relative().flex_shrink_0()
-        .on_hover(cx.listener(|this, entered, window, cx| hover(this, false, *entered, window, cx)))
+        .on_hover(cx.listener(|this, entered, window, cx| trigger_hover(this, *entered, window, cx)))
         .child(Button::new("release-updates").ghost().small()
             .icon(gpui_kit::component::Icon::new(IconName::Download).text_color(cx.theme().primary))
             .accessibility_label("Changelog and updates")
@@ -174,8 +158,8 @@ pub fn button(this: &Workspace, cx: &mut Context<Workspace>) -> impl IntoElement
                 this.ai_chip.update(cx, |chip, cx| chip.hide(cx));
                 crate::language_picker::close(this, window, cx);
                 this.omni.open = false;
-                this.release_update.open = true;
-                this.release_update.pinned = true;
+                if this.release_update.open { this.release_update.close(); }
+                else { this.release_update.open = true; }
                 cx.notify();
             })))
         .when(available, |el| el.child(div().absolute().top_0().right_0().size(px(5.)).rounded_full().bg(cx.theme().primary)))
@@ -208,13 +192,12 @@ pub fn panel(this: &Workspace, window: &Window, cx: &mut Context<Workspace>) -> 
     Some(v_flex().id("release-update-panel").absolute().bottom(px(36.)).right(px(12.)).w(px(380.)).max_w_full()
         .occlude().p_4().gap_3().rounded_lg().border_1().border_color(cx.theme().border)
         .bg(cx.theme().popover).text_color(cx.theme().foreground).shadow_lg()
-        .on_hover(cx.listener(|this, entered, window, cx| hover(this, true, *entered, window, cx)))
         .on_mouse_down_out(cx.listener(|this, _, _, cx| {
             if !this.release_update.trigger_hovered { this.release_update.close(); cx.notify(); }
         }))
         .child(div().text_sm().child(status))
         .when_some(state.error.clone(), |el, error| el.child(div().text_xs().text_color(cx.theme().danger).child(error)))
-        .child(div().id("release-notes-scroll").max_h(notes_height).overflow_y_scroll()
+        .child(div().id("release-notes-scroll").test_support().h(notes_height).flex_shrink_0().overflow_y_scroll().track_scroll(&state.scroll).vertical_scrollbar(&state.scroll)
             .child(Accordion::new("release-categories").multiple(true).bordered(false).small()
                 .item(|item| item.title("Feat").open(state.categories.contains(&0))
                     .child(TextView::markdown("release-feat", bullets(notes.feat)).selectable(true)))

@@ -80,6 +80,7 @@
 <details>
 <summary>Fix</summary>
 
+- Keep the update changelog open until its trigger or an outside click closes it, with scrollable release notes.
 - Keep tour shortcuts visible during practice; use Prev/Next with arrow keys and arrow keycaps.
 - Ctrl+P opens full search, including settings, just like Ctrl+Shift+P.
 

@@ -9,6 +9,7 @@ use crate::debug_view::{Debugger, Snapshot};
 
 mod statement;
 mod tour;
+mod update;
 
 const PYTHON: &str = "import sys\n\ndef solve():\n    data = list(map(int, sys.stdin.buffer.read().split()))\n    answers = []\n    for i in range(1, len(data)):\n        n = data[i]\n        answer = n * 2\n        answers.append(answer)\n        print(answer)\n\nif __name__ == '__main__':\n    solve()\n";
 const CPP: &str = "#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t;\n    cin >> t;\n    vector<int> answers;\n    while (t--) {\n        int n;\n        cin >> n;\n        int answer = n * 2;\n        answers.push_back(answer);\n        cout << answer << '\\n' << flush;\n    }\n    return 0;\n}\n";
@@ -60,7 +61,7 @@ pub fn run() -> Result<()> {
     });
     cx.allow_parking();
     cx.update(init);
-    let mut reports = vec![statement::native(&mut cx, &output, pixels)?];
+    let mut reports = vec![statement::native(&mut cx, &output, pixels)?, update::native(&mut cx, &output, pixels)?];
     reports.push(tour::native(&mut cx, &output, pixels, video)?);
     reports.push(crate::assist::composer_fixture::native(&mut cx, &output, pixels)?);
     for slug in ["cf:1:A", "cc:GUIFIXTURE"] {
