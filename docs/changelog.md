@@ -40,7 +40,7 @@
 
 - Show debugger step and case shortcuts in their tooltips.
 - Prevent onboarding requirements checks from crashing when opened from Settings.
-- Provider icons and a hover submenu for the active NeetCode list.
+- Provider icons in the closed dropdown and a hover submenu for the active NeetCode list.
 - Show function icons for calls, returns, and stack frames in Debug mode.
 - Show “Just a template” instead of executing untouched templates in every language.
 - Keep the source, case tabs, and debugger controls visible before recording steps.

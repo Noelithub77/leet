@@ -159,7 +159,8 @@ impl Workspace {
             } else { self.config.source.label().to_owned() };
         let current = self.config.source;
         let current_list = self.config.roadmap_list;
-        Button::new("practice-source").ghost().small().label(label).icon(IconName::ChevronDown)
+        Button::new("practice-source").ghost().small().label(label).icon(crate::brand::source_icon(current))
+            .child(Icon::new(IconName::ChevronDown).xsmall())
             .accessibility_label("Practice source").tooltip_with_action("Practice source", &crate::actions::CycleSource, Some(crate::actions::WORKSPACE))
             .dropdown_menu(move |menu, window, cx| {
                 let lists_weak = weak.clone();
