@@ -175,7 +175,7 @@ pub fn panel(this: &Workspace, window: &Window, cx: &mut Context<Workspace>) -> 
         else if state.checking { "Checking for updates…".into() }
         else if let Some(latest) = &state.latest {
             if latest.available.is_some() { format!("Update available · {}", latest.version) }
-            else { format!("Up to date · {}", env!("LEET_VERSION")) }
+            else { format!("Up to date · {}", practice::updates::current_version(env!("LEET_VERSION"))) }
         } else { format!("leet {}", env!("LEET_VERSION")) };
     let notes = state.latest.as_ref().filter(|latest| latest.available.is_some() || !is_development_build(env!("LEET_VERSION")))
         .map(|latest| latest.notes.clone()).filter(|notes| !notes.trim().is_empty())
@@ -195,7 +195,7 @@ pub fn panel(this: &Workspace, window: &Window, cx: &mut Context<Workspace>) -> 
         .on_mouse_down_out(cx.listener(|this, _, _, cx| {
             if !this.release_update.trigger_hovered { this.release_update.close(); cx.notify(); }
         }))
-        .child(div().text_sm().child(status))
+        .child(div().id("release-update-status").test_support().text_sm().aria_label(status.clone()).child(status))
         .when_some(state.error.clone(), |el, error| el.child(div().text_xs().text_color(cx.theme().danger).child(error)))
         .child(div().id("release-notes-scroll").test_support().h(notes_height).flex_shrink_0().overflow_y_scroll().track_scroll(&state.scroll).vertical_scrollbar(&state.scroll)
             .child(Accordion::new("release-categories").multiple(true).bordered(false).small()

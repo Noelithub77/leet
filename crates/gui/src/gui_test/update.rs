@@ -46,6 +46,8 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         window.click("release-updates", cx);
         window.render_frame(cx);
         ensure!(fixture.read(cx).workspace.read(cx).release_update.is_open(), "Click did not open the changelog state");
+        let expected_status = format!("Up to date · {}", practice::updates::current_version(env!("LEET_VERSION")));
+        ensure!(window.find("release-update-status").label() == Some(expected_status.as_str()), "Up-to-date status did not use the semantic version");
         ensure!(window.find("release-notes-scroll").visible(), "Click did not show release notes");
         window.scroll("release-notes-scroll", ScrollDelta::Lines(point(0., -12.)), cx);
         window.render_frame(cx);
