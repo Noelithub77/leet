@@ -19,7 +19,7 @@ fn execute()->Result<()> {
     let args:Vec<_>=std::env::args().skip(1).collect();
     let command=args.first().map(String::as_str).unwrap_or("--help");
     if matches!(command,"--help"|"-h"|"help"){
-        println!("./ops <check|build|local:deploy|companion|agents|snapshot|cache:fetch|contests:refresh|workspace:move|release:package|trace|gui:test> [--json]\n\ncompanion     Login browser-import listener; use ./ops companion --help.\n\nagents        Detect local agents; --catalog lists live models, --smoke runs read-only JSON probes.\ncheck         Rust workspace tests.\nbuild         Release desktop build.\nlocal:deploy  Build/install leet and 1337 commands, desktop entry/icon; verify version and links.\nsnapshot      Public-only SQLite refresh; use ./ops snapshot --help.\ncache:fetch   Cache one Codeforces statement: --slug cf:CONTEST:INDEX.\ncontests:refresh  Refresh both providers; optional --contest ID or --leetcode-contest SLUG.\nworkspace:move Move solutions and Git history: --path /absolute/path; preserve a compatibility link.\nrelease:package  Package a native CI build; use ./ops release:package --help.\ngui:test      Isolated GPUI interaction, PNG and optional video checks; use ./ops gui:test --help.\ntrace         Record one case; use ./ops trace --help.\n\nLocal environment. Preserves settings, credentials, cache, and Solutions. Running windows offer restart.");return Ok(());
+        println!("./ops <check|build|local:deploy|companion|agents|snapshot|cache:fetch|contests:refresh|workspace:move|release:package|trace|gui:test|toolchain:setup> [--json]\n\ncompanion     Login browser-import listener; use ./ops companion --help.\n\nagents        Detect local agents; --catalog lists live models, --smoke runs read-only JSON probes.\ncheck         Rust workspace tests.\nbuild         Release desktop build.\nlocal:deploy  Build/install leet and 1337 commands, desktop entry/icon; verify version and links.\nsnapshot      Public-only SQLite refresh; use ./ops snapshot --help.\ncache:fetch   Cache one Codeforces statement: --slug cf:CONTEST:INDEX.\ncontests:refresh  Refresh both providers; optional --contest ID or --leetcode-contest SLUG.\nworkspace:move Move solutions and Git history: --path /absolute/path; preserve a compatibility link.\nrelease:package  Package a native CI build; use ./ops release:package --help.\ngui:test      Isolated GPUI interaction, PNG and optional video checks; use ./ops gui:test --help.\ntrace         Record one case; use ./ops trace --help.\n\nLocal environment. Preserves settings, credentials, cache, and Solutions. Running windows offer restart.");return Ok(());
     }
     if command == "companion" {
         let status = Command::new("cargo").args(["run", "--quiet", "-p", "practice", "--example", "companion_service", "--"]).args(&args[1..]).status()?;
@@ -247,10 +247,18 @@ fn prune(dir:&Path,current:&Path)->Result<()> {
 }
 
 #[cfg(unix)]
-fn main() { unix::main(); }
+fn main() {
+    if std::env::args().nth(1).as_deref() == Some("toolchain:setup") {
+        if let Err(error) = practice::tool_setup::cli(&std::env::args().skip(2).collect::<Vec<_>>()) { eprintln!("{error:#}"); std::process::exit(1); }
+    } else { unix::main(); }
+}
 
 #[cfg(not(unix))]
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some("toolchain:setup") {
+        if let Err(error) = practice::tool_setup::cli(&std::env::args().skip(2).collect::<Vec<_>>()) { eprintln!("{error:#}"); std::process::exit(1); }
+        return;
+    }
     eprintln!("Local desktop deployment uses Unix. For Windows releases use cargo run -p practice --example release -- --help.");
     std::process::exit(1);
 }

@@ -1,0 +1,92 @@
+{
+  "python": {
+    "aarch64-apple-darwin": {
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261003/cpython-3.13.16%2B20261003-aarch64-apple-darwin-install_only_stripped.tar.gz",
+      "sha256": "9e01f63bbb08576cd9c8bc2d0564d098cb30c8453a0cd4bcf6aef458f6d2a147"
+    },
+    "aarch64-unknown-linux-gnu": {
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261003/cpython-3.13.16%2B20261003-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz",
+      "sha256": "6e9641400f8debd9b7924b27b5ff0662c372852382e291a76c450c7b67414cf6"
+    },
+    "x86_64-apple-darwin": {
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261003/cpython-3.13.16%2B20261003-x86_64-apple-darwin-install_only_stripped.tar.gz",
+      "sha256": "b4dad38ba6a344555ccb71a1b08caad0a6c0dda88c5803658bc95bd7f04e9f5c"
+    },
+    "x86_64-pc-windows-msvc": {
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261003/cpython-3.13.16%2B20261003-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
+      "sha256": "ec43f1a85c29f147d7ae2d13218c52c70b24a983a82ab22d6c607c0593060e10"
+    },
+    "x86_64-unknown-linux-gnu": {
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261003/cpython-3.13.16%2B20261003-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
+      "sha256": "4595c5589fff7bf0cb158d9a88a797e0d791fa33830770fcb7bf3f4b104feeae"
+    }
+  },
+  "clangd": {
+    "linux": {
+      "url": "https://github.com/clangd/clangd/releases/download/23.1.0/clangd-linux-23.1.0.zip",
+      "sha256": "e53b1a96196095faedb7642cf64964f7fb9ad4a0c1f00dd2c172a3d9dcbafdfd"
+    },
+    "mac": {
+      "url": "https://github.com/clangd/clangd/releases/download/23.1.0/clangd-mac-23.1.0.zip",
+      "sha256": "1082e6638223b785ca2daf0939f13afcd0bb95c84ee9a4bbaff4745365159253"
+    },
+    "windows": {
+      "url": "https://github.com/clangd/clangd/releases/download/23.1.0/clangd-windows-23.1.0.zip",
+      "sha256": "23412a240756a162e7b98a282f36aa2a23a88db5ce16a0cbc4fef7253768c810"
+    }
+  },
+  "basedpyright": "1.40.2",
+  "node": "24.19.0",
+  "wheels": {
+    "windows-x86_64": [
+      {
+        "url": "https://files.pythonhosted.org/packages/de/53/0031b22e118264a57a3b64dfc0c8f0659b81af5bccd419ac62933013c601/basedpyright-1.40.2-py3-none-any.whl",
+        "sha256": "3a53aeb93a86675ded0e12bc27bd8476c1742356de07ad8cab67bff18110c690"
+      },
+      {
+        "url": "https://files.pythonhosted.org/packages/88/d1/e3be8fa327a795bcaf7a19cd84299e338a7bce32ff0665fdce9cfa22573c/nodejs_wheel_binaries-24.19.0-py2.py3-none-win_amd64.whl",
+        "sha256": "67e3abeb9c3830cae8c8487ae8a2af7cc27dfa75af06145cee5ca7d1857c81bd"
+      }
+    ],
+    "macos-x86_64": [
+      {
+        "url": "https://files.pythonhosted.org/packages/de/53/0031b22e118264a57a3b64dfc0c8f0659b81af5bccd419ac62933013c601/basedpyright-1.40.2-py3-none-any.whl",
+        "sha256": "3a53aeb93a86675ded0e12bc27bd8476c1742356de07ad8cab67bff18110c690"
+      },
+      {
+        "url": "https://files.pythonhosted.org/packages/67/3a/4fdbbfecf2c23d52c0e3f68de7f7c1b3c97a26d328c69c5f6c49c48e340e/nodejs_wheel_binaries-24.19.0-py2.py3-none-macosx_13_0_x86_64.whl",
+        "sha256": "1c890adf4b7e6556ccc1ca66c866bb81884b6c9a581dee4e530dc7f78fb9d514"
+      }
+    ],
+    "macos-aarch64": [
+      {
+        "url": "https://files.pythonhosted.org/packages/de/53/0031b22e118264a57a3b64dfc0c8f0659b81af5bccd419ac62933013c601/basedpyright-1.40.2-py3-none-any.whl",
+        "sha256": "3a53aeb93a86675ded0e12bc27bd8476c1742356de07ad8cab67bff18110c690"
+      },
+      {
+        "url": "https://files.pythonhosted.org/packages/8c/52/0774b52c7be8151ad9d5aff44edc100c3f13d6d8eb3765f63ffa40e69fe8/nodejs_wheel_binaries-24.19.0-py2.py3-none-macosx_13_0_arm64.whl",
+        "sha256": "e12cbfd69089504e42fb14194ce734a9dcf3eb38c820ca63dd511d36fb964e9c"
+      }
+    ],
+    "linux-x86_64": [
+      {
+        "url": "https://files.pythonhosted.org/packages/de/53/0031b22e118264a57a3b64dfc0c8f0659b81af5bccd419ac62933013c601/basedpyright-1.40.2-py3-none-any.whl",
+        "sha256": "3a53aeb93a86675ded0e12bc27bd8476c1742356de07ad8cab67bff18110c690"
+      },
+      {
+        "url": "https://files.pythonhosted.org/packages/f4/89/6631d0982353da1bb7bc00bb1988f702822c62b42634f57999ee53b5c337/nodejs_wheel_binaries-24.19.0-py2.py3-none-manylinux_2_28_x86_64.whl",
+        "sha256": "4196a947bcc883f2003ab101762d729f3e99b5e86b75bd09151563403e2eceb8"
+      }
+    ],
+    "linux-aarch64": [
+      {
+        "url": "https://files.pythonhosted.org/packages/de/53/0031b22e118264a57a3b64dfc0c8f0659b81af5bccd419ac62933013c601/basedpyright-1.40.2-py3-none-any.whl",
+        "sha256": "3a53aeb93a86675ded0e12bc27bd8476c1742356de07ad8cab67bff18110c690"
+      },
+      {
+        "url": "https://files.pythonhosted.org/packages/5f/a8/0147149415195c59b8a72a594916bfb80d6be4d586f9fbfda313889e0efc/nodejs_wheel_binaries-24.19.0-py2.py3-none-manylinux_2_28_aarch64.whl",
+        "sha256": "4e029dadfae1295876063c96b236f673487e8c27379fe146c1e2250283520227"
+      }
+    ]
+  }
+}

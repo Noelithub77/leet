@@ -62,6 +62,7 @@ fn executable_file(path: &Path) -> bool {
     true
 }
 pub(crate) fn command(language: Language) -> Result<(PathBuf, Vec<String>, String)> {
+    if let Some(server) = crate::tool_setup::server(language) { return Ok(server); }
     match language {
         Language::Python => {
             for name in ["basedpyright-langserver", "pyright-langserver"] {
@@ -71,9 +72,9 @@ pub(crate) fn command(language: Language) -> Result<(PathBuf, Vec<String>, Strin
             if script.is_file() {
                 if let Some(node) = executable("node") { return Ok((node, vec![script.to_string_lossy().into_owned(), "--stdio".into()], "basedpyright".into())); }
             }
-            bail!("Install basedpyright and put basedpyright-langserver in PATH")
+            bail!("Install Python tools from Setup or run leet --setup-tools --language python")
         }
-        Language::Cpp | Language::C => Ok((executable("clangd").context("Install clangd and put it in PATH")?, vec!["--background-index".into()], "clangd".into())),
+        Language::Cpp | Language::C => Ok((executable("clangd").context("Install clangd from Setup or run leet --setup-tools --language cpp")?, vec!["--background-index".into()], "clangd".into())),
         Language::Java => Ok((executable("jdtls").context("Install Eclipse JDT LS and put jdtls in PATH; use JDK 21 or newer")?, vec![], "jdtls".into())),
         Language::Go => Ok((executable("gopls").context("Install gopls and put it in PATH")?, vec![], "gopls".into())),
     }
@@ -115,7 +116,12 @@ impl Server {
         std::thread::Builder::new().name(format!("leet-lsp-{}", language.id())).spawn(move || {
             let _java_workspace = java_workspace;
             let outcome: Result<()> = async_io::block_on(async {
-                let mut child = async_process::Command::new(binary).args(args).current_dir(&root)
+                let mut process = async_process::Command::new(binary);
+                #[cfg(windows)] {
+                    use async_process::windows::CommandExt as _;
+                    process.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+                }
+                let mut child = process.args(args).current_dir(&root)
                     .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).kill_on_drop(true).spawn()?;
                 let input = child.stdout.take().context("Server stdout")?;
                 let output = child.stdin.take().context("Server stdin")?;
@@ -254,6 +260,17 @@ impl Drop for Document { fn drop(&mut self) { let _ = self.server.socket.notify:
     #[test]
     #[ignore = "requires installed language servers"]
     fn live_completion_hover_definition_and_diagnostics() {
+        check_language_features(&[Language::Python, Language::Cpp, Language::Go, Language::C]);
+    }
+    #[test]
+    #[ignore = "requires private Python and clangd tools; isolate XDG_DATA_HOME for verification"]
+    fn live_private_python_and_cpp_servers() {
+        for language in [Language::Python, Language::Cpp] {
+            assert!(crate::tool_setup::server(language).is_some(), "Private {} server is required", language.label());
+        }
+        check_language_features(&[Language::Python, Language::Cpp]);
+    }
+    fn check_language_features(languages: &[Language]) {
         async_io::block_on(async {
             let root = tempfile::tempdir().unwrap();
             std::fs::write(root.path().join("go.mod"), "module vgtest\n\ngo 1.23\n").unwrap();
@@ -263,6 +280,7 @@ impl Drop for Document { fn drop(&mut self) { let _ = self.server.socket.notify:
                 (Language::Go, "package main\nimport \"fmt\"\nfunc main(){fmt.Println(4)}\n", "Println"),
                 (Language::C, "#include <stdio.h>\nint main(){printf(\"ok\");}\n", "printf"),
             ] {
+                if !languages.contains(&language) { continue; }
                 let path = root.path().join(format!("main.{}", language.extension()));
                 std::fs::write(&path, text).unwrap();
                 let server = Server::start(language, root.path()).unwrap();

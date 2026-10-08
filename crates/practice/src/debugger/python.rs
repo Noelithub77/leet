@@ -53,6 +53,7 @@ impl Scratch {
 }
 impl Drop for Scratch { fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); } }
 pub(super) fn execute(command: &mut Command, input: &str, timeout: Duration, dir: &Path) -> Result<(bool, bool, String, String)> {
+    crate::background_process::hide_console(command);
     let out = dir.join("stdout"); let err = dir.join("stderr"); let stdin = dir.join("stdin");
     fs::write(&stdin, input)?;
     command.stdin(fs::File::open(stdin)?).stdout(fs::File::create(&out)?).stderr(fs::File::create(&err)?);
@@ -103,7 +104,7 @@ pub(super) fn execute(command: &mut Command, input: &str, timeout: Duration, dir
 }
 pub fn available(python: &str) -> Result<(), String> {
     let dir = Scratch::new().map_err(|e| e.to_string())?;
-    let mut cmd = Command::new(python); cmd.args(["-X", "utf8", "-c", "print(1)"]);
+    let mut cmd = crate::background_process::command(python); cmd.args(["-X", "utf8", "-c", "print(1)"]);
     match execute(&mut cmd, "", Duration::from_secs(2), &dir.0) {
         Ok((true, false, _, _)) => Ok(()),
         _ => Err(format!("{python} interpreter unavailable")),
@@ -124,7 +125,7 @@ fn record_mode(python: &str, solution: &Path, meta: &serde_json::Value, case: &c
     let harness = include_str!("../harness.py").rsplit_once("\nmain()").context("Harness entry point")?.0;
     let script = format!("{harness}\n{}", include_str!("tracer.py"));
     let spec = serde_json::json!({"path":path,"meta":meta,"stdin":stdin,"stdin_file":stdin_file,"prelude":crate::python::PRELUDE,"input":case.input.lines().collect::<Vec<_>>(),"events":events,"result":result,"max_steps":limits.max_steps,"max_items":limits.max_items,"stdout_file":stdout_file});
-    let mut cmd = Command::new(python); cmd.env("PYTHONHASHSEED", "0").args(["-X", "utf8", "-c"]).arg(script);
+    let mut cmd = crate::background_process::command(python); cmd.env("PYTHONHASHSEED", "0").args(["-X", "utf8", "-c"]).arg(script);
     let (_, timeout, _, stderr) = execute(&mut cmd, &spec.to_string(), limits.timeout, &dir.0)?;
     let mut trace = Trace { language: crate::language::Language::Python, case_id: case.id, steps: Vec::new(), truncated: false, output: None, error: None, stdout: String::new() };
     if let Ok(data) = read_bounded(&events, EVENTS_LIMIT).map(|data| String::from_utf8_lossy(&data).into_owned()) { for line in data.lines() { trace.steps.push(serde_json::from_str(line)?); } }

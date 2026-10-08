@@ -39,3 +39,7 @@ pub mod release_notes;
 pub mod toolchain;
 
 pub mod viz;
+
+mod background_process;
+
+pub mod tool_setup;

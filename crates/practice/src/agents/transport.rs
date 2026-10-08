@@ -10,6 +10,7 @@ pub(super) struct Process {
 }
 impl Process {
     pub fn spawn(command: &mut Command, timeout: Duration) -> Result<Self> {
+        crate::background_process::hide_console(command);
         command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
         #[cfg(unix)] { use std::os::unix::process::CommandExt; command.process_group(0); }
         let mut child = command.spawn().context("Start coding agent")?;

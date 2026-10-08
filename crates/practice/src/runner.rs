@@ -2,7 +2,7 @@
 
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -85,7 +85,8 @@ pub fn run(
             "input": c.input.lines().filter(|l| !l.trim().is_empty()).collect::<Vec<_>>(),
         })).collect::<Vec<_>>(),
     });
-    let mut child = Command::new(python)
+    let mut process = crate::background_process::command(python);
+    let mut child = process
         .args(["-X", "utf8", "-c", HARNESS])
         .arg(solution)
         .current_dir(solution.parent().unwrap_or(Path::new(".")))

@@ -34,6 +34,7 @@ pub struct Setup {
     error: Option<String>,
     requirements: Option<practice::toolchain::Setup>,
     checking: bool,
+    installing: bool,
     check_epoch: u64,
     check_task: Task<()>,
 }
@@ -49,7 +50,7 @@ impl Workspace {
             language: config.preferred_language, source: config.source,
             python: config.python.clone(),
             handle: cx.new(|cx| InputState::new(window, cx).placeholder("Codeforces handle").default_value(config.codeforces_handle)),
-            busy: false, error: None, requirements: None, checking: false, check_epoch: 0, check_task: Task::ready(()),
+            busy: false, error: None, requirements: None, checking: false, installing: false, check_epoch: 0, check_task: Task::ready(()),
         });
         if !accounts { setup.update(cx, |setup, cx| setup.check_requirements(window, cx)); }
         let focus = setup.read(cx).focus.clone();
@@ -87,14 +88,38 @@ impl Setup {
         });
         cx.notify();
     }
+    fn install_tools(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.installing || !practice::tool_setup::supported(self.language) { return; }
+        self.installing = true;
+        self.error = None;
+        let language = self.language;
+        let workspace = self.workspace.clone();
+        cx.spawn_in(window, async move |this, cx| {
+            let result = cx.background_spawn(async move {
+                practice::tool_setup::install(language, &practice::tool_setup::directory(), |_| {})
+            }).await;
+            let installed = result.is_ok();
+            let _ = this.update_in(cx, |this, window, cx| {
+                this.installing = false;
+                match result {
+                    Ok(()) => this.check_requirements(window, cx),
+                    Err(error) => this.error = Some(error.to_string()),
+                }
+                cx.notify();
+            });
+            if installed {
+                let _ = workspace.update_in(cx, |workspace, window, cx| {
+                    workspace.suspend_language_servers(cx);
+                    if workspace.center == Center::Editor { workspace.attach_language_server(window, cx); }
+                });
+            }
+        }).detach();
+        cx.notify();
+    }
+
     fn advance(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.busy { return; }
         if self.step == 0 {
-            if self.checking || !self.requirements.as_ref().is_some_and(|requirements| requirements.ready()) {
-                self.error = Some("Install the missing tools, then recheck.".into());
-                cx.notify();
-                return;
-            }
             self.step = 1;
             self.handle.update(cx, |handle, cx| handle.focus(window, cx));
             cx.notify();
@@ -151,7 +176,7 @@ impl Render for Setup {
         let theme = cx.theme().clone();
         let accounts = self.workspace.upgrade().map(|ws| ws.read(cx).account_names.clone()).unwrap_or(["Signed out".into(), "Signed out".into()]);
         let current_step = self.step;
-        v_flex().size_full().items_center().justify_center().key_context("Onboarding").track_focus(&self.focus)
+        v_flex().id("onboarding").test_support().size_full().items_center().justify_center().key_context("Onboarding").track_focus(&self.focus)
             .on_action(cx.listener(|this, _: &ContinueSetup, window, cx| this.advance(window, cx)))
             .on_action(cx.listener(|this, _: &SetupPython, window, cx| this.choose_language(Language::Python, window, cx)))
             .on_action(cx.listener(|this, _: &SetupCpp, window, cx| this.choose_language(Language::Cpp, window, cx)))
@@ -178,10 +203,16 @@ impl Render for Setup {
                                 .child(Icon::new(if requirement.ready { IconName::Check } else { IconName::X }).small()
                                     .text_color(if requirement.ready { theme.success } else { theme.warning }))
                                 .child(div().id(("setup-requirement-detail", index)).flex_1().text_sm().child(requirement.label.clone()).tooltip({ let detail = requirement.detail.clone(); move |window, cx| gpui_kit::component::tooltip::Tooltip::new(detail.clone()).build(window, cx) }))
-                                .when(!requirement.ready, |row| row.child(Button::new(("setup-requirement", index)).ghost().small().label("Set up")
+                                .when(!requirement.ready && practice::tool_setup::supported(self.language)
+                                    && (!requirement.required || self.language == Language::Python && index == 0)
+                                    && (self.language != Language::Python || index == 0 || setup.requirements.first().is_none_or(|tool| tool.ready)), |row| row.child(Button::new(("setup-requirement", index)).ghost().small()
+                                    .label(if self.installing { "Installing…" } else { "Install" }).disabled(self.installing)
+                                    .on_click(cx.listener(|this, _, window, cx| this.install_tools(window, cx)))))
+                                .when(!requirement.ready && !practice::tool_setup::supported(self.language), |row| row.child(Button::new(("setup-requirement", index)).ghost().small().label("Set up")
                                     .on_click(move |_, _, _| { let _ = open::that(url); })))
                         })))
-                        .when(self.requirements.as_ref().is_some_and(|setup| !setup.ready()), |view| view.child(div().text_xs().text_color(theme.muted_foreground).child("Install missing tools, then recheck.")))
+                        .when(self.requirements.as_ref().is_some_and(|setup| setup.requirements.iter().any(|tool| !tool.ready)), |view| view.child(div().text_xs().text_color(theme.muted_foreground).child(
+                            "You can install tools later and continue now.")))
                         .child(h_flex().justify_end().child(Button::new("recheck-tools").ghost().small().label("Recheck").disabled(self.checking)
                             .on_click(cx.listener(|this, _, window, cx| this.check_requirements(window, cx))))))
                     .child(v_flex().gap_3().child(div().text_color(theme.muted_foreground).child("Practice source"))
@@ -206,9 +237,13 @@ impl Render for Setup {
                     .child(Button::new("setup-back").ghost().small().icon(IconName::ArrowLeft).disabled(current_step == 0 || self.busy)
                         .accessibility_label("Previous setup step").tooltip("Back")
                         .on_click(cx.listener(|this, _, window, cx| { this.step = 0; this.check_requirements(window, cx); this.focus.focus(window, cx); cx.notify(); })))
-                    .child(Button::new("setup-continue").primary().disabled(self.busy || (self.step == 0 && (self.checking || !self.requirements.as_ref().is_some_and(|requirements| requirements.ready()))))
+                    .child(Button::new("setup-continue").primary().disabled(self.busy)
                         .label(if self.busy { "Checking…" } else if current_step == 0 { "Continue" } else { "Start practicing" })
                         .tooltip("Continue · Ctrl+Enter").on_click(cx.listener(|this, _, window, cx| this.advance(window, cx)))))
                 .child(div().text_xs().text_color(theme.muted_foreground).child(if current_step == 0 { "Ctrl+1…5 language · Ctrl+Enter continue" } else { "Connect accounts for judging and progress sync." })))
     }
 }
+
+#[cfg(feature = "gui-test")]
+#[path = "gui_test/onboarding.rs"]
+pub(crate) mod fixture;

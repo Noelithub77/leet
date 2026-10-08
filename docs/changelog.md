@@ -67,6 +67,8 @@
 - Settings → AI for agent, model, reasoning, Fast tier, and web chat.
 - Edit test inputs and expected values inline with a pencil or double-click.
 - Java in onboarding, language switching, highlighting, and local contest runs.
+- Install pinned Python and clangd editor tools privately from Setup and Debug mode.
+- Continue onboarding while language tools are missing or still being checked.
 - Onboarding checks the selected language's tools and links to missing setup.
 - Organize Settings into General, Editor, Appearance, Provider, AI, Accounts, and Keybindings tabs.
 - Show current shortcuts with keycaps.
@@ -82,6 +84,7 @@
 <details>
 <summary>Fix</summary>
 
+- Suppress Windows console windows for background tool checks, editor servers, and local execution.
 - Keep the update changelog open until its trigger or an outside click closes it, with scrollable release notes.
 - Keep tour shortcuts visible during practice; use Prev/Next with arrow keys and arrow keycaps.
 - Ctrl+P opens full search, including settings, just like Ctrl+Shift+P.

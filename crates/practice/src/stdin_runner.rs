@@ -19,6 +19,7 @@ impl Scratch {
 impl Drop for Scratch { fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); } }
 struct Output { success: bool, timeout: bool, stdout: String, stderr: String, ms: f64 }
 fn execute(mut command: Command, input: String, timeout: Duration, scratch: &Path) -> Result<Output> {
+    crate::background_process::hide_console(&mut command);
     let out = scratch.join("stdout"); let err = scratch.join("stderr");
     command.stdin(Stdio::piped()).stdout(fs::File::create(&out)?).stderr(fs::File::create(&err)?);
     let started = Instant::now();
@@ -68,7 +69,7 @@ pub fn run(language: Language, python: &str, path: &Path, cases: &[Case], timeou
     }
     for case in cases {
         let mut command = if language == Language::Python {
-            let mut cmd = Command::new(python);
+            let mut cmd = crate::background_process::command(python);
             cmd.args(["-u", "-c"]).arg(format!("{}\nimport runpy\nrunpy.run_path(sys.argv[1], run_name='__main__', init_globals=globals())", crate::python::PRELUDE)).arg(path); cmd
         } else if language == Language::Java {
             let mut cmd = Command::new("java");

@@ -1,5 +1,5 @@
 //! Selected-language prerequisites; checking never starts a language server.
-use std::{process::{Command, Stdio}, time::{Duration, Instant}};
+use std::{process::Stdio, time::{Duration, Instant}};
 use crate::{language::Language, lsp};
 
 #[derive(Clone, Debug)]
@@ -7,14 +7,16 @@ pub struct Requirement {
     pub label: String,
     pub ready: bool,
     pub detail: String,
+    pub required: bool,
     pub setup_url: &'static str,
 }
 #[derive(Clone, Debug)]
 pub struct Setup { pub requirements: Vec<Requirement> }
-impl Setup { pub fn ready(&self) -> bool { self.requirements.iter().all(|tool| tool.ready) } }
+impl Setup { pub fn ready(&self) -> bool { self.requirements.iter().all(|tool| !tool.required || tool.ready) } }
 
 fn version(command: &str, argument: &str) -> Result<String, String> {
-    let mut child = Command::new(command).arg(argument).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped())
+    let mut process = crate::background_process::command(command);
+    let mut child = process.arg(argument).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped())
         .spawn().map_err(|_| format!("{command} not found"))?;
     let started = Instant::now();
     loop {
@@ -35,6 +37,8 @@ fn java_major(version: &str) -> Option<u32> {
     let major: u32 = parts.next()?.parse().ok()?;
     if major == 1 { parts.next()?.parse().ok() } else { Some(major) }
 }
+pub fn editor_ready(language: Language) -> bool { lsp::command(language).is_ok() }
+
 pub fn check(language: Language, python: &str) -> Setup {
     let mut requirements = Vec::new();
     let tools: Vec<(&str, &str, &str, &'static str)> = match language {
@@ -52,7 +56,7 @@ pub fn check(language: Language, python: &str) -> Setup {
                 Err(format!("JDK 21+ required · {version}"))
             } else { Ok(version) }
         });
-        requirements.push(Requirement { label: label.into(), ready: result.is_ok(), detail: result.unwrap_or_else(|error| error), setup_url });
+        requirements.push(Requirement { label: label.into(), required: true, ready: result.is_ok(), detail: result.unwrap_or_else(|error| error), setup_url });
     }
     let (label, setup_url) = match language {
         Language::Python => ("Python language server", "https://docs.basedpyright.com/latest/installation/command-line-and-language-server/"),
@@ -61,11 +65,16 @@ pub fn check(language: Language, python: &str) -> Setup {
         Language::Java => ("Eclipse JDT LS", "https://github.com/eclipse-jdtls/eclipse.jdt.ls#installation"),
     };
     let server = lsp::command(language);
-    requirements.push(Requirement { label: label.into(), ready: server.is_ok(), detail: server.map(|(path, _, _)| path.display().to_string()).unwrap_or_else(|error| error.to_string()), setup_url });
+    requirements.push(Requirement { label: label.into(), required: false, ready: server.is_ok(), detail: server.map(|(path, _, _)| path.display().to_string()).unwrap_or_else(|error| error.to_string()), setup_url });
     Setup { requirements }
 }
 #[cfg(test)] mod tests {
     use super::*;
+    #[test] fn language_servers_do_not_gate_onboarding() {
+        let requirement = |required, ready| Requirement { label: "fixture".into(), required, ready, detail: String::new(), setup_url: "https://clangd.llvm.org/installation" };
+        assert!(Setup { requirements: vec![requirement(true, true), requirement(false, false)] }.ready());
+        assert!(!Setup { requirements: vec![requirement(true, false), requirement(false, true)] }.ready());
+    }
     #[test] fn java_versions_include_legacy_and_modern_jdks() {
         assert_eq!(java_major("openjdk version \"21.0.5\" 2024-10-15"), Some(21));
         assert_eq!(java_major("javac 25.0.1"), Some(25));

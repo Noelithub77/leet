@@ -28,7 +28,9 @@ fn record_mode(solution: &Path, meta: &serde_json::Value, case: &crate::runner::
     let spec=serde_json::json!({"solution":solution,"stdin":stdin,"events":events,"result":result,"stdout":output,"stderr":error,"input":input,"max_steps":limits.max_steps,"max_items":limits.max_items});
     let script=dir.0.join("recorder.py");
     fs::write(&script,format!("import json\nSPEC=json.loads({})\n{}",serde_json::to_string(&spec.to_string())?,include_str!("gdb_recorder.py")))?;
-    let mut cmd=Command::new("gdb"); cmd.args(["-q","-nx","-batch","-x"]).arg(script).arg("--args").arg(binary);
+    let mut cmd=Command::new("gdb");
+    #[cfg(windows)] cmd.args(["-ex", "set new-console off"]);
+    cmd.args(["-q","-nx","-batch","-x"]).arg(script).arg("--args").arg(binary);
     let (_,timeout,_,stderr)=execute(&mut cmd,"",limits.timeout,&dir.0)?;
     let mut trace=Trace { language:crate::language::Language::Cpp,case_id:case.id,steps:Vec::new(),truncated:false,output:None,error:None,stdout:String::new() };
     if let Ok(data)=fs::read_to_string(events) { for line in data.lines() { trace.steps.push(serde_json::from_str(line)?); } }

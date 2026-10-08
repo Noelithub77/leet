@@ -41,6 +41,10 @@ use gpui_kit::*;
 use practice::config::Config;
 
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some("--setup-tools") {
+        if let Err(error) = practice::tool_setup::cli(&std::env::args().skip(2).collect::<Vec<_>>()) { eprintln!("leet tool setup: {error:#}"); std::process::exit(1); }
+        return;
+    }
     #[cfg(feature = "gui-test")]
     if std::env::args().nth(1).as_deref() == Some("--gui-test") {
         if let Err(error) = gui_test::run() { eprintln!("leet GUI test: {error:#}"); std::process::exit(1); }
@@ -64,7 +68,7 @@ fn main() {
             return;
         }
         Some("--help" | "-h") => {
-            println!("leet [WORKSPACE]\n\nNative coding practice. --version identifies the installed build.");
+            println!("leet [WORKSPACE]\n\nNative coding practice. --version identifies the installed build.\n--setup-tools --language python|cpp|c installs private pinned editor tools; add --help for options.");
             return;
         }
         // `leet <dir>` uses that directory as the workspace for this launch.
