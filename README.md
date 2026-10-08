@@ -1,19 +1,5 @@
 # leet
 
-## Quick install
-
-**Linux & macOS** — copy into your terminal; the installer downloads and launches leet.
-
-```sh
-curl -fsSL https://noelithub77.github.io/leet/install.sh | sh
-```
-
-<p align="center">
-  <a href="https://github.com/Noelithub77/leet/releases/latest/download/leet-windows-x86_64.exe"><img alt="Download Windows x64 executable" src="docs/assets/download-windows.svg" width="260" height="48"></a>
-  &nbsp;&nbsp;
-  <a href="https://noelithub77.github.io/leet/"><img alt="Visit the leet website" src="docs/assets/visit-website.svg" width="260" height="48"></a>
-</p>
-
 <p align="center">
   <a href="https://noelithub77.github.io/leet/"><img src="docs/assets/hero.svg" alt="Leeting @ 120Hz — animated 1337 to leet logo, in peach and mint on Vesper black" width="1000"></a>
 </p>
@@ -29,6 +15,20 @@ curl -fsSL https://noelithub77.github.io/leet/install.sh | sh
 A native, keyboard-first coding-practice IDE in **idiomatic Rust**, powered by **GPUI**. Practice, debug, ask your local AI agents, and prepare for contests in one calm workspace.
 
 **Leeting @ 120Hz.** Built to follow your display’s refresh rate; actual frame cadence depends on your hardware and workload.
+
+## Quick install
+
+**Linux & macOS** — copy into your terminal; the installer downloads and launches leet.
+
+```sh
+curl -fsSL https://noelithub77.github.io/leet/install.sh | sh
+```
+
+<p align="center">
+  <a href="https://github.com/Noelithub77/leet/releases/latest/download/leet-windows-x86_64.exe"><img alt="Download Windows x64 executable" src="docs/assets/download-windows.svg" width="260" height="48"></a>
+  &nbsp;&nbsp;
+  <a href="https://noelithub77.github.io/leet/"><img alt="Visit the leet website" src="docs/assets/visit-website.svg" width="260" height="48"></a>
+</p>
 
 ## See it in motion
 
