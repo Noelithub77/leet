@@ -63,6 +63,7 @@
 <details>
 <summary>Fix</summary>
 
+- Retry blocked Codeforces statements with installed curl before the snapshot fallback.
 - Automatically acquire three free Companion ports, retry occupied ports, and avoid VS Code CPH’s default port.
 - Remove CPH settings and suppress duplicate browser deliveries.
 - Fetch complete statements after CPH imports and select the provider from the problem URL.
