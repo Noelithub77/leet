@@ -1,6 +1,6 @@
 //! Deterministic record-then-seek debugging: run one test case under a line tracer,
 //! keep every step's state, and let the UI scrub through it.
-//! Python uses `sys.settrace`; C++ uses a generated LeetCode driver under gdb's Python API.
+//! Python uses `sys.settrace`; C++ uses gdb for function harnesses and stdin programs.
 
 use std::path::Path;
 use std::time::Duration;
@@ -145,6 +145,23 @@ pub fn record(language: Language, python: &str, solution: &Path, meta: &serde_js
     }
 }
 
+/// Records a complete stdin/stdout program, including its top-level entry point.
+pub fn record_stdin(language: Language, python: &str, solution: &Path, case: &Case, limits: Limits) -> anyhow::Result<Trace> {
+    match language {
+        Language::Python => python::record_stdin(python, solution, case, limits),
+        Language::Cpp => cpp::record_stdin(solution, case, limits),
+        _ => anyhow::bail!("{} has no native debugger yet", language.label()),
+    }
+}
+
+/// Captures a stdin program before recording so later editor changes cannot affect it.
+pub fn record_stdin_code(language: Language, python: &str, code: &str, case: &Case, limits: Limits) -> anyhow::Result<Trace> {
+    let dir = python::Scratch::new()?;
+    let path = dir.0.join(format!("solution.{}", language.extension()));
+    std::fs::write(&path, code)?;
+    record_stdin(language, python, &path, case, limits)
+}
+
 /// Records the captured editor contents so later file edits cannot change a replay.
 pub fn record_code(language: Language, python: &str, code: &str, meta: &serde_json::Value, case: &Case, limits: Limits) -> anyhow::Result<Trace> {
     let dir = python::Scratch::new()?;
@@ -165,3 +182,6 @@ mod snapshot_tests {
         assert!(trace.steps.iter().any(|step| step.line == 3));
     }
 }
+
+#[cfg(test)]
+mod stdin_tests;

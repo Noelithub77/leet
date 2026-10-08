@@ -181,12 +181,13 @@ fn execute()->Result<()> {
     println!("{}",json!({"command":command,"environment":"local"}));Ok(())
 }
 fn trace(args:&[String])->Result<()> {
-    const USAGE:&str="./ops trace --language python|cpp --solution PATH --meta PATH --input PATH [--json] [--max-steps N]";
+    const USAGE:&str="./ops trace --language python|cpp --solution PATH (--stdin | --meta PATH) --input PATH [--json] [--max-steps N]";
     if args.iter().any(|arg|matches!(arg.as_str(),"--help"|"-h")){println!("{USAGE}\nLocal solution execution; no account, cache, or solution repository writes.");return Ok(());}
-    let mut language=None;let mut solution=None;let mut meta=None;let mut input=None;let mut max_steps=4000;let mut json_output=false;let mut i=0;
+    let mut language=None;let mut solution=None;let mut meta=None;let mut input=None;let mut max_steps=4000;let mut json_output=false;let mut stdin=false;let mut i=0;
     while i<args.len(){
         let option=args[i].as_str();
         if option=="--json" {json_output=true;i+=1;continue;}
+        if option=="--stdin" && !stdin {stdin=true;i+=1;continue;}
         let value=args.get(i+1).with_context(||format!("{option} requires a value; {USAGE}"))?;
         match option {
             "--language" if language.is_none()=>language=Some(match value.as_str(){"python"=>practice::language::Language::Python,"cpp"=>practice::language::Language::Cpp,_=>bail!("Language must be python or cpp")}),
@@ -198,10 +199,12 @@ fn trace(args:&[String])->Result<()> {
         }i+=2;
     }
     let language=language.context(USAGE)?;let solution=solution.context(USAGE)?;
-    let meta:serde_json::Value=serde_json::from_str(&std::fs::read_to_string(meta.context(USAGE)?)?)?;
+    if stdin && meta.is_some() { bail!("Choose --stdin or --meta, not both"); }
+    let meta:serde_json::Value=if stdin { serde_json::Value::Null } else { serde_json::from_str(&std::fs::read_to_string(meta.context(USAGE)?)?)? };
     let case=practice::runner::Case{id:0,input:std::fs::read_to_string(input.context(USAGE)?)?,expected:None,custom:true};
     let started=Instant::now();
-    let trace=practice::debugger::record(language,"python3",&solution,&meta,&case,practice::debugger::Limits{max_steps,..Default::default()})?;
+    let limits=practice::debugger::Limits{max_steps,..Default::default()};
+    let trace=if stdin { practice::debugger::record_stdin(language,"python3",&solution,&case,limits)? } else { practice::debugger::record(language,"python3",&solution,&meta,&case,limits)? };
     let ms=started.elapsed().as_secs_f64()*1000.;
     if json_output{println!("{}",json!({"command":"trace","environment":"local","steps_count":trace.steps.len(),"ms":ms,"trace":trace}));}
     else{println!("{} steps, truncated={}, {:.1} ms\noutput: {}",trace.steps.len(),trace.truncated,ms,trace.output.as_deref().unwrap_or("(none)"));if let Some(error)=trace.error{println!("error: {error}");}}

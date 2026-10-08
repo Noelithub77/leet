@@ -110,12 +110,20 @@ pub fn available(python: &str) -> Result<(), String> {
     }
 }
 pub fn record(python: &str, solution: &Path, meta: &serde_json::Value, case: &crate::runner::Case, limits: Limits) -> Result<Trace> {
+    record_mode(python, solution, meta, case, limits, false)
+}
+pub fn record_stdin(python: &str, solution: &Path, case: &crate::runner::Case, limits: Limits) -> Result<Trace> {
+    record_mode(python, solution, &serde_json::Value::Null, case, limits, true)
+}
+fn record_mode(python: &str, solution: &Path, meta: &serde_json::Value, case: &crate::runner::Case, limits: Limits, stdin: bool) -> Result<Trace> {
     let dir = Scratch::new()?; let events = dir.0.join("steps.jsonl"); let result = dir.0.join("result.json");
     let stdout_file = dir.0.join("program.stdout");
     let path = fs::canonicalize(solution)?;
+    let stdin_file = dir.0.join("case.input");
+    if stdin { fs::write(&stdin_file, &case.input)?; }
     let harness = include_str!("../harness.py").rsplit_once("\nmain()").context("Harness entry point")?.0;
     let script = format!("{harness}\n{}", include_str!("tracer.py"));
-    let spec = serde_json::json!({"path":path,"meta":meta,"input":case.input.lines().collect::<Vec<_>>(),"events":events,"result":result,"max_steps":limits.max_steps,"max_items":limits.max_items,"stdout_file":stdout_file});
+    let spec = serde_json::json!({"path":path,"meta":meta,"stdin":stdin,"stdin_file":stdin_file,"prelude":crate::python::PRELUDE,"input":case.input.lines().collect::<Vec<_>>(),"events":events,"result":result,"max_steps":limits.max_steps,"max_items":limits.max_items,"stdout_file":stdout_file});
     let mut cmd = Command::new(python); cmd.env("PYTHONHASHSEED", "0").args(["-X", "utf8", "-c"]).arg(script);
     let (_, timeout, _, stderr) = execute(&mut cmd, &spec.to_string(), limits.timeout, &dir.0)?;
     let mut trace = Trace { language: crate::language::Language::Python, case_id: case.id, steps: Vec::new(), truncated: false, output: None, error: None, stdout: String::new() };

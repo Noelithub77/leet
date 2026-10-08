@@ -136,7 +136,7 @@ impl Debugger {
         self.lines = source_lines(&source);
         self.highlighter = SyntaxHighlighter::new(snapshot.language.id());
         self.highlighter.update(None, &ropey::Rope::from_str(&source), None);
-        self.unsupported = if practice::language::Source::for_problem(&snapshot.slug).is_stdin() { Some("Native tracing supports LeetCode function problems. Use AI Dry run for stdin problems.".into()) } else { debugger::requirement(snapshot.language, &snapshot.python).err() };
+        self.unsupported = debugger::requirement(snapshot.language, &snapshot.python).err();
         self.traces = snapshot.cases.iter().map(|_| Recording::Waiting).collect();
         self.selected = selected.min(snapshot.cases.len().saturating_sub(1));
         self.playback = Playback::new(0);
@@ -151,7 +151,11 @@ impl Debugger {
         std::thread::spawn(move || {
             for index in order {
                 let case = &snapshot.cases[index];
-                let trace = debugger::record_code(snapshot.language, &snapshot.python, &snapshot.code, &snapshot.meta, case, Limits::default());
+                let trace = if practice::language::Source::for_problem(&snapshot.slug).is_stdin() {
+                    debugger::record_stdin_code(snapshot.language, &snapshot.python, &snapshot.code, case, Limits::default())
+                } else {
+                    debugger::record_code(snapshot.language, &snapshot.python, &snapshot.code, &snapshot.meta, case, Limits::default())
+                };
                 if tx.unbounded_send((index, trace)).is_err() { break; }
             }
         });
@@ -231,7 +235,10 @@ impl Debugger {
         let (Some(Recording::Ready(trace)), Some(snapshot)) = (self.traces.get(index), &self.snapshot) else { return None };
         let expected = snapshot.cases.get(index)?.expected.as_deref()?;
         if trace.error.is_some() { return Some(false); }
-        Some(practice::runner::outputs_match(trace.output.as_deref()?, expected, snapshot.compare))
+        let actual = trace.output.as_deref()?;
+        Some(if practice::language::Source::for_problem(&snapshot.slug).is_stdin() {
+            actual.split_whitespace().eq(expected.split_whitespace())
+        } else { practice::runner::outputs_match(actual, expected, snapshot.compare) })
     }
 }
 

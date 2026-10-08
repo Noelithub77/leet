@@ -47,8 +47,15 @@ def _record_main():
     count = 0
     trace_bytes = 0
     events = open(spec['events'], 'w', encoding='utf-8', buffering=1)
-    module = {k: v for k, v in globals().items() if not k.startswith('__')}
-    module.update(__name__='solution', __file__=path)
+    stdin_mode = spec.get('stdin', False)
+    module = {} if stdin_mode else {k: v for k, v in globals().items() if not k.startswith('__')}
+    if stdin_mode: exec(spec['prelude'], module)
+    module.update(__name__='__main__' if stdin_mode else 'solution', __file__=path)
+    initial_names = set(module)
+    original_stdin = sys.stdin
+    if stdin_mode:
+        sys.stdin = open(spec['stdin_file'], encoding='utf-8')
+        sys.__stdin__ = sys.stdin
 
     def encoder():
         seen = {}
@@ -106,13 +113,14 @@ def _record_main():
         nonlocal count, trace_bytes
         if frame.f_code.co_filename != path: return trace
         # Comprehension and generator frames are compiler machinery, not named user functions.
-        if frame.f_code.co_name.startswith('<') and frame.f_code.co_name != '<lambda>': return trace
+        if frame.f_code.co_name.startswith('<') and frame.f_code.co_name not in (('<lambda>', '<module>') if stdin_mode else ('<lambda>',)): return trace
         if event not in ('call','line','return','exception'): return trace
         if count >= spec['max_steps']:
             result['truncated']=True; sys.settrace(None); raise _TraceStop()
         encode_value = encoder()
         variables=[]
         for name,v in frame.f_locals.items():
+            if stdin_mode and frame.f_locals is module and name in initial_names: continue
             if not name.isidentifier() or name == 'self' or name.startswith('__') or isinstance(v,(types.ModuleType,types.FunctionType,types.MethodType,type)): continue
             variables.append({'name':name,'value':encode_value(v,0,name)})
         obj=frame.f_locals.get('self')
@@ -121,7 +129,7 @@ def _record_main():
                 if not name.startswith('__') and not isinstance(v,(types.ModuleType,types.FunctionType,types.MethodType,type)): variables.append({'name':'self.'+name,'value':encode_value(v,0,'self.'+name)})
         stack=[]; current=frame
         while current:
-            if current.f_code.co_filename == path and (not current.f_code.co_name.startswith('<') or current.f_code.co_name == '<lambda>'): stack.append({'function':current.f_code.co_name.strip('<>'),'line':current.f_lineno})
+            if current.f_code.co_filename == path and (not current.f_code.co_name.startswith('<') or current.f_code.co_name in (('<lambda>', '<module>') if stdin_mode else ('<lambda>',))): stack.append({'function':current.f_code.co_name.strip('<>'),'line':current.f_lineno})
             current=current.f_back
         step={'kind':event,'line':frame.f_lineno,'function':frame.f_code.co_name.strip('<>'),'stack':stack[::-1],'locals':variables,'stdout_len':stdout.byte_len}
         if event=='return': step['returned']=encode_value(arg)
@@ -134,19 +142,28 @@ def _record_main():
         return trace
     try:
         with redirect_stdout(stdout):
-            exec(compile(open(path,encoding='utf-8').read(),path,'exec'),module)
-            sys.settrace(trace)
-            try:
-                meta=spec['meta']
-                value=(run_design if meta.get('systemdesign') or 'classname' in meta else run_function)(module,meta,spec['input'])
-            finally: sys.settrace(None)
-            result['output']=dump(value)
+            if stdin_mode:
+                sys.settrace(trace)
+                try:
+                    exec(compile(open(path,encoding='utf-8').read(),path,'exec'),module)
+                except SystemExit as exc:
+                    if exc.code not in (None, 0): raise
+                finally: sys.settrace(None)
+                result['output']=stdout.getvalue()
+            else:
+                exec(compile(open(path,encoding='utf-8').read(),path,'exec'),module)
+                sys.settrace(trace)
+                try:
+                    meta=spec['meta']
+                    value=(run_design if meta.get('systemdesign') or 'classname' in meta else run_function)(module,meta,spec['input'])
+                finally: sys.settrace(None)
+                result['output']=dump(value)
     except _TraceStop: pass
     except BaseException as exc:
         tb = BaseException.__traceback__.__get__(exc, type(exc))
         result['error']=(''.join(traceback.format_list(traceback.extract_tb(tb, limit=-4)))+_exception(exc))[-4000:]
     finally:
-        sys.settrace(None); events.close(); result['stdout']=stdout.getvalue(); stdout.file.close()
+        sys.settrace(None); sys.stdin=original_stdin; sys.__stdin__=original_stdin; events.close(); result['stdout']=stdout.getvalue(); stdout.file.close()
         data = json.dumps(result,ensure_ascii=False).encode('utf-8')
         if len(data) > 2 * 1048576:
             result.update(truncated=True, error='Trace result exceeded 2 MiB; use a smaller test case')

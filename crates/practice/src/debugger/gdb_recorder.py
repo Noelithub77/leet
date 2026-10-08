@@ -118,6 +118,11 @@ def capture(frame,kind,visited):
             names.add(symbol.name)
             if symbol.line and symbol.line>sal.line and not symbol.is_argument: continue
             symbols.append(symbol)
+    if SPEC.get('stdin'):
+        for block in (frame.find_sal().symtab.static_block(), frame.find_sal().symtab.global_block()):
+            for symbol in block:
+                if symbol.is_variable and symbol.name not in names and symbol.symtab and os.path.realpath(symbol.symtab.fullname()) == SPEC['solution']:
+                    names.add(symbol.name); symbols.append(symbol)
     symbols.sort(key=lambda s:(0 if s.is_argument else 1,s.line))
     for symbol in symbols:
         try:
@@ -137,6 +142,11 @@ class TraceBudgetExceeded(RuntimeError):
 
 def main():
     result={'truncated':False}; signals=[]
+    def exited(event):
+        if hasattr(event, 'exit_code'):
+            result['completed']=True
+            if event.exit_code: result['error']='Program exited with code '+str(event.exit_code)
+    gdb.events.exited.connect(exited)
     def stopped(event):
         if isinstance(event,gdb.SignalEvent): signals.append(event.stop_signal)
     gdb.events.stop.connect(stopped)
@@ -217,7 +227,7 @@ def main():
                 new=key not in active
                 if new:
                     try: active[key]=Finish(frame,key)
-                    except gdb.error: active[key]=None
+                    except (gdb.error, ValueError): active[key]=None
                 step=capture(frame,'call' if new else 'line',active[key].visited if active[key] is not None else set())
                 if active[key] is not None:
                     active[key].snapshot=step; active[key].visited.add(step['line'])
@@ -233,6 +243,7 @@ def main():
         except gdb.error: pass
     finally:
         gdb.events.stop.disconnect(stopped)
+        gdb.events.exited.disconnect(exited)
         events.close()
         data=json.dumps(result).encode('utf-8')
         if len(data)>2*1048576:

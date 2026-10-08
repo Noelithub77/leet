@@ -1,6 +1,8 @@
 <details open>
 <summary>Feat</summary>
 
+- Replay Python and C++ Codeforces and CodeChef programs in Debug, including CPH samples.
+
 - Click NeetCode to return to the saved list; hover to choose another list.
 
 - Reopen closed problem tabs with Ctrl+Shift+T, preserving their editor state.
