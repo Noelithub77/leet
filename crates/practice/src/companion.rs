@@ -232,4 +232,19 @@ mod tests {
             drop(listener);
         }
     }
+    #[test]
+    fn stopping_releases_the_port_even_with_an_incomplete_request() {
+        use std::io::Write;
+        let _guard = network_guard();
+        let reservation = reserve();
+        let port = reservation.local_addr().unwrap().port(); drop(reservation);
+        let (_events, stop) = start(port).unwrap();
+        let mut client = std::net::TcpStream::connect((std::net::Ipv4Addr::LOCALHOST, port)).unwrap();
+        client.write_all(b"POST / HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        drop(stop);
+        let (_events, replacement) = start(port).unwrap();
+        drop(client);
+        drop(replacement);
+    }
 }
