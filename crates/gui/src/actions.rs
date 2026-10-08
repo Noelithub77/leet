@@ -107,8 +107,8 @@ pub const COMMANDS: &[Command] = &[
     cmd!("Reopen closed problem tab", "ctrl-shift-t", ReopenProblem),
     cmd!("Next tab", "ctrl-tab", CycleTabs),
     cmd!("Previous tab", "ctrl-shift-tab", PreviousTab),
-    cmd!("Search everything", "ctrl-k|ctrl-shift-p|ctrl-t", Search),
-    cmd!("Go to problem", "ctrl-p", FindProblem),
+    cmd!("Search everything", "ctrl-k|ctrl-p|ctrl-shift-p|ctrl-t", Search),
+    cmd!("Go to problem", "", FindProblem),
     cmd!("Keyboard shortcut help", "ctrl-/", ShortcutHelp),
     cmd!("Guided tour", "", GuidedTour),
     cmd!("Codeforces contests", "ctrl-alt-c", ShowContests),
@@ -327,7 +327,7 @@ mod tests {
     fn rejects_conflicts_and_bare_keys() {
         let config = practice::config::Config::default();
         let search = COMMANDS.iter().position(|c| c.id == "Search").unwrap();
-        assert_eq!(COMMANDS[search].effective_key(&config), "ctrl-k|ctrl-shift-p|ctrl-t");
+        assert_eq!(COMMANDS[search].effective_key(&config), "ctrl-k|ctrl-p|ctrl-shift-p|ctrl-t");
         let reopen = COMMANDS.iter().position(|c| c.id == "ReopenProblem").unwrap();
         assert_eq!(COMMANDS[reopen].key, "ctrl-shift-t");
         assert!(validate_key(reopen, COMMANDS[reopen].key, &config).is_ok());
@@ -338,8 +338,8 @@ mod tests {
         }
         assert!(validate_key(search, COMMANDS[search].key, &config).is_ok());
         assert!(validate_key(COMMANDS.iter().position(|c| c.id == "FindProblem").unwrap(), "ctrl-t", &config).is_err());
-        assert!(validate_key(COMMANDS.iter().position(|c| c.id == "Search").unwrap(), "ctrl-p", &config).is_err());
-        assert!(validate_key(COMMANDS.iter().position(|c| c.id == "Search").unwrap(), "ctrl-p ctrl-k", &config).is_err());
+        assert!(validate_key(COMMANDS.iter().position(|c| c.id == "Search").unwrap(), "ctrl-p", &config).is_ok());
+        assert!(validate_key(COMMANDS.iter().position(|c| c.id == "Search").unwrap(), "ctrl-p ctrl-k", &config).is_ok());
         assert!(validate_key(COMMANDS.iter().position(|c| c.id == "Search").unwrap(), "k", &config).is_err());
         assert!(validate_key(COMMANDS.iter().position(|c| c.id == "Search").unwrap(), "shift-k", &config).is_err());
         assert!(validate_key(COMMANDS.iter().position(|c| c.id == "Search").unwrap(), "ctrl-alt-k", &config).is_ok());

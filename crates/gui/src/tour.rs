@@ -14,8 +14,8 @@ gpui_kit::actions!(tour, [Next, Back, Skip]);
 
 pub fn bind_keys(cx: &mut App) {
     cx.bind_keys([
-        KeyBinding::new("enter", Next, Some("TourCard")),
-        KeyBinding::new("backspace", Back, Some("TourCard")),
+        KeyBinding::new("right", Next, Some("TourCard")),
+        KeyBinding::new("left", Back, Some("TourCard")),
         KeyBinding::new("escape", Skip, Some("GuidedTour")),
     ]);
 }
@@ -137,7 +137,7 @@ pub fn panel(workspace: &Workspace, cx: &mut Context<Workspace>) -> Option<AnyEl
     let index = tour.index;
     let practicing = tour.practicing;
     let action = crate::actions::COMMANDS.iter().find(|action| action.id == command).map(|command| command.action);
-    let card = v_flex().id("guided-tour-card").key_context("TourCard").track_focus(&tour.focus)
+    let card = v_flex().id("guided-tour-card").test_support().key_context("TourCard").track_focus(&tour.focus)
         .w(rems(if practicing { 22. } else { 26. })).max_w_full().p_5().gap_4().rounded_lg().bg(theme.popover).text_color(theme.popover_foreground).border_1().border_color(theme.border).shadow_lg()
         .on_mouse_down(MouseButton::Left, cx.listener(|this, _, window, cx| { if let Some(tour) = &this.tour { tour.focus.focus(window, cx); } }))
         .child(h_flex().justify_between().items_center()
@@ -150,7 +150,7 @@ pub fn panel(workspace: &Workspace, cx: &mut Context<Workspace>) -> Option<AnyEl
             .child(div().text_xl().font_weight(FontWeight::SEMIBOLD).child(title))
             .child(div().text_sm().text_color(theme.muted_foreground).child(tip))))
         .when(practicing, |card| card.child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(title)))
-        .when(!practicing, |card| card.child(if step == Step::Playback {
+        .child(if step == Step::Playback {
             v_flex().gap_2()
                 .child(h_flex().justify_between().child(div().text_sm().child("Steps")).child(crate::view::key("left right")))
                 .child(h_flex().justify_between().child(div().text_sm().child("Cases")).child(crate::view::key("up down")))
@@ -164,15 +164,15 @@ pub fn panel(workspace: &Workspace, cx: &mut Context<Workspace>) -> Option<AnyEl
             Button::new("tour-try").outline().label(match step { Step::Problem => "Find a problem", Step::Explorer => "Toggle Explorer", Step::Description => "Toggle description", Step::Editor => "Focus editor", Step::Tests => "Run tests", Step::Assist => "Toggle AI", _ => "Switch Code / Debug" })
                 .child(crate::view::key(crate::actions::key_for(command, &workspace.config)))
                 .on_click(move |_, window, cx| { if let Some(action) = action { window.dispatch_action(action(), cx); } }).into_any_element()
-        }))
+        })
         .child(h_flex().gap_1().children((0..STEPS.len()).map(|step| div().flex_1().h_1().rounded_full()
             .bg(if step <= index { theme.primary } else { theme.muted }))))
         .child(h_flex().justify_between().items_center()
-            .child(Button::new("tour-back").ghost().small().label("Back").disabled(tour.index == 0).child(crate::view::key("backspace"))
+            .child(Button::new("tour-back").ghost().small().label("Prev").disabled(tour.index == 0).child(crate::view::key("left"))
                 .on_click(cx.listener(|this, _, window, cx| this.tour_move(-1, window, cx))))
             .child(div().text_xs().text_color(theme.muted_foreground).child(format!("{} of {}", index + 1, STEPS.len())))
             .child(Button::new("tour-next").primary().small().label(if tour.index + 1 == STEPS.len() { "Done" } else { "Next" }).disabled(!can_next)
-                .child(crate::view::key("enter")).tooltip(if can_next { "Continue tour" } else { "Open a problem first" })
+                .child(crate::view::key("right")).tooltip(if can_next { "Continue tour" } else { "Open a problem first" })
                 .on_click(cx.listener(|this, _, window, cx| this.tour_move(1, window, cx)))))
         .when(!practicing, |card| card.child(h_flex().gap_2().justify_center().text_xs().text_color(theme.muted_foreground).child(crate::view::key("escape")).child("to skip")))
         .with_animation(SharedString::from(format!("tour-step-{index}-{practicing}")), Animation::new(Duration::from_millis(260)).with_easing(|t| 1. - (1. - t).powi(3)), |card, t| card.opacity(t).mt(rems((1. - t) * 0.75)));

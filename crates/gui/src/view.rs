@@ -25,7 +25,10 @@ fn panel_spring() -> Spring {
 /// A shortcut as key caps; for `a|b` alternatives only the first is shown.
 pub fn key(k: &str) -> impl IntoElement + use<> {
     let first = k.split('|').next().unwrap_or_default();
-    h_flex().gap_0p5().children(first.split_whitespace().filter_map(|k| Keystroke::parse(k).ok()).map(Kbd::new))
+    h_flex().gap_0p5().children(first.split_whitespace().filter_map(|k| Keystroke::parse(k).ok()).map(|mut stroke| {
+        stroke.key = match stroke.key.as_str() { "left" => "←", "right" => "→", "up" => "↑", "down" => "↓", _ => &stroke.key }.to_owned();
+        Kbd::new(stroke)
+    }))
 }
 
 /// All active alternatives, using the same native keycap component as tooltips.

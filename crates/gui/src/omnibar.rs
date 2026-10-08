@@ -1,4 +1,4 @@
-//! Universal search (`ctrl+k`, `ctrl+shift+p`; `ctrl+p` for problems): commands, settings,
+//! Universal search (`ctrl+k`, `ctrl+p`, `ctrl+shift+p`): commands, settings,
 //! themes, topics, lists, and every problem in one fuzzy list. `>` limits to commands and
 //! settings, `#` to topics and lists.
 

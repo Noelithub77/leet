@@ -28,7 +28,7 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool, v
         ensure!(view.config.source == Source::NeetCode && view.config.roadmap_list == List::NeetCode150, "Wrong default practice list");
         ensure!(view.tour.is_some(), "Existing users did not receive the tour");
         ensure!(window.find("tour-try").visible(), "Tour card is hidden");
-        window.press("enter", cx);
+        window.press("right", cx);
         ensure!(workspace.read(cx).center == Center::Home, "Tour advanced without a problem");
         window.click("tour-try", cx);
         Ok(())
@@ -41,6 +41,12 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool, v
         ensure!(workspace.read(cx).tour.is_none(), "Skip did not dismiss the tour");
         workspace.update(cx, |view, cx| view.start_default_tour(window, cx));
         ensure!(workspace.read(cx).tour.is_none(), "Dismissed tour restarted automatically");
+        for shortcut in ["ctrl-p", "ctrl-shift-p"] {
+            window.press(shortcut, cx);
+            ensure!(workspace.read(cx).omni.open && workspace.read(cx).omni.scope == crate::omnibar::Scope::All, "{shortcut} did not open full search");
+            window.render_frame(cx);
+            window.press("escape", cx);
+        }
         window.click("guided-tour", cx);
         ensure!(workspace.read(cx).tour.is_some(), "Manual replay did not start");
         window.press("escape", cx);
@@ -101,6 +107,13 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool, v
                 window.click("tour-try", cx);
             }
             if step == 1 {
+                window.click_at("guided-tour-card", point(px(8.), px(8.)), cx);
+                window.press("left", cx);
+                ensure!(workspace.read(cx).center == Center::Home, "Left did not return to the previous tour step");
+                window.render_frame(cx);
+                window.press("right", cx);
+                ensure!(workspace.read(cx).center == Center::Editor, "Right did not advance the tour");
+                window.render_frame(cx);
                 window.click("tour-try", cx);
             }
             if step == 2 {
@@ -124,17 +137,41 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool, v
             if matches!(step, 1 | 2 | 3 | 5) {
                 window.render_frame(cx);
                 ensure!(window.find("skip-tour").bounds().top() < px(100.), "Guide did not move aside for practice");
+                ensure!(window.find("tour-try").visible(), "Practice guide hid its action and shortcut");
             }
-            window.click("tour-next", cx);
             Ok(())
         })??;
+        if pixels && matches!(step, 1 | 2 | 5) {
+            std::thread::sleep(Duration::from_millis(320));
+            cx.advance_clock(Duration::from_millis(320));
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| window.render_frame(cx))?;
+            cx.capture_screenshot(handle)?.save(output.join(format!("tour-practice-{step}.png")))?;
+        }
+        cx.update_window(handle, |_, window, cx| window.click("tour-next", cx))?;
     }
-    cx.update_window(handle, |_, window, cx| -> Result<()> {
+    cx.update_window(handle, |_, _, cx| -> Result<()> {
         ensure!(workspace.read(cx).tour.is_none(), "Done did not finish the tour");
         ensure!(workspace.read(cx).left && workspace.read(cx).home.sidebar, "Tour did not restore Explorer");
-        window.remove_window();
         Ok(())
     })??;
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| -> Result<()> {
+        window.render_frame(cx);
+        window.press("ctrl-p", cx);
+        ensure!(workspace.read(cx).omni.open, "Full search did not open after finishing the tour");
+        Ok(())
+    })??;
+    cx.run_until_parked();
+    if pixels {
+        cx.update_window(handle, |_, window, cx| window.render_frame(cx))?;
+        cx.advance_clock(Duration::from_millis(320));
+        cx.run_until_parked();
+        std::thread::sleep(Duration::from_millis(320));
+        cx.update_window(handle, |_, window, cx| window.render_frame(cx))?;
+        cx.capture_screenshot(handle)?.save(output.join("search-arrows.png"))?;
+    }
+    cx.update_window(handle, |_, window, _| window.remove_window())?;
     ensure!(db.get("guided-tour-v1")?.as_deref() == Some("dismissed"), "Tour dismissal was not persisted");
     if video {
         let result = std::process::Command::new("ffmpeg").args(["-nostdin", "-v", "error", "-framerate", "60", "-i"]).arg(output.join("tour-frames/frame-%04d.png"))
@@ -174,5 +211,5 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool, v
         cx.run_until_parked();
     }
     cx.update(|cx| { crate::theme::apply("Vesper", cx); crate::theme::set_zoom(1., cx); });
-    Ok(json!({"fixture":"guided-tour","passed":true,"checks":["Explorer and NeetCode 150 defaults","automatic start","problem required","clickable search and editor","Explorer action and shortcut","description and AI keyboard shortcuts","guide moves aside for practice","Skip persistence across workspaces","manual replay","Escape after shortcut reload","eight steps and Done","layout restoration","dark/light, minimum size and zoom bounds"],"pixels":pixels,"video":video}))
+    Ok(json!({"fixture":"guided-tour","passed":true,"checks":["Explorer and NeetCode 150 defaults","automatic start","problem required","clickable search and editor","Explorer action and shortcut","description and AI keyboard shortcuts","guide moves aside with its shortcut visible","Left/Right tour navigation","Ctrl+P and Ctrl+Shift+P full search","Skip persistence across workspaces","manual replay","Escape after shortcut reload","eight steps and Done","layout restoration","dark/light, minimum size and zoom bounds"],"pixels":pixels,"video":video}))
 }

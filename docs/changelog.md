@@ -79,6 +79,9 @@
 <details>
 <summary>Fix</summary>
 
+- Keep tour shortcuts visible during practice; use Prev/Next with arrow keys and arrow keycaps.
+- Ctrl+P opens full search, including settings, just like Ctrl+Shift+P.
+
 - Keep tour navigation working after changing keyboard shortcuts, and restore the workspace layout when the tour ends.
 
 - Preserve provider formulas through statement conversion and keep math out of literal code.
