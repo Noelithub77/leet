@@ -17,12 +17,16 @@ pub fn catalog(agent: &Detected) -> Result<Catalog> {
     bail!("Claude Code is not signed in or initialization failed; run `claude auth login`: {}",process.error())
 }
 fn configure(command: &mut Command, request: &Request) {
-    command.current_dir(&request.cwd).args(["--model",&request.selection.model,"--permission-prompts","none","--strict-mcp-config","--mcp-config","{\"mcpServers\":{}}"]);
+    command.current_dir(&request.cwd).args(["--model",&request.selection.model,"--permission-prompts","none"]);
+    if request.access!=Access::Full { command.args(["--strict-mcp-config","--mcp-config","{\"mcpServers\":{}}"]); }
     if let Some(effort)=&request.selection.effort { command.args(["--effort",effort]); }
     if let Some(schema)=&request.schema { command.arg("--json-schema").arg(schema.to_string()); }
     if let Some(session)=&request.resume { command.args(["--resume",session]); }
     let mut settings=json!({"fastMode":request.selection.fast});
-    if request.access==Access::ReadOnly { command.args(["--permission-mode","dontAsk","--tools",""]); } else {
+    if request.access==Access::ReadOnly { command.args(["--permission-mode","dontAsk","--tools",""]); } else if request.access==Access::Full {
+        command.args(["--dangerously-skip-permissions", "--tools", "default"]);
+        settings["sandbox"]=json!({"enabled":false});
+    } else {
         command.args(["--permission-mode","acceptEdits","--allowedTools","Read","Edit","Write","Bash"]);
         settings["sandbox"]=json!({"enabled":true,"autoAllowBashIfSandboxed":true,"allowUnsandboxedCommands":false,"filesystem":{"allowWrite":[request.cwd]}});
     }
@@ -72,6 +76,14 @@ pub fn run(request: &Request, events: &mut dyn FnMut(Event), cancel: &Cancel) ->
         let args:Vec<_>=command.get_args().filter_map(|arg|arg.to_str()).collect();
         assert!(args.windows(2).any(|pair|pair==["--tools",""]));assert!(args.windows(2).any(|pair|pair==["--resume","previous"]));
         let settings=args.windows(2).find(|pair|pair[0]=="--settings").unwrap();assert_eq!(serde_json::from_str::<Value>(settings[1]).unwrap()["fastMode"],true);
+        let mut full=request.clone(); full.access=Access::Full;
+        let mut command=super::command(&full.agent); configure(&mut command,&full);
+        let args:Vec<_>=command.get_args().filter_map(|arg|arg.to_str()).collect();
+        assert!(args.contains(&"--dangerously-skip-permissions"));
+        assert!(!args.contains(&"--strict-mcp-config") && !args.contains(&"--allowedTools"));
+        assert!(args.windows(2).any(|pair|pair==["--tools","default"]));
+        let settings=args.windows(2).find(|pair|pair[0]=="--settings").unwrap();
+        assert_eq!(serde_json::from_str::<Value>(settings[1]).unwrap()["sandbox"]["enabled"],false);
         let fixture:Value=serde_json::from_str(include_str!("fixtures/claude-fast.json")).unwrap();assert_eq!(fixture["fast_mode_disabled_reason"],"extra_usage_disabled");
     }
 }

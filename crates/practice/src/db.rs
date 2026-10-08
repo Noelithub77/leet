@@ -11,6 +11,8 @@ use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 
 use crate::leetcode::{CatalogItem, Question};
 
+mod chat;
+
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
 mod schema {

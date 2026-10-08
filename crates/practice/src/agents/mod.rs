@@ -131,6 +131,8 @@ pub enum Access {
     ReadOnly,
     /// May edit files and run commands inside `cwd` under the agent's own sandbox.
     Edit,
+    /// User-authorized native tools without workspace or permission restrictions.
+    Full,
 }
 
 #[derive(Clone, Debug)]

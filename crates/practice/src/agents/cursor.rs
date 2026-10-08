@@ -18,7 +18,7 @@ fn catalog_models(agent:&Detected)->Result<Catalog>{
 }
 fn strip_ansi(text:&str)->String{let mut result=String::new();let mut chars=text.chars();while let Some(c)=chars.next(){if c=='\u{1b}' {if chars.next()==Some('['){for c in chars.by_ref(){if ('@'..='~').contains(&c){break;}}}}else{result.push(c);}}result}
 pub fn run(request:&Request,events:&mut dyn FnMut(Event),cancel:&Cancel)->Result<Outcome>{
-    let mut command=Command::new(&request.agent.path);command.current_dir(&request.cwd).args(["--print","--output-format","stream-json","--stream-partial-output","--model",&request.selection.model,"--sandbox","enabled"]);
+    let mut command=Command::new(&request.agent.path);command.current_dir(&request.cwd).args(["--print","--output-format","stream-json","--stream-partial-output","--model",&request.selection.model,"--sandbox",if request.access==Access::Full {"disabled"}else{"enabled"}]);
     if request.access==Access::ReadOnly{command.args(["--mode","ask"]);}else{command.arg("--force");}
     if let Some(session)=&request.resume{command.args(["--resume",session]);}command.arg(prompt(request));
     let mut process=Process::spawn(&mut command,Duration::from_secs(900))?;process.close_input();let mut text=String::new();let mut session=None;

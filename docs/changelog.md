@@ -11,9 +11,12 @@
 - Import CodeChef samples through CPH and run solutions locally in every supported language.
 - Background CPH listener opens Leet when closed and reuses tabs in its existing window.
 
-- Per-problem AI chat with custom action instructions, follow-up questions, and locally saved conversations.
+- Multiple problem and shared Root chat threads with saved drafts, message forks, branch edits, deletion, and undo.
+- Search chat titles and messages with automatic search focus.
+- Use every prompt shortcut in ordinary chats, with readable prompts on hover and shared native agent capabilities.
+- Let agents write and revise native visualization artifacts directly in private files.
 - Native resizable Explorer on Alt+S, Description on Alt+A, and AI on Alt+D.
-- General, My solution, and Conversation AI tabs with a combined solution review and visual dry run.
+- General, Analysis, and Chats AI tabs with a combined solution review and visual dry run.
 - Compact AI navigation with centered empty views and time and space analysis placeholders.
 - Show AI-generated edge cases with a sparkle icon.
 - Resize the rounded results panel vertically and remember its height.

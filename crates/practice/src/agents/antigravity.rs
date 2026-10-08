@@ -22,7 +22,7 @@ pub fn run(request: &Request, events: &mut dyn FnMut(Event), cancel: &Cancel) ->
     if let Some(effort)=&request.selection.effort {command.args(["--effort",effort]);}
     if let Some(schema)=&request.schema {command.arg("--json-schema").arg(schema.to_string());}
     if let Some(session)=&request.resume {command.args(["--conversation",session]);}
-    if request.access==Access::ReadOnly {command.args(["--mode","plan"]);} else {command.args(["--mode","accept-edits","--sandbox","--dangerously-skip-permissions"]);}
+    if request.access==Access::ReadOnly {command.args(["--mode","plan"]);} else {command.args(["--mode","accept-edits","--dangerously-skip-permissions"]); if request.access==Access::Edit { command.arg("--sandbox"); }}
     let mut process=Process::spawn(&mut command,Duration::from_secs(900))?; process.close_input(); let mut text=String::new();let mut session=None;
     while let Some(line)=process.line(cancel)? {
         let Ok(value)=serde_json::from_str::<Value>(&line) else {continue};

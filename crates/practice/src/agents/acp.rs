@@ -29,7 +29,7 @@ fn configuration(kind:AgentKind,value:&Value,category:&str,preferred:&str) -> Op
     Some((option.id,selected))
 }
 fn permission_outcome(options:&[PermissionOption],access:&Access)->RequestPermissionOutcome {
-    let wanted=if *access==Access::Edit {PermissionOptionKind::AllowOnce}else{PermissionOptionKind::RejectOnce};
+    let wanted=if *access!=Access::ReadOnly {PermissionOptionKind::AllowOnce}else{PermissionOptionKind::RejectOnce};
     options.iter().find(|option|option.kind==wanted).map(|option|RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(option.option_id.clone()))).unwrap_or(RequestPermissionOutcome::Cancelled)
 }
 fn protocol_error(error:impl std::fmt::Display)->agent_client_protocol::Error {agent_client_protocol::Error::into_internal_error(std::io::Error::other(error.to_string()))}
@@ -40,7 +40,8 @@ fn execute(agent:Detected,request:Option<Request>,events:&mut dyn FnMut(Event),c
     let worker=std::thread::spawn(move || {
         let result=async_io::block_on(async {
             let mut config=AcpAgentConfig::new(&agent.path).arg(if agent.kind==AgentKind::OpenCode {"acp"}else{"--acp"});
-            if agent.kind==AgentKind::OpenCode && let Some(request)=&request { let permission=if request.access==Access::ReadOnly {json!({"*":"deny"})}else{json!({"*":"ask","external_directory":"deny"})}; config=config.env("OPENCODE_CONFIG_CONTENT",json!({"permission":permission}).to_string()); }
+            if agent.kind==AgentKind::OpenCode && let Some(request)=&request { let permission=if request.access==Access::ReadOnly {json!({"*":"deny"})}else if request.access==Access::Full {json!({"*":"allow"})}else{json!({"*":"ask","external_directory":"deny"})}; config=config.env("OPENCODE_CONFIG_CONTENT",json!({"permission":permission}).to_string()); }
+            if agent.kind==AgentKind::Gemini && request.as_ref().is_some_and(|request| request.access==Access::Full) { config=config.arg("--approval-mode").arg("yolo").arg("--sandbox=false").arg("--skip-trust"); }
             // ACP's process transport terminates its entire process group on drop.
             let transport=AcpAgent::new(config);
             let prompting=Arc::new(AtomicBool::new(false));let accepting=prompting.clone();
@@ -112,6 +113,7 @@ pub fn run(request:&Request,events:&mut dyn FnMut(Event),cancel:&Cancel)->Result
         let options=vec![PermissionOption::new("yes","Allow",PermissionOptionKind::AllowOnce),PermissionOption::new("no","Deny",PermissionOptionKind::RejectOnce)];
         assert_eq!(serde_json::to_value(permission_outcome(&options,&Access::ReadOnly)).unwrap()["optionId"],"no");
         assert_eq!(serde_json::to_value(permission_outcome(&options,&Access::Edit)).unwrap()["optionId"],"yes");
+        assert_eq!(serde_json::to_value(permission_outcome(&options,&Access::Full)).unwrap()["optionId"],"yes");
         assert_eq!(permission_outcome(&options[..1],&Access::ReadOnly),RequestPermissionOutcome::Cancelled);
     }
 }

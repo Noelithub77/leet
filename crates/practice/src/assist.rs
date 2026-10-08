@@ -92,33 +92,16 @@ impl Action {
         matches!(self, Self::Bugs | Self::Analyze | Self::Stuck | Self::Optimize | Self::DryRun | Self::Review)
     }
 
-    pub fn access(self) -> Access {
-        if self == Self::Solve { Access::Edit } else { Access::ReadOnly }
-    }
+    pub fn access(self) -> Access { Access::Full }
 
-    /// Strict JSON Schema of the answer.
+    /// Every shortcut and free-form turn shares the native response contract.
     pub fn schema(self) -> serde_json::Value {
-        let schema = match self {
-            Self::Hints => schemars::schema_for!(Hints),
-            Self::Tests => schemars::schema_for!(Tests),
-            Self::Bugs => schemars::schema_for!(Bugs),
-            Self::Analyze => schemars::schema_for!(Analysis),
-            Self::Stuck => schemars::schema_for!(Stuck),
-            Self::Explain => schemars::schema_for!(Explanation),
-            Self::Visualize => schemars::schema_for!(Scene),
-            Self::Optimize => schemars::schema_for!(Optimization),
-            Self::Pattern => schemars::schema_for!(PatternMatch),
-            Self::DryRun => schemars::schema_for!(DryRun),
-            Self::Solve => schemars::schema_for!(SolveReport),
-            Self::Ask => schemars::schema_for!(String),
-            Self::Review => schemars::schema_for!(SolutionReview),
-        };
-        crate::agents::strict_schema(serde_json::to_value(schema).unwrap_or_default())
+        crate::agents::strict_schema(serde_json::to_value(schemars::schema_for!(Reply)).unwrap_or_default())
     }
 
-    fn instructions(self) -> &'static str {
+    pub fn instructions(self) -> &'static str {
         match self {
-            Self::Review => "Review my current solution as written. Return correctness bugs (or explicitly say none found), time and space complexity with line costs, improvements compared with the best approach, and a dry run of my code on the focus test case. Include an animated scene showing the actual changing variables and data structures. Explain the first wrong step if present. Do not edit files or supply a replacement solution. Keep every section concise.",
+            Self::Review => "Review my current solution as written. Return correctness bugs (or explicitly say none found), time and space complexity with line costs, improvements compared with the best approach, and a dry run of my code on the focus test case. Include an animated scene showing the actual changing variables and data structures. Explain the first wrong step if present. Do not modify my solution or supply a replacement solution. You may write native response artifacts. Keep every section concise.",
             Self::Hints => "Give 4 escalating hints that let me solve it myself. Level 1 is a small observation about the problem; level 2 names the useful data structure or pattern; level 3 states the key insight; level 4 outlines the approach in plain words. Never include code. If my attempt is present, aim the first hint at what my attempt misses. Each body is at most 2 sentences.",
             Self::Tests => "Use the requested count and case types from the additional instructions; default to 6 to 10 cases when no count is given. Propose test cases that are most likely to break solutions to this problem: empty and minimum inputs, boundaries from the constraints, duplicates, negatives, sorted and reversed orders, single elements, and one larger stress-style case that is still small enough to read. Compute every expected output carefully by reasoning step by step; it must be exactly what the judge returns. Inputs use the exact LeetCode input format: one argument per line, JSON values.",
             Self::Bugs => "Review my attempt for correctness bugs only: wrong logic, off-by-one errors, missed edge cases, wrong return values, mutation mistakes, overflow, and exceptions. Cite the 1-based line from the numbered code. Do not rewrite the solution; each fix is the smallest change in words or one short code fragment. If you find no bugs, return an empty list and say so in the summary. Use the failing tests when present.",
@@ -129,7 +112,7 @@ impl Action {
             Self::Optimize => "Compare the complexity of my attempt with the best known for this problem. Name the bottleneck line, give one nudge toward the faster approach without code, then the idea in two or three sentences (shown only when I ask). If my attempt is already optimal, say so and suggest a constant-factor or space improvement instead.",
             Self::Pattern => "Identify the algorithmic pattern this problem belongs to, the cues in the statement that reveal it, a short generic code template of the pattern in the required language (not the solution to this problem), and 3 to 5 similar problems chosen ONLY from the candidate list below, using their exact slugs.",
             Self::DryRun => "Dry-run my attempt on the given case exactly as the code executes, not as it was intended. Produce frames for each meaningful step (at most 30) with `line` set to the executed 1-based line and structures showing the variables at that moment. Set `wrong_frame` to the first frame whose state diverges from a correct solution's state, explain why, and give a fix hint without rewriting the code.",
-            Self::Ask => "Answer my question about this problem and my current code. Use the prior conversation when relevant, but treat the current code and test results as the latest state. Reply in concise Markdown. Do not edit files, run commands, or submit anything. Do not reveal a full solution unless I ask for one.",
+            Self::Ask => "Answer my question about this problem and my current code. Use the prior conversation when relevant, but treat the current code and test results as the latest state. Use native tools when needed and respond concisely. Edit files only when requested. Leave judge submission to the app confirmation. Do not reveal a full solution unless I ask for one.",
             Self::Solve => "Solve this problem in the solution file at the path given below, in the required language, preserving the judge interface exactly. Edit only that file. Write a clean, optimal solution. Run it on the examples if a local runtime is available. When done, reply with a short report of the approach and complexity.",
         }
     }
@@ -299,7 +282,7 @@ pub struct SolutionReview {
 }
 
 /// The parsed answer of one action.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "action", content = "answer", rename_all = "kebab-case")]
 pub enum Answer {
     Hints(Hints),
@@ -316,6 +299,10 @@ pub enum Answer {
     Chat(String),
     Review(SolutionReview),
 }
+
+/// A single object envelope keeps the shared tagged response compatible with strict providers.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct Reply { pub response: Answer }
 
 impl Answer {
     pub fn parse(action: Action, value: serde_json::Value) -> serde_json::Result<Self> {
@@ -344,8 +331,18 @@ pub fn execute(action: Action, request: &crate::agents::Request, events: &mut dy
 }
 
 fn execute_with(action: Action, request: &crate::agents::Request, run: &mut dyn FnMut(&crate::agents::Request) -> anyhow::Result<crate::agents::Outcome>) -> anyhow::Result<(Option<Answer>, crate::agents::Outcome)> {
+    execute_with_artifact(action, request, run, None)
+}
+
+/// File-based native artifacts may be the result even when the final text is only a report.
+pub fn execute_artifact(action: Action, request: &crate::agents::Request, path: &std::path::Path, events: &mut dyn FnMut(crate::agents::Event), cancel: &crate::agents::Cancel) -> anyhow::Result<(Option<Answer>, crate::agents::Outcome)> {
+    execute_with_artifact(action, request, &mut |request| crate::agents::run(request, events, cancel), Some(path))
+}
+
+fn execute_with_artifact(action: Action, request: &crate::agents::Request, run: &mut dyn FnMut(&crate::agents::Request) -> anyhow::Result<crate::agents::Outcome>, artifact: Option<&std::path::Path>) -> anyhow::Result<(Option<Answer>, crate::agents::Outcome)> {
     let outcome = run(request)?;
-    if action == Action::Ask { return Ok((Some(Answer::Chat(outcome.text.clone())), outcome)); }
+    if let Some(path) = artifact.filter(|path| path.exists()) { return Ok((Some(crate::chat::artifacts::load(path)?), outcome)); }
+    if action == Action::Ask && request.schema.is_none() { return Ok((Some(Answer::Chat(outcome.text.clone())), outcome)); }
     match parse(action, &outcome) {
         Ok(answer) => Ok((Some(answer), outcome)),
         Err(_) if action == Action::Solve => Ok((None, outcome)),
@@ -366,6 +363,9 @@ fn parse(action: Action, outcome: &crate::agents::Outcome) -> Result<Answer, Str
         Some(value) => value.clone(),
         None => json_in(&outcome.text).ok_or_else(|| "no JSON object in the answer".to_owned())?,
     };
+    if value.get("response").is_some() {
+        return serde_json::from_value::<Reply>(value).map(|reply| reply.response).map_err(|error| error.to_string());
+    }
     Answer::parse(action, value).map_err(|error| error.to_string())
 }
 
@@ -413,22 +413,24 @@ pub struct Context<'a> {
 const STATEMENT_LIMIT: usize = 6000;
 const CODE_LIMIT: usize = 8000;
 
+/// Shared environment instructions describe real capabilities, not imaginary app tools.
+pub fn environment_prompt(web: bool) -> String {
+    let mut out = format!("You are an agent inside Leet, a safe Rust/GPUI coding-practice IDE. Environment: {} / {}. All requests and prompt shortcuts belong to ordinary conversation threads. Use prior conversation when relevant; current editor code and tests are the latest state.\n", std::env::consts::OS, std::env::consts::ARCH);
+    if web {
+        out.push_str("This is an external web conversation. Leet supplies context but exposes no local file, command, runner, or native rendering tools here. Do not claim to have executed local operations.\n");
+    } else {
+        out.push_str("Native agent capabilities: your selected provider's installed file read/write/edit, search, and command tools have full user-authorized access with non-interactive permissions. Use your actual tool catalog; other provider-specific capabilities depend on that provider. Work directly in files with native tools. Edit only files relevant to the user's request; report actual execution results.\nLeet renders validated native response kinds: chat (Markdown), hints, tests (addable cases), bugs (line links), analyze (complexity curves), stuck, explain, visualize (animated scenes), optimize, pattern (problem links), dry-run, review (combined analysis), and solve (solution report). Native scenes support arrays, grids, linked lists, trees, graphs, heaps, stacks/queues, sets, maps, variables and playback. These are typed response/artifact formats, not callable app tools or arbitrary executable UI.\nThe app provides editor reload, local tests, trace recording, judge runs and submission confirmation through its existing controls. You may run available runtimes or commands directly. Never submit to a judge via commands or HTTP: return a solve report and leave submission to the app's explicit confirmation. Never fabricate runtime results.\n");
+    }
+    out
+}
+
 /// The prompt for a local agent; the schema travels separately.
 pub fn prompt(action: Action, ctx: &Context) -> String {
-    let mut out = format!(
-        "You are the {} assistant inside leet, a coding-practice IDE. {}\n",
-        action.label(),
-        action.instructions()
-    );
-    if action == Action::Ask {
-        out.push_str("Do not use tools or read files: everything you need is below.\n");
-    } else if action != Action::Solve {
-        out.push_str("Answer with one JSON object matching the provided schema. Write prose fields in clear, friendly, concise English; use Markdown inline code for identifiers. Do not use tools or read files: everything you need is below.\n");
-    }
+    let mut out = environment_prompt(false);
+    out.push_str(&format!("\n## Request shortcut\n{}\n{}\n", action.label(), action.instructions()));
+    out.push_str("Return one JSON object with a `response` containing a tagged native answer: {\"response\":{\"action\":\"chat\",\"answer\":\"Markdown here\"}}. Choose any supported response kind appropriate to the user's request, regardless of the shortcut.\n");
     push_problem(&mut out, ctx);
-    if matches!(action, Action::Visualize | Action::Explain | Action::DryRun | Action::Review) {
-        out.push_str(VISUAL_GUIDE);
-    }
+    out.push_str(VISUAL_GUIDE);
     if let (Action::DryRun, Some(trace)) = (action, ctx.trace) {
         out.push_str("\n## Recorded execution of the focus case\nThis is the real trace from running my code, one step per line: `#step Lline event function | variables`. Do not simulate; read it. Set `wrong_step` to the `#` of the first step whose state diverges from a correct solution, and make `scene` 3 to 6 key frames around it.\n");
         out.push_str(trace);
@@ -440,16 +442,15 @@ pub fn prompt(action: Action, ctx: &Context) -> String {
             out.push_str(&format!("{} | {} | {}\n", entry.slug, entry.title, entry.topic));
         }
     }
-    if action == Action::Solve {
-        out.push_str(&format!("\nSolution file: {}\n", ctx.solution_path));
-        if let Some(feedback) = ctx.feedback { out.push_str(&format!("\nThe previous attempt was judged:\n{feedback}\nFix the solution file accordingly.\n")); }
-    }
+    out.push_str(&format!("\nSolution file: {}\n", ctx.solution_path));
+    if let Some(feedback) = ctx.feedback { out.push_str(&format!("\nThe previous attempt was judged:\n{feedback}\nFix the solution file accordingly.\n")); }
     out
 }
 
 /// A self-contained prompt for a web chat, which cannot enforce a schema.
 pub fn web_prompt(action: Action, ctx: &Context) -> String {
-    let mut out = format!("{}\nAnswer in Markdown.\n", action.instructions());
+    let mut out = environment_prompt(true);
+    out.push_str(&format!("{}\nAnswer in Markdown.\n", action.instructions()));
     push_problem(&mut out, ctx);
     out
 }
@@ -604,7 +605,7 @@ mod tests {
         let prompt = prompt(Action::Bugs, &ctx("a = 1\nreturn a", cases));
         assert!(prompt.contains("1 | a = 1") && prompt.contains("2 | return a"));
         assert!(prompt.contains("my result: [1,0]") && prompt.contains("10^4") && prompt.contains("dry-run this one"));
-        assert!(!prompt.contains("Visual structures"));
+        assert!(prompt.contains("Visual structures"));
     }
 
     #[test]
@@ -627,7 +628,7 @@ mod tests {
         let prompt = prompt(Action::Solve, &context);
         assert!(prompt.contains("/tmp/1-two-sum.py") && prompt.contains("Wrong Answer on [3,3]"));
         assert!(!prompt.contains("Do not use tools"));
-        assert_eq!(Action::Solve.access(), Access::Edit);
+        assert_eq!(Action::Solve.access(), Access::Full);
     }
 
     #[test]
@@ -640,12 +641,13 @@ mod tests {
     }
 
     #[test]
-    fn combined_review_is_read_only_and_requires_every_section() {
+    fn combined_review_uses_shared_capabilities_and_requires_every_section() {
         assert!(Action::Review.needs_attempt());
-        assert_eq!(Action::Review.access(), Access::ReadOnly);
+        assert_eq!(Action::Review.access(), Access::Full);
         let schema = Action::Review.schema();
         let properties = schema["properties"].as_object().unwrap();
-        for section in ["correctness", "complexity", "improvements", "dry_run"] { assert!(properties.contains_key(section)); }
+        assert!(properties.contains_key("response"));
+        assert!(schema.to_string().contains("correctness"));
         assert!(Answer::parse(Action::Review, serde_json::json!({"complexity": {}})).is_err());
         let prompt = prompt(Action::Review, &ctx("x = 1", vec![]));
         assert!(prompt.contains("visual") || prompt.contains("animated"));
@@ -690,7 +692,7 @@ mod reliability_tests {
         Request { agent: Detected { kind, path: "mock".into(), version: None }, selection: Selection { agent: kind, model: "mock".into(), effort: None, fast: false }, prompt: "original problem context".into(), schema: Some(Action::Hints.schema()), cwd: std::env::temp_dir(), access: Access::ReadOnly, resume: None }
     }
     #[test]
-    fn questions_return_markdown_without_schema_repair_or_edit_access() {
+    fn legacy_markdown_questions_still_parse_without_a_schema() {
         let mut request = request(AgentKind::Codex);
         request.schema = None;
         let mut calls = 0;
@@ -702,12 +704,40 @@ mod reliability_tests {
         }).unwrap();
         assert_eq!(calls, 1);
         assert!(matches!(answer, Some(Answer::Chat(text)) if text == "Check **before** inserting."));
-        assert_eq!(Action::Ask.access(), Access::ReadOnly);
+        assert_eq!(Action::Ask.access(), Access::Full);
         let context = super::tests::ctx("latest_code()", vec![]);
         let prompt = prompt(Action::Ask, &context);
         assert!(prompt.contains("latest_code()"));
-        assert!(prompt.contains("Do not edit files"));
-        assert!(!prompt.contains("one JSON object"));
+        assert!(prompt.contains("full user-authorized access"));
+        assert!(prompt.contains("one JSON object"));
+    }
+
+    #[test]
+    fn ordinary_questions_can_return_native_scenes_and_file_artifacts() {
+        let mut request = request(AgentKind::Codex); request.access = Access::Full; request.schema = Some(Action::Ask.schema());
+        let scene = serde_json::json!({"response":{"action":"visualize","answer":{"title":"Pointers","frames":[]}}});
+        let (answer, _) = execute_with(Action::Ask, &request, &mut |_| Ok(Outcome { text: scene.to_string(), session: None, structured: Some(scene.clone()) })).unwrap();
+        assert!(matches!(answer, Some(Answer::Visualize(_))));
+        let dir = tempfile::tempdir().unwrap(); let path = dir.path().join("response.json");
+        let (answer, _) = execute_with_artifact(Action::Ask, &request, &mut |_| {
+            crate::chat::artifacts::save(&path, &Answer::Chat("Artifact content".into()))?;
+            Ok(Outcome { text: "Wrote the artifact".into(), session: None, structured: None })
+        }, Some(&path)).unwrap();
+        assert_eq!(answer, Some(Answer::Chat("Artifact content".into())));
+        for action in Action::ALL { assert_eq!(action.schema(), Action::Ask.schema()); assert_eq!(action.access(), Access::Full); }
+        assert!(environment_prompt(false).contains("submission confirmation"));
+        assert!(environment_prompt(true).contains("exposes no local file"));
+    }
+
+    #[test]
+    #[ignore = "Uses the signed-in Codex account to verify full native file access and response schema"]
+    fn unified_chat_live_native_artifact() {
+        let agent = crate::agents::detect().into_iter().find(|agent| agent.kind == AgentKind::Codex).expect("Codex installed");
+        let catalog = crate::agents::catalog(&agent).unwrap();
+        let cwd = tempfile::tempdir().unwrap(); let artifacts = tempfile::tempdir().unwrap(); let file = artifacts.path().join("response.json");
+        let request = Request { agent, selection: Selection { agent: AgentKind::Codex, model: catalog.default_model.unwrap(), effort: Some("low".into()), fast: false }, prompt: format!("{}\nUse your native file tools to write exactly this JSON to {} (outside the working directory): {{\"response\":{{\"action\":\"visualize\",\"answer\":{{\"title\":\"Native artifact probe\",\"input\":\"\",\"frames\":[]}}}}}}. Then return the same response JSON. Do not read or alter any other files.", environment_prompt(false), file.display()), schema: Some(Action::Ask.schema()), cwd: cwd.path().into(), access: Access::Full, resume: None };
+        let (answer, _) = execute_artifact(Action::Ask, &request, &file, &mut |_| {}, &crate::agents::Cancel::default()).unwrap();
+        assert!(file.exists()); assert!(matches!(answer, Some(Answer::Visualize(scene)) if scene.title == "Native artifact probe"));
     }
 
     #[test]

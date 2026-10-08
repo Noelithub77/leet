@@ -30,14 +30,14 @@ pub fn catalog(agent: &Detected) -> Result<Catalog> {
 }
 fn approval(process: &mut Process, value: &Value, access: &Access) -> Result<()> {
     if let (Some(id),Some(method))=(value.get("id"),value["method"].as_str()) {
-        let decision=if *access==Access::Edit { "accept" } else { "decline" };
+        let decision=if *access!=Access::ReadOnly { "accept" } else { "decline" };
         let result=if method=="item/permissions/requestApproval" { json!({"permissions":{},"scope":"turn"}) } else if method.ends_with("requestApproval") { json!({"decision":decision}) } else { process.send(&json!({"jsonrpc":"2.0","id":id,"error":{"code":-32601,"message":"Unsupported client request"}}))?; return Ok(()); };
         process.send(&json!({"jsonrpc":"2.0","id":id,"result":result}))?;
     } Ok(())
 }
 pub fn run(request: &Request, events: &mut dyn FnMut(Event), cancel: &Cancel) -> Result<Outcome> {
     let mut process=connect(&request.agent,cancel,Duration::from_secs(900))?;
-    let mut params=json!({"model":request.selection.model,"cwd":request.cwd,"approvalPolicy":"never","sandbox":if request.access==Access::ReadOnly {"read-only"} else {"workspace-write"}});
+    let mut params=json!({"model":request.selection.model,"cwd":request.cwd,"approvalPolicy":"never","sandbox":match request.access { Access::ReadOnly => "read-only", Access::Edit => "workspace-write", Access::Full => "danger-full-access" }});
     if request.access==Access::ReadOnly { params["config"]=json!({"features.shell_tool":false,"features.unified_exec":false,"features.code_mode":false,"features.code_mode_host":false,"features.multi_agent":false}); params["developerInstructions"]=json!("Answer from the prompt alone. Do not invoke tools, run commands, create planning artifacts, or edit files."); }
     let method=if let Some(id)=&request.resume { params["threadId"]=json!(id); "thread/resume" } else { "thread/start" };
     let result=process.rpc(method,params,cancel,&mut |p,v|approval(p,v,&request.access))?;

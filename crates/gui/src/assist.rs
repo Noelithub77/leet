@@ -11,7 +11,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::Disableable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::shimmer::ShimmerText;
-use gpui_kit::component::input::{InputEvent, TextareaState};
+use gpui_kit::component::input::{InputEvent, InputState, TextareaState};
 use gpui_kit::component::text::TextView;
 use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, Theme, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
@@ -26,15 +26,22 @@ use practice::viz::Tone;
 use crate::gen_ui::player::{self, Playback};
 use crate::workspace::Workspace;
 
-gpui_kit::actions!(chat, [SendChat]);
+gpui_kit::actions!(chat, [SendChat, NextThread, PreviousThread, OpenThread, CloseThreadList]);
 
 pub fn bind_keys(cx: &mut App) {
     cx.bind_keys([KeyBinding::new("ctrl-enter", SendChat, Some("AgentChat")),
-        KeyBinding::new("ctrl-enter", SendChat, Some("AgentChat > Input"))]);
+        KeyBinding::new("ctrl-enter", SendChat, Some("AgentChat > Input")),
+        KeyBinding::new("down", NextThread, Some("ChatThreads")),
+        KeyBinding::new("up", PreviousThread, Some("ChatThreads")),
+        KeyBinding::new("enter", OpenThread, Some("ChatThreads")),
+        KeyBinding::new("ctrl-enter", OpenThread, Some("ChatThreads")),
+        KeyBinding::new("escape", CloseThreadList, Some("ChatThreads"))]);
 }
 
 #[path = "chat_view.rs"]
 mod chat_view;
+#[path = "conversation.rs"]
+mod conversation;
 
 const SOLVE_ATTEMPTS: usize = 5;
 
@@ -134,12 +141,16 @@ struct SolveState {
 
 pub struct Run {
     id: u64,
+    thread_id: i64,
+    message_id: i64,
+    problem_title: String,
     slug: String,
     action: Action,
     agent: Option<AgentKind>,
     model: String,
     started: Instant,
     elapsed: Option<Duration>,
+    artifact_mtime: Option<std::time::SystemTime>,
     phase: Phase,
     thinking: String,
     tokens: u64,
@@ -156,6 +167,7 @@ pub struct Run {
     generation: u64,
     collapsed: bool,
     instructions: String,
+    request_prompt: String,
     history: String,
     reply: String,
 }
@@ -187,30 +199,29 @@ pub struct Assist {
     ticker: Option<Task<()>>,
     scroll: ScrollHandle,
     pub(crate) composer: Entity<TextareaState>,
-    composer_slug: Option<String>,
+    composer_thread: Option<i64>,
+    threads: Vec<practice::chat::history::Thread>,
+    selected_thread: Option<i64>,
+    loaded_threads: HashSet<i64>,
+    root_scope: bool,
+    show_threads: bool,
+    thread_scroll: UniformListScrollHandle,
+    thread_search: Entity<InputState>,
+    thread_query: String,
+    thread_selection: usize,
+    conversation_error: Option<String>,
+    editing: Option<u64>,
     ai_tab: u8,
     context_key: Option<(Option<String>, bool, bool, bool)>,
-    drafts: HashMap<String, String>,
+
 }
 
-/// Saved conversation turns per problem, newest first; old answer-only entries still load.
-#[derive(serde::Serialize, serde::Deserialize)]
-struct Saved {
-    model: String,
-    agent: Option<AgentKind>,
-    answer: Option<Answer>,
-    #[serde(default)] instructions: String,
-    #[serde(default)] action: Option<Action>,
-    #[serde(default)] phase: SavedPhase,
-}
+use practice::chat::history::{SavedTurn as Saved, SavedPhase};
 
-#[derive(Default, serde::Serialize, serde::Deserialize)]
-enum SavedPhase { #[default] Done, Stopped, Failed(String) }
-
-impl Saved {
-    fn from_run(run: &Run) -> Self {
-        Self { model: run.model.clone(), agent: run.agent, answer: run.answer.clone(), instructions: run.instructions.clone(), action: Some(run.action),
-            phase: match &run.phase { Phase::Done => SavedPhase::Done, Phase::Failed(error) => SavedPhase::Failed(error.clone()), _ => SavedPhase::Stopped } }
+impl Run {
+    fn saved(&self) -> Saved {
+        Saved { model: self.model.clone(), agent: self.agent, answer: self.answer.clone(), instructions: self.instructions.clone(), request_prompt: self.request_prompt.clone(), action: Some(self.action), problem: self.slug.clone(), problem_title: self.problem_title.clone(),
+            phase: match &self.phase { Phase::Done => SavedPhase::Done, Phase::Failed(error) => SavedPhase::Failed(error.clone()), _ => SavedPhase::Stopped } }
     }
 }
 
@@ -221,10 +232,22 @@ impl Assist {
         let composer = cx.new(|cx| TextareaState::new(window, cx).rows(3).placeholder("Ask a question or add instructions…"));
         cx.subscribe_in(&composer, window, |this, _, event: &InputEvent, window, cx| {
             if matches!(event, InputEvent::PressEnter { secondary: true, .. }) { this.send(window, cx); }
+            if matches!(event, InputEvent::Change) { this.persist_draft(cx); }
             cx.notify();
         }).detach();
+        let thread_search = cx.new(|cx| InputState::new(window, cx).placeholder("Search chats"));
+        cx.subscribe_in(&thread_search, window, |this, input, event: &InputEvent, _, cx| {
+            if matches!(event, InputEvent::Change) { this.thread_query = input.read(cx).value().to_string(); this.thread_selection = 0; this.refresh_threads(); cx.notify(); }
+        }).detach();
         let mut this = Self { workspace, db, agents: vec![], detecting: false, catalogs, catalog_cache, requested_catalogs: HashSet::new(), installing: None,
-            runs: vec![], next_id: 0, slug: None, ticker: None, scroll: ScrollHandle::new(), composer, composer_slug: None, ai_tab: 0, context_key: None, drafts: HashMap::new() };
+            runs: vec![], next_id: 0, slug: None, ticker: None, scroll: ScrollHandle::new(), composer, composer_thread: None, threads: vec![], selected_thread: None, loaded_threads: HashSet::new(), root_scope: false, show_threads: true, thread_scroll: UniformListScrollHandle::new(), thread_search, thread_query: String::new(), thread_selection: 0, conversation_error: None, editing: None, ai_tab: 0, context_key: None };
+        if let Err(error) = this.db.migrate_chats() { this.conversation_error = Some(error.to_string()); }
+        this.root_scope = this.db.get("chat:scope").ok().flatten().as_deref() == Some("root");
+        this.refresh_threads();
+        if this.root_scope {
+            let saved = this.db.get(&this.selection_key()).ok().flatten().and_then(|value| value.parse::<i64>().ok());
+            if let Some(id) = saved.filter(|id| this.threads.iter().any(|thread| thread.id == *id)) { this.load_thread(id); }
+        }
         this.detect(cx);
         this
     }
@@ -289,26 +312,31 @@ impl Assist {
         }).detach();
     }
 
-    /// Switches conversations, restoring saved turns and legacy answers the first time.
+    /// Problem navigation preserves a selected root conversation across problems.
     pub fn set_problem(&mut self, slug: Option<&str>, cx: &mut Context<Self>) {
         if self.slug.as_deref() == slug { return; }
         self.slug = slug.map(str::to_owned);
-        if let Some(slug) = slug && !self.runs.iter().any(|run| run.slug == slug) {
-                let saved: Vec<Saved> = self.db.get(&format!("assist:{slug}")).ok().flatten().and_then(|text| serde_json::from_str(&text).ok()).unwrap_or_default();
-                for saved in saved.into_iter().rev() {
-                    let id = self.next_id(); let action = saved.action.or_else(|| saved.answer.as_ref().map(action_of)).unwrap_or(Action::Ask);
-                    let mut run = Run::new(id, slug.into(), action, saved.agent, saved.model, None, None);
-                    run.instructions = saved.instructions;
-                    run.elapsed = Some(Duration::ZERO); run.phase = match saved.phase { SavedPhase::Done => Phase::Done, SavedPhase::Stopped => Phase::Stopped, SavedPhase::Failed(error) => Phase::Failed(error) }; run.set_answer(saved.answer);
-                    self.runs.insert(0, run);
-                }
+        if !self.root_scope {
+            self.selected_thread = None;
+            self.editing = None;
+            self.refresh_threads();
+            let key = self.selection_key();
+            let saved = self.db.get(&key).ok().flatten().and_then(|value| value.parse::<i64>().ok());
+            let selected = saved.filter(|id| self.threads.iter().any(|thread| thread.id == *id))
+                .or_else(|| self.threads.first().map(|thread| thread.id));
+            if let Some(id) = selected { self.load_thread(id); }
+        } else { self.refresh_threads(); }
+        if let Some(slug) = slug {
+            match self.db.latest_chat_review(slug) { Ok(Some(message)) => self.restore_message(message), Ok(None) => {}, Err(error) => self.conversation_error = Some(error.to_string()) }
         }
         cx.notify();
     }
 
-    fn save(&self, slug: &str) {
-        let saved: Vec<Saved> = self.runs.iter().filter(|run| run.slug == slug).map(Saved::from_run).collect();
-        if let Ok(text) = serde_json::to_string(&saved) { let _ = self.db.set(&format!("assist:{slug}"), &text); }
+    fn save(&mut self, slug: &str) {
+        for run in self.runs.iter().filter(|run| run.slug == slug) {
+            if run.message_id == 0 { continue; }
+            if let Err(error) = self.db.save_chat_message(run.message_id, &run.saved()) { self.conversation_error = Some(error.to_string()); }
+        }
     }
 
     fn next_id(&mut self) -> u64 { self.next_id += 1; self.next_id }
@@ -328,33 +356,57 @@ impl Assist {
 
     /// Starts `action`, or opens the web chat when no agent is installed.
     pub fn start(&mut self, action: Action, snapshot: Snapshot, target: Target, window: &mut Window, cx: &mut Context<Self>) {
-        self.set_problem(Some(&snapshot.slug), cx);
+        self.set_problem((!snapshot.slug.is_empty()).then_some(snapshot.slug.as_str()), cx);
         self.sync_composer(window, cx);
         let instructions = self.composer.read(cx).value().trim().to_string();
+        let editing = self.editing.is_some();
+        let action = self.editing.and_then(|id| self.runs.iter().find(|run| run.id == id)).map_or(action, |run| run.action);
         if action == Action::Ask && instructions.is_empty() { return; }
         if instructions.chars().count() > practice::chat::INSTRUCTIONS_LIMIT {
             use gpui_kit::component::WindowExt as _;
             window.push_notification(gpui_kit::component::notification::Notification::warning("Keep the prompt under 8,000 characters"), cx);
             return;
         }
-        let history = practice::chat::context(self.runs.iter().filter(|run| run.slug == snapshot.slug).filter_map(|run|
-            Some(practice::chat::Turn { action: run.action, instructions: run.instructions.clone(), answer: run.answer.clone()? })));
+        if let Some(id) = self.editing.take() {
+            let Some(run) = self.runs.iter().find(|run| run.id == id) else { return };
+            match self.db.fork_chat(run.thread_id, run.message_id, false) {
+                Ok(thread) => { self.selected_thread = Some(thread.id); self.refresh_threads(); self.load_thread(thread.id); self.composer_thread = Some(thread.id); }
+                Err(error) => { self.conversation_error = Some(error.to_string()); cx.notify(); return; }
+            }
+        }
+        let thread_id = match self.ensure_thread() { Ok(id) => id, Err(error) => { self.conversation_error = Some(error.to_string()); cx.notify(); return; } };
+        let history = practice::chat::context(self.runs.iter().filter(|run| run.thread_id == thread_id).filter_map(|run|
+            Some(practice::chat::Turn { action: run.action, instructions: format!("{}\n{}\nProblem: {}\nNative artifact: {}", run.request_prompt, run.instructions, run.problem_title, practice::chat::artifacts::path(run.message_id).display()), answer: run.answer.clone()? })));
         if let Target::Web(provider) = target {
             let prompt = practice::chat::prompt(assist::web_prompt(action, &snapshot.context(None)), &history, &instructions);
             cx.write_to_clipboard(ClipboardItem::new_string(prompt.clone()));
             let _ = open::that_detached(practice::prompts::url(provider, &prompt));
             use gpui_kit::component::WindowExt as _;
             window.push_notification(gpui_kit::component::notification::Notification::info(format!("{} opened in {} · prompt copied", action.label(), provider.label())), cx);
+            let id = self.next_id();
+            let mut run = Run::new(id, snapshot.slug.clone(), action, None, provider.label().to_owned(), None, None);
+            run.thread_id = thread_id; run.problem_title = snapshot.title.clone(); run.instructions = instructions;
+            run.phase = Phase::Done; run.elapsed = Some(Duration::ZERO);
+            match self.db.append_chat(thread_id, &run.saved()) { Ok(message) => { run.message_id = message; self.runs.insert(0, run); }, Err(error) => self.conversation_error = Some(error.to_string()) }
+            self.composer.update(cx, |input, cx| input.set_value("", window, cx)); self.refresh_threads(); cx.notify();
             return;
         }
-        let previous: Vec<_> = self.runs.iter().filter(|run| run.slug == snapshot.slug && (run.phase.active() || run.phase == Phase::Confirm)).map(|run| run.id).collect();
+        let previous: Vec<_> = self.runs.iter().filter(|run| (run.thread_id == thread_id || (action == Action::Solve && run.slug == snapshot.slug && run.solve.is_some())) && (run.phase.active() || run.phase == Phase::Confirm)).map(|run| run.id).collect();
         for id in previous { self.stop(id, cx); }
         let id = self.next_id();
         let Target::Agent(agent, selection) = &target else { return };
         let model = selection.as_ref().map(|s| s.model.clone()).unwrap_or_default();
         let mut run = Run::new(id, snapshot.slug.clone(), action, Some(agent.kind), model, Some(snapshot.clone()), Some(target.clone()));
         if action == Action::Solve { run.solve = Some(SolveState { attempt: 1, session: None, log: vec![], accepted: false }); }
-        run.instructions = instructions; run.history = history;
+        run.thread_id = thread_id; run.problem_title = snapshot.title.clone();
+        run.request_prompt = if editing && action != Action::Ask { instructions.clone() } else { action.instructions().to_owned() };
+        run.instructions = if editing && action != Action::Ask { String::new() } else { instructions }; run.history = history;
+        match self.db.append_chat(thread_id, &run.saved()) { Ok(message) => run.message_id = message, Err(error) => { self.conversation_error = Some(error.to_string()); cx.notify(); return; } }
+        if self.threads.iter().any(|thread| thread.id == thread_id && thread.title == "New chat") {
+            let title = if run.instructions.is_empty() { action.label().to_owned() } else { run.instructions.lines().next().unwrap_or(action.label()).chars().take(60).collect() };
+            let _ = self.db.rename_chat(thread_id, &title);
+        }
+        self.refresh_threads();
         self.composer.update(cx, |input, cx| input.set_value("", window, cx));
         self.runs.insert(0, run);
         self.save(&snapshot.slug);
@@ -376,6 +428,8 @@ impl Assist {
         run.tokens = 0;
         let cancel = run.cancel.clone();
         let action = run.action;
+        let message_id = run.message_id;
+        let request_prompt = run.request_prompt.clone();
         let instructions = run.instructions.clone();
         let history = run.history.clone();
         run.reply.clear();
@@ -393,16 +447,27 @@ impl Assist {
                     }
                 }
             };
-            let prompt = practice::chat::prompt(assist::prompt(action, &snapshot.context(feedback.as_deref())), &history, &instructions);
+            let base = assist::prompt(action, &snapshot.context(feedback.as_deref())).replacen(action.instructions(), &request_prompt, 1);
+            let prompt = practice::chat::prompt(base, &history, &instructions);
+            let artifact = practice::chat::artifacts::path(message_id);
+            let artifact_dir = practice::chat::artifacts::directory(message_id);
+            if let Err(error) = std::fs::create_dir_all(&artifact_dir).and_then(|_| std::fs::write(artifact_dir.join("schema.json"), action.schema().to_string())) { let _ = tx.unbounded_send(Msg::Done(Err(error.into()))); return; }
+            let mut prompt = prompt;
+            prompt.push_str(&format!("\nWorkspace: {}\nEditable native response artifact: {}\nNative response JSON schema file: {}\nUse your file tools to write or revise this artifact when creating a visualization or other artifact. It uses the same response envelope as your final reply. Previous artifacts are listed in conversation history.\n", snapshot.workspace.display(), artifact.display(), artifact_dir.join("schema.json").display()));
             let request = agents::Request {
                 agent, selection, prompt,
-                schema: (!matches!(action, Action::Solve | Action::Ask)).then(|| action.schema()),
-                cwd: if action == Action::Solve { snapshot.workspace.clone() } else { std::env::temp_dir() },
+                schema: Some(action.schema()),
+                cwd: snapshot.workspace.clone(),
                 access: action.access(), resume,
             };
             let sender = tx.clone();
-            let result = assist::execute(action, &request, &mut |event| { let _ = sender.unbounded_send(Msg::Event(event)); }, &cancel)
-                .map(|(answer, outcome)| (answer, outcome.session));
+            let result = assist::execute_artifact(action, &request, &artifact, &mut |event| { let _ = sender.unbounded_send(Msg::Event(event)); }, &cancel)
+                .and_then(|(answer, outcome)| {
+                    let answer = if artifact.exists() { Some(practice::chat::artifacts::load(&artifact)?) } else {
+                        if let Some(answer) = &answer { practice::chat::artifacts::save(&artifact, answer)?; } answer
+                    };
+                    Ok((answer, outcome.session))
+                });
             let _ = tx.unbounded_send(Msg::Done(result));
         });
         self.ensure_ticker(cx);
@@ -441,7 +506,8 @@ impl Assist {
                 match result {
                     Err(_) if cancelled => { run.phase = Phase::Stopped; run.elapsed = Some(run.started.elapsed()); }
                     Err(error) => { run.phase = Phase::Failed(first_line(&error.to_string())); run.elapsed = Some(run.started.elapsed()); }
-                    Ok((answer, session)) if run.action == Action::Solve => {
+                    Ok((answer, session)) if run.solve.is_some() || matches!(answer, Some(Answer::Solve(_))) => {
+                        if run.solve.is_none() { run.solve = Some(SolveState { attempt: 1, session: None, log: vec![], accepted: false }); }
                         if let Some(solve) = run.solve.as_mut() {
                             solve.session = session.or(solve.session.take());
                             solve.log.push((Tone::Done, format!("Attempt {} written", solve.attempt)));
@@ -451,7 +517,11 @@ impl Assist {
                         let (workspace, slug) = (self.workspace.clone(), run.slug.clone());
                         window.defer(cx, move |window, cx| {
                             let _ = workspace.update(cx, |ws, cx| {
-                                if ws.session.as_ref().is_some_and(|s| s.slug == slug) { ws.reload_solution(&slug, window, cx); ws.run_tests(window, cx); }
+                                if ws.session.as_ref().is_some_and(|s| s.slug == slug) {
+                                    if ws.session.as_ref().is_some_and(|s| s.running || matches!(s.judge, Some(crate::workspace::Judge::Running { .. }))) {
+                                        ws.assist.update(cx, |assist, cx| assist.fail_solve(&slug, "Current tests or judge run must finish before testing this solution".into(), cx));
+                                    } else { ws.reload_solution(&slug, window, cx); ws.run_tests(window, cx); }
+                                }
                                 else { ws.assist.update(cx, |assist, cx| assist.fail_solve(&slug, "Problem changed; solve stopped".into(), cx)); }
                             });
                         });
@@ -463,14 +533,21 @@ impl Assist {
                 }
             }
         }
-        if save { if let Some(run) = self.runs.iter().find(|run| run.id == id) { self.save(&run.slug); } }
+        if let Some((slug, owner)) = self.runs.iter().find(|run| run.id == id && run.solve.is_some() && run.phase == Phase::Testing).map(|run| (run.slug.clone(), run.id)) {
+            let previous: Vec<_> = self.runs.iter().filter(|run| run.id != owner && run.slug == slug && run.solve.is_some() && (run.phase.active() || run.phase == Phase::Confirm)).map(|run| run.id).collect();
+            for other in previous { self.stop(other, cx); }
+        }
+        if save {
+            if let Some(thread) = self.runs.iter().find(|run| run.id == id).map(|run| run.thread_id) { self.refresh_artifacts(thread); }
+            if let Some(slug) = self.runs.iter().find(|run| run.id == id).map(|run| run.slug.clone()) { self.save(&slug); }
+        }
         if follow { self.scroll.scroll_to_bottom(); }
         cx.notify();
     }
 
     /// Called by the workspace when a local or judge run of `slug` finishes.
     pub fn tests_finished(&mut self, slug: &str, passed: bool, report: String, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(run) = self.runs.iter_mut().find(|run| run.slug == slug && run.action == Action::Solve && run.phase == Phase::Testing) else { return };
+        let Some(run) = self.runs.iter_mut().find(|run| run.slug == slug && run.solve.is_some() && run.phase == Phase::Testing) else { return };
         let Some(solve) = run.solve.as_mut() else { return };
         if passed {
             solve.log.push((Tone::Done, "Tests pass".into()));
@@ -484,7 +561,7 @@ impl Assist {
 
     /// Called by the workspace when a submission of `slug` is judged.
     pub fn judge_finished(&mut self, slug: &str, accepted: bool, report: String, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(run) = self.runs.iter_mut().find(|run| run.slug == slug && run.action == Action::Solve && run.phase == Phase::Judging) else { return };
+        let Some(run) = self.runs.iter_mut().find(|run| run.slug == slug && run.solve.is_some() && run.phase == Phase::Judging) else { return };
         let Some(solve) = run.solve.as_mut() else { return };
         if accepted {
             solve.accepted = true;
@@ -499,7 +576,7 @@ impl Assist {
     }
 
     fn retry(&mut self, slug: &str, report: String, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(run) = self.runs.iter_mut().find(|run| run.slug == slug && run.action == Action::Solve && run.solve.is_some()) else { return };
+        let Some(run) = self.runs.iter_mut().find(|run| run.slug == slug && run.solve.is_some()) else { return };
         let Some(solve) = run.solve.as_mut() else { return };
         if solve.attempt >= SOLVE_ATTEMPTS {
             run.phase = Phase::Failed(format!("Not accepted after {SOLVE_ATTEMPTS} attempts"));
@@ -539,7 +616,7 @@ impl Assist {
     }
 
     pub fn fail_solve(&mut self, slug: &str, error: String, cx: &mut Context<Self>) {
-        if let Some(run) = self.runs.iter_mut().find(|run| run.slug == slug && run.action == Action::Solve && run.phase.active()) {
+        if let Some(run) = self.runs.iter_mut().find(|run| run.slug == slug && run.solve.is_some() && run.phase.active()) {
             run.cancel.cancel(); run.phase = Phase::Failed(first_line(&error)); run.elapsed = Some(run.started.elapsed());
         }
         cx.notify();
@@ -565,7 +642,7 @@ impl Assist {
                 }
                 // An agent edit can arrive before the file watcher refreshes the editor.
                 let reload = ws.assist.read(cx).runs.iter().find(|run| run.id == id)
-                    .filter(|run| run.action == Action::Solve && ws.session.as_ref().is_some_and(|session| session.slug == run.slug))
+                    .filter(|run| run.solve.is_some() && ws.session.as_ref().is_some_and(|session| session.slug == run.slug))
                     .and_then(|run| run.snapshot.as_ref())
                     .filter(|snapshot| ws.editor.read(cx).value().as_ref() == snapshot.code)
                     .map(|snapshot| snapshot.slug.clone());
@@ -574,14 +651,16 @@ impl Assist {
                 let Some(snapshot) = ws.assist_snapshot(cx) else { return };
                 ws.assist.update(cx, |assist, cx| {
                     if continue_run {
-                        let others: Vec<_> = assist.runs.iter().filter(|run| run.id != id && run.slug == snapshot.slug && run.action == Action::Solve
+                        let others: Vec<_> = assist.runs.iter().filter(|run| run.id != id && run.slug == snapshot.slug && run.solve.is_some()
                             && (run.phase.active() || run.phase == Phase::Confirm)).map(|run| run.id).collect();
                         for other in others { assist.stop(other, cx); }
                     }
+                    let target = assist.target(&ws.config);
                     let Some(run) = assist.runs.iter_mut().find(|run| run.id == id && matches!(run.phase, Phase::Stopped | Phase::Failed(_))) else { return };
+                    if run.target.is_none() { run.target = Some(target); }
                     if run.slug != snapshot.slug || run.snapshot.as_ref().is_some_and(|old| old.language != snapshot.language) { return; }
                     if run.action.needs_attempt() && !snapshot.has_attempt() { return; }
-                    if continue_run && run.action == Action::Solve {
+                    if continue_run && run.solve.is_some() {
                         let session = run.solve.as_ref().and_then(|solve| solve.session.clone());
                         let feedback = format!("Continue the interrupted solve from the current solution. Inspect the file before editing; preserve completed work. Previous status: {}.", run.phase.label());
                         run.snapshot = Some(snapshot);
@@ -600,21 +679,13 @@ impl Assist {
     }
 
     pub fn stop_solves(&mut self, cx: &mut Context<Self>) {
-        let ids: Vec<_> = self.runs.iter().filter(|run| run.action == Action::Solve && (run.phase.active() || run.phase == Phase::Confirm)).map(|run| run.id).collect();
+        let ids: Vec<_> = self.runs.iter().filter(|run| run.solve.is_some() && (run.phase.active() || run.phase == Phase::Confirm)).map(|run| run.id).collect();
         for id in ids { self.stop(id, cx); }
     }
 
     pub fn stop_all(&mut self, cx: &mut Context<Self>) {
         let ids: Vec<u64> = self.runs.iter().filter(|run| run.phase.active() || run.phase == Phase::Confirm).map(|run| run.id).collect();
         for id in ids { self.stop(id, cx); }
-    }
-
-    fn dismiss(&mut self, id: u64, cx: &mut Context<Self>) {
-        let slug = self.runs.iter().find(|run| run.id == id).map(|run| run.slug.clone());
-        if let Some(run) = self.runs.iter().find(|run| run.id == id) { run.cancel.cancel(); }
-        self.runs.retain(|run| run.id != id);
-        if let Some(slug) = slug { self.save(&slug); }
-        cx.notify();
     }
 
     /// Redraws the stopwatch and advances playing walkthroughs.
@@ -664,7 +735,7 @@ mod recovery_tests {
         assert!(matches!(legacy.answer, Some(practice::assist::Answer::Hints(_))));
         let mut run = Run::new(1, "two-sum".into(), Action::Ask, None, String::new(), None, None);
         run.instructions = "Why check before inserting?".into();
-        let saved = super::Saved::from_run(&run);
+        let saved = run.saved();
         let restored: super::Saved = serde_json::from_str(&serde_json::to_string(&saved).unwrap()).unwrap();
         assert_eq!(restored.instructions, run.instructions);
         assert_eq!(restored.action, Some(Action::Ask));
@@ -697,20 +768,11 @@ fn first_line(text: &str) -> String {
     if line.chars().count() > 160 { format!("{}…", line.chars().take(160).collect::<String>()) } else { line.to_owned() }
 }
 
-fn action_of(answer: &Answer) -> Action {
-    match answer {
-        Answer::Hints(_) => Action::Hints, Answer::Tests(_) => Action::Tests, Answer::Bugs(_) => Action::Bugs,
-        Answer::Analyze(_) => Action::Analyze, Answer::Stuck(_) => Action::Stuck, Answer::Explain(_) => Action::Explain,
-        Answer::Visualize(_) => Action::Visualize, Answer::Optimize(_) => Action::Optimize, Answer::Pattern(_) => Action::Pattern,
-        Answer::DryRun(_) => Action::DryRun, Answer::Solve(_) => Action::Solve, Answer::Chat(_) => Action::Ask, Answer::Review(_) => Action::Review,
-    }
-}
-
 impl Run {
     fn new(id: u64, slug: String, action: Action, agent: Option<AgentKind>, model: String, snapshot: Option<Snapshot>, target: Option<Target>) -> Self {
-        Self { id, slug, action, agent, model, started: Instant::now(), elapsed: None, phase: Phase::Starting, thinking: String::new(), tokens: 0,
+        Self { id, thread_id: 0, message_id: 0, problem_title: String::new(), slug, action, agent, model, started: Instant::now(), elapsed: None, artifact_mtime: None, phase: Phase::Starting, thinking: String::new(), tokens: 0,
             answer: None, cancel: Cancel::default(), hints_shown: 1, playback: Playback::new(0), last_frame: Instant::now(), reveal: false,
-            added: vec![], solve: None, snapshot, target, generation: 0, collapsed: false, instructions: String::new(), history: String::new(), reply: String::new() }
+            added: vec![], solve: None, snapshot, target, generation: 0, collapsed: false, instructions: String::new(), request_prompt: action.instructions().to_owned(), history: String::new(), reply: String::new() }
     }
 
     fn set_answer(&mut self, answer: Option<Answer>) {
@@ -770,6 +832,7 @@ impl Assist {
         let color = accent(run.action, &theme);
         let id = run.id;
         let active = run.phase.active();
+        let request_prompt = run.request_prompt.clone();
         let header = h_flex().gap_2().items_center()
             .child(Button::new(("assist-collapse", id)).ghost().xsmall().icon(if run.collapsed { IconName::ChevronRight } else { IconName::ChevronDown })
                 .tooltip(if run.collapsed { "Expand result" } else { "Collapse result" }).accessibility_label(if run.collapsed { "Expand result" } else { "Collapse result" })
@@ -778,7 +841,7 @@ impl Assist {
                     cx.notify();
                 })))
             .child(div().size(px(24.)).rounded_lg().flex().items_center().justify_center().bg(color.opacity(0.14)).child(Icon::new(icon(run.action)).size_3p5().text_color(color)))
-            .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(run.action.label()))
+            .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child("Assistant"))
             .when_some(run.agent, |el, agent| el.child(crate::brand::agent_icon(agent).xsmall()))
             .child(div().min_w_0().flex_1().truncate().text_xs().text_color(theme.muted_foreground).child(run.model.clone()))
             .when(run.elapsed != Some(Duration::ZERO), |el| el.child(h_flex().gap_1().text_xs().text_color(if active { color } else { theme.muted_foreground })
@@ -787,8 +850,16 @@ impl Assist {
                 Button::new(("assist-stop", id)).ghost().xsmall().icon(IconName::CircleStop).tooltip("Stop").accessibility_label("Stop")
                     .on_click(cx.listener(move |this, _, _, cx| this.stop(id, cx))).into_any_element()
             } else {
-                Button::new(("assist-dismiss", id)).ghost().xsmall().icon(IconName::X).tooltip("Dismiss").accessibility_label("Dismiss")
-                    .on_click(cx.listener(move |this, _, _, cx| this.dismiss(id, cx))).into_any_element()
+                let weak = cx.entity().downgrade();
+                use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
+                Button::new(("chat-message-options", id)).ghost().xsmall().icon(IconName::Ellipsis).tooltip("Message actions")
+                    .dropdown_menu(move |menu, _, _| {
+                        let fork = weak.clone(); let edit = weak.clone(); let reload = weak.clone();
+                        menu.item(PopupMenuItem::new("Fork from here").icon(IconName::GitBranch).on_click(move |_, window, cx| { let _ = fork.update(cx, |this, cx| this.fork_message(id, window, cx)); }))
+                            .item(PopupMenuItem::new("Edit request").icon(IconName::Pencil).on_click(move |_, window, cx| { let _ = edit.update(cx, |this, cx| this.edit_message(id, window, cx)); }))
+                            .separator()
+                            .item(PopupMenuItem::new("Reload artifact").icon(IconName::RefreshCw).on_click(move |_, window, cx| { let _ = reload.update(cx, |this, cx| this.reload_artifact(id, window, cx)); }))
+                    }).into_any_element()
             });
         let status = (active || matches!(run.phase, Phase::Failed(_) | Phase::Stopped)).then(|| {
             let label = run.phase.label();
@@ -810,15 +881,17 @@ impl Assist {
         v_flex().id(("assist-card", id)).p_3().gap_2p5().rounded_lg().bg(theme.background.opacity(0.55)).border_1()
             .border_color(if active { color.opacity(0.45) } else { theme.border })
             .child(v_flex().gap_1().pb_2().border_b_1().border_color(theme.border)
-                .child(div().text_xs().text_color(theme.muted_foreground).child("You"))
-                .child(TextView::markdown(SharedString::from(format!("chat-request-{id}")),
-                    if run.instructions.is_empty() { run.action.label().to_string() } else if run.action == Action::Ask { run.instructions.clone() } else { format!("{}\n\n{}", run.action.label(), run.instructions) }).selectable(true)))
+                .child(h_flex().gap_2().child(div().text_xs().text_color(theme.muted_foreground).child("You"))
+                    .when(self.root_scope, |el| el.child(div().min_w_0().truncate().text_xs().text_color(theme.muted_foreground).child(if run.problem_title.is_empty() { run.slug.clone() } else { run.problem_title.clone() }))))
+                .when(run.action != Action::Ask, |el| el.child(h_flex().id(("chat-action-prompt", id)).gap_2().items_center().child(Icon::new(icon(run.action)).small().text_color(color)).child(div().text_sm().child(run.action.label()))
+                    .tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(request_prompt.clone()).build(window, cx))))
+                .when(!run.instructions.is_empty(), |el| el.child(TextView::markdown(SharedString::from(format!("chat-request-{id}")), run.instructions.clone()).selectable(true))))
             .child(header)
             .children(status)
-            .when(run.action == Action::Ask && run.answer.is_none() && !run.reply.is_empty(), |el| el.child(
+            .when(run.answer.is_none() && !run.reply.is_empty() && !run.reply.trim_start().starts_with('{'), |el| el.child(
                 TextView::markdown(SharedString::from(format!("chat-stream-{id}")), run.reply.clone()).selectable(true)))
-            .when(matches!(run.phase, Phase::Stopped | Phase::Failed(_)) && run.target.is_some(), |el| el.child(h_flex().gap_2()
-                .when(run.action == Action::Solve, |el| el.child(Button::new(("assist-continue", id)).primary().small().icon(IconName::Play).label("Continue")
+            .when(matches!(run.phase, Phase::Stopped | Phase::Failed(_)), |el| el.child(h_flex().gap_2()
+                .when(run.solve.is_some(), |el| el.child(Button::new(("assist-continue", id)).primary().small().icon(IconName::Play).label("Continue")
                     .tooltip("Continue using the current solution and agent session when available")
                     .on_click(cx.listener(move |this, _, window, cx| this.recover(id, true, window, cx)))))
                 .child(Button::new(("assist-retry", id)).ghost().small().icon(IconName::RefreshCw).label("Retry")
@@ -1098,20 +1171,18 @@ fn growth_chart(yours: Growth, best: Growth, theme: &Theme) -> AnyElement {
 }
 
 impl Workspace {
-    /// Runs an Assist action on the open problem. Dry run uses the native debugger when it can.
+    /// Sends a prompt shortcut with the current problem context.
     pub fn run_assist(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
         let slug = self.session.as_ref().map(|session| session.slug.clone());
         self.assist.update(cx, |assist, cx| {
             assist.set_problem(slug.as_deref(), cx);
             assist.sync_composer(window, cx);
         });
-        if action == Action::DryRun && !self.assist.read(cx).has_instructions(cx) && self.session.as_ref().is_some_and(|s| practice::debugger::supported(s.language) && !s.source.is_stdin()) {
-            self.set_debug(true, window, cx);
-            return;
-        }
         if action == Action::Solve && self.session.as_ref().is_some_and(|s| s.running || matches!(s.judge, Some(crate::workspace::Judge::Running { .. }))) { self.flash("Wait for the current test or submission", cx); return; }
         self.save_now(cx);
-        let Some(snapshot) = self.assist_snapshot(cx) else { self.flash("Open a problem first", cx); return };
+        let snapshot = if let Some(snapshot) = self.assist_snapshot(cx) { snapshot } else if action == Action::Ask && self.assist.read(cx).root_scope {
+            Snapshot { slug: String::new(), title: "General".into(), difficulty: String::new(), url: String::new(), statement_html: String::new(), code: String::new(), starter: String::new(), language: self.config.preferred_language, cases: vec![], focus_case: 0, solution_path: PathBuf::new(), workspace: self.config.workspace.clone(), trace: None }
+        } else { self.flash("Open a problem first", cx); return };
         if action.needs_attempt() && !snapshot.has_attempt() { self.flash("Write some code first", cx); return; }
         let target = self.assist.read(cx).target(&self.config);
         if action == Action::Solve && matches!(target, Target::Web(_)) {
