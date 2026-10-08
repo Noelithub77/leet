@@ -7,6 +7,8 @@ use practice::{language::Language, runner::{Case, Compare}};
 use serde_json::json;
 use crate::debug_view::{Debugger, Snapshot};
 
+mod statement;
+
 const PYTHON: &str = "import sys\n\ndef solve():\n    data = list(map(int, sys.stdin.buffer.read().split()))\n    answers = []\n    for i in range(1, len(data)):\n        n = data[i]\n        answer = n * 2\n        answers.append(answer)\n        print(answer)\n\nif __name__ == '__main__':\n    solve()\n";
 const CPP: &str = "#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t;\n    cin >> t;\n    vector<int> answers;\n    while (t--) {\n        int n;\n        cin >> n;\n        int answer = n * 2;\n        answers.push_back(answer);\n        cout << answer << '\\n' << flush;\n    }\n    return 0;\n}\n";
 
@@ -33,11 +35,13 @@ fn check_state(debugger: &Entity<Debugger>, cx: &App, case: usize, index: Option
 
 pub fn run() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(2).collect();
+    let mut statement_view = false;
     let mut output = None; let mut video = false; let mut pixels = true; let mut wayland = false; let mut explore = false;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
             "--output" if output.is_none() => { i += 1; output = Some(PathBuf::from(args.get(i).context("--output requires a path")?)); }
+            "--statement" if !statement_view => statement_view = true,
             "--video" if !video => video = true,
             "--wayland" if !wayland => wayland = true,
             "--explore" if !explore => { explore = true; wayland = true; }
@@ -49,13 +53,13 @@ pub fn run() -> Result<()> {
     ensure!(!video || pixels, "Video requires pixel rendering");
     let output = output.context("--output is required")?;
     std::fs::create_dir_all(&output)?;
-    if wayland { ensure!(!video && pixels, "Wayland smoke uses screenshots"); return run_wayland(output, explore); }
+    if wayland { ensure!(!video && pixels, "Wayland smoke uses screenshots"); return run_wayland(output, explore, statement_view); }
     let mut cx = HeadlessAppContext::with_platform(gpui_kit::platform::current_platform(true).text_system(), Arc::new(crate::assets::Assets), move || {
         if pixels { gpui_kit::platform::current_headless_renderer() } else { Ok(None) }
     });
     cx.allow_parking();
     cx.update(init);
-    let mut reports = Vec::new();
+    let mut reports = vec![statement::native(&mut cx, &output, pixels)?];
     for slug in ["cf:1:A", "cc:GUIFIXTURE"] {
         for language in [Language::Python, Language::Cpp] {
             let name = format!("{}-{}", if slug.starts_with("cf:") { "codeforces" } else { "codechef" }, language.id());
@@ -108,7 +112,7 @@ pub fn run() -> Result<()> {
                 check_state(&debugger, cx, 1, Some(len - 1), false)
             })??;
             if pixels { capture(&mut cx, handle, &output.join(format!("{name}-final.png")))?; }
-            if video && reports.is_empty() { motion_video(&mut cx, handle, &debugger, &output)?; }
+            if video && reports.len() == 1 { motion_video(&mut cx, handle, &debugger, &output)?; }
             reports.push(json!({"fixture":name,"passed":true,"checks":["real recording","case clicks","step button","keyboard steps","case shortcuts","seek drag","play/pause","final verdict"],"pixels":pixels}));
             cx.update_window(handle, |_, window, _| window.remove_window())?;
             cx.run_until_parked();
@@ -155,7 +159,7 @@ fn motion_video(cx: &mut HeadlessAppContext, handle: gpui_kit::AnyWindowHandle, 
     Ok(())
 }
 
-fn run_wayland(output: PathBuf, explore: bool) -> Result<()> {
+fn run_wayland(output: PathBuf, explore: bool, statement_view: bool) -> Result<()> {
     if explore {
         let name = std::env::var("OMABOX_BOX").context("Exploration requires an OmaBox session")?;
         ensure!(!name.is_empty() && std::env::var("OMABOX").as_deref() == Ok("1") && std::env::var("OMABOX_NAME").as_deref() == Ok(name.as_str()), "Exploration requires omabox run in a named box");
@@ -166,6 +170,7 @@ fn run_wayland(output: PathBuf, explore: bool) -> Result<()> {
     ensure!(runtime.is_dir() && (explore || runtime == output.join("session/runtime")), "Runtime is not the fixture's private directory");
     let socket = std::env::var("WAYLAND_DISPLAY").context("Missing private Wayland socket")?;
     ensure!(!socket.contains('/') && runtime.join(&socket).exists(), "Private compositor socket is missing");
+    if statement_view { ensure!(explore, "Statement exploration requires OmaBox"); return statement::explore(output); }
     let result = Arc::new(std::sync::Mutex::new(None));
     let outcome = result.clone();
     gpui_kit::application().with_assets(crate::assets::Assets).run(move |cx| {

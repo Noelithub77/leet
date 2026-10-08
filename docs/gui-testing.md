@@ -19,9 +19,11 @@ remain with the report and screenshots. The operator removes temporary session
 data and bounds the fixture process to 180 seconds. Failure never falls back to
 the user's display.
 
+Native mode also checks long statement cards at regular and compact sizes, in light and dark themes, and at 140% zoom: visible headers, exclusive expansion, wheel scrolling, PageDown, and Tab/Space activation. Statement PNGs are saved alongside debugger captures.
+
 Native mode checks real recorder results, case selection, step buttons, arrow
 keys, seek dragging, Home/End, play/pause, and expected output. Inputs go through
-GPUI dispatch and hit testing. PNGs are 2560×1600 for a 1280×800 logical window
+GPUI dispatch and hit testing. Debugger PNGs are 2560×1600 for a 1280×800 logical window
 at GPUI's 2× test scale. Inspect the images separately from the assertions.
 
 Video uses 240 offscreen frames, advances the test clock at 60 Hz, and presses
@@ -62,13 +64,15 @@ host. Adapt the absolute binary path when using another checkout. View the final
 image and confirm Case 2, its final step, output `6` and `10`, and the matching
 verdict; an exit-zero key command alone is insufficient evidence.
 
-The verified local OmaBox session used the Intel `i915` render node. NVIDIA EGL
-initialization failed on this machine; inspect `omabox help up` for `--gpu`
-selection when the default GPU cannot initialize. Do not change the live
-compositor to resolve a fixture failure. OmaBox does not prove physical input,
+The verified local OmaBox session used the Intel `i915` render node. OmaBox
+reports its selected node and driver in the `render` field from `up --json`.
+The current command selects the node automatically and has no `--gpu` flag.
+Do not change the live compositor to resolve a fixture failure. OmaBox does not prove physical input,
 real monitors, native system services, or performance on another GPU.
 
 Run `./ops check --json` after source changes. Local deployment uses
 `./ops local:deploy --json`; it installs the ordinary release binary without
 the `gui-test` feature. Running windows may offer a restart, which remains a
 user action.
+
+To explore the statement cards in a named OmaBox, use the same isolated launch with `--gui-test --explore --statement --output /tmp/leet-statement-review`; its app id is `leet-statement-fixture`. This fixture stays open for 180 seconds and uses synthetic long content without a database.

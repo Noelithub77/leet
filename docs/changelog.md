@@ -1,7 +1,7 @@
 <details open>
 <summary>Feat</summary>
 
-- Separate Description, Examples, and Constraints into cards with subtle pastel rails.
+- Keep Description, Examples, and Constraints visible with one scrolling card open at a time.
 
 - Replay Python and C++ Codeforces and CodeChef programs in Debug, including CPH samples.
 

@@ -4,7 +4,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::text::TextViewStyle;
-use gpui_kit::component::{ActiveTheme as _, Selectable as _, Sizable as _, WindowExt as _, Icon, h_flex, v_flex};
+use gpui_kit::component::{ActiveTheme as _, Selectable as _, Sizable as _, WindowExt as _, FocusableExt as _, Icon, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use practice::{db::Db, description::{Block, Part}, language::Language, solutions::{Article, Reference}};
@@ -15,6 +15,11 @@ impl Global for TagsVisible {}
 pub struct Sections(pub [bool; 3]);
 impl Default for Sections { fn default() -> Self { Self([true, false, false]) } }
 impl Global for Sections {}
+impl Sections {
+    fn active(&self) -> Option<usize> {
+        if self.0[2] { Some(2) } else { self.0.iter().position(|open| *open) }
+    }
+}
 fn tag_icon(topic: &str) -> IconName {
     match topic {
         "Array" | "Hash Table" | "String" => IconName::Brackets,
@@ -41,7 +46,6 @@ fn tag_icon(topic: &str) -> IconName {
 pub struct Statement {
     pub(crate) focus: Option<FocusHandle>,
     pub(crate) scroll: ScrollHandle,
-    pub(crate) constraints_scroll: ScrollHandle,
     pub slug: SharedString,
     pub title: SharedString,
     pub blocks: Vec<Block>,
@@ -66,13 +70,15 @@ impl Statement {
         self.focus.get_or_insert_with(|| cx.focus_handle()).clone().focus(window, cx);
     }
     fn scroll_by(&self, delta: f32, cx: &mut Context<Self>) {
-        let scroll = if !self.reference_open && cx.global::<Sections>().0[2] { &self.constraints_scroll } else { &self.scroll };
+        let scroll = &self.scroll;
         let mut offset = scroll.offset(); offset.y += px(delta); scroll.set_offset(offset); cx.notify();
     }
 
     fn section_button(&self, section: usize, label: &'static str, cx: &mut Context<Self>) -> Button {
-        let open = cx.global::<Sections>().0[section];
-        Button::new(("statement-section", section)).ghost().small().w_full().h_9().px_3().rounded_none()
+        let open = cx.global::<Sections>().active() == Some(section);
+        Button::new(("statement-section", section)).ghost().small().tab_stop(true).toggled(open).focus_ring(false).w_full().h_9().px_3().rounded_lg().flex_shrink_0()
+            .border_1().border_color(cx.theme().border.opacity(0.))
+            .focus(|style| style.border_color(cx.theme().ring))
             .accessibility_label(label)
             .child(h_flex().w_full().justify_between().gap_2()
                 .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(label))
@@ -80,27 +86,23 @@ impl Statement {
                     .size_4().text_color(cx.theme().muted_foreground)))
             .on_click(cx.listener(move |this, _, window, cx| {
                 let sections = toggle_section(cx.global::<Sections>().0, section);
-                let Some(db) = &this.db else { return; };
-                if let Err(error) = db.save_statement_sections(sections) {
+                if let Some(db) = &this.db && let Err(error) = db.save_statement_sections(sections) {
                     window.push_notification(gpui_kit::component::notification::Notification::error(format!("Section preferences not saved: {error}")), cx);
                     return;
                 }
                 this.scroll.set_offset(point(px(0.), px(0.)));
-                this.constraints_scroll.set_offset(point(px(0.), px(0.)));
                 cx.set_global(Sections(sections));
                 cx.refresh_windows();
             }))
     }
     fn section_card(&self, section: usize, label: &'static str, cx: &mut Context<Self>) -> Div {
         let theme = cx.theme();
-        let accent = rgb(match (section, theme.mode.is_dark()) {
-            (0, true) => 0x99dfce, (0, false) => 0x397e6d,
-            (1, true) => 0xa0c4ff, (1, false) => 0x536aae,
-            (_, true) => 0xd8b4fe, (_, false) => 0x9561b7,
-        });
-        v_flex().relative().min_w_0().flex_shrink_0().rounded_lg().overflow_hidden()
-            .border_1().border_color(theme.border.opacity(0.65)).bg(theme.muted.opacity(0.2))
-            .child(div().absolute().left_0().top_0().bottom_0().w(px(3.)).bg(accent.opacity(0.7)))
+        let open = cx.global::<Sections>().active() == Some(section);
+        v_flex().min_w_0().min_h_0().rounded_lg()
+            .border_1().border_color(theme.border.opacity(if open { 0.7 } else { 0.4 }))
+            .bg(theme.muted.opacity(if open { 0.18 } else { 0.08 }))
+            .when(open, |view| view.flex_1())
+            .when(!open, |view| view.flex_shrink_0())
             .child(self.section_button(section, label, cx))
     }
     pub fn toggle_reference(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -161,23 +163,27 @@ impl Statement {
         }))
     }
     fn render_sections(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let sections = cx.global::<Sections>().0;
-        v_flex().gap_3().children(["Description", "Examples"].into_iter().enumerate().filter_map(|(section, label)| {
-            let exists = self.blocks.iter().any(|block| match block {
-                Block::Markdown(_) => section == 0, Block::Example { .. } => section == 1, Block::Constraints(_) => false,
-            });
-            exists.then(|| self.section_card(section, label, cx)
-                .when(sections[section], |view| view.child(div().px_3().pb_3().pt_1().child(self.render_blocks(section, cx)))))
-        }))
+        let active = cx.global::<Sections>().active();
+        v_flex().flex_1().min_h_0().gap_2()
+            .children(["Description", "Examples", "Constraints"].into_iter().enumerate().filter_map(|(section, label)| {
+                let exists = self.blocks.iter().any(|block| match block {
+                    Block::Markdown(_) => section == 0, Block::Example { .. } => section == 1, Block::Constraints(_) => section == 2,
+                });
+                exists.then(|| self.section_card(section, label, cx)
+                    .when(active == Some(section), |view| view.child(
+                        div().id("statement-content").flex_1().min_h_0().overflow_y_scroll().track_scroll(&self.scroll)
+                            .child(v_flex().px_3().pb_3().pt_2().gap_4().child(self.render_blocks(section, cx))
+                                .child(self.render_hints(cx))))))
+            }))
+            .when(active.is_none(), |view| view.child(div().id("statement-content").flex_1().min_h_0().overflow_y_scroll().track_scroll(&self.scroll).child(self.render_hints(cx))))
     }
 
-    fn render_constraints(&self, max_height: f32, cx: &mut Context<Self>) -> impl IntoElement {
-        let open = cx.global::<Sections>().0[2];
-        v_flex().flex_shrink_0().min_h_0().px_4().py_2()
-            .child(self.section_card(2, "Constraints", cx)
-                .when(open, |view| view.child(div().id("statement-constraints")
-                    .max_h(px(max_height)).overflow_y_scroll().track_scroll(&self.constraints_scroll)
-                    .px_3().pb_3().pt_1().child(self.render_blocks(2, cx)))))
+    fn render_hints(&self, cx: &Context<Self>) -> impl IntoElement {
+        v_flex().gap_3().children(self.hints.iter().take(self.hints_shown).enumerate().map(|(index, hint)| {
+            v_flex().p_3().gap_1().rounded_md().bg(cx.theme().muted)
+                .child(div().text_xs().font_weight(FontWeight::SEMIBOLD).text_color(cx.theme().primary).child(format!("Hint {}", index + 1)))
+                .child(self.markdown(format!("hint-{}-{index}", self.slug), hint.to_string(), cx.theme().primary))
+        }))
     }
 
     fn render_reference(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -240,9 +246,9 @@ impl Render for Statement {
             .on_action(cx.listener(|this, _: &PageDown, _, cx| this.scroll_by(-520., cx)));
         if self.slug.is_empty() { return body.child(div().text_color(theme.muted_foreground).child("Open a problem from the roadmap or search.")); }
         if let Some(status) = &self.status { return body.child(div().text_color(theme.muted_foreground).child(status.clone())); }
-        body.child(v_flex().id("statement-content").flex_1().min_h_0().track_scroll(&self.scroll).overflow_y_scroll().p_4().gap_4()
-            .child(div().text_size(px(24.)).font_weight(FontWeight::BOLD).child(self.title.clone()))
-            .child(h_flex().gap_1()
+        body.child(v_flex().flex_1().min_h_0().p_4().gap_3()
+            .child(div().flex_shrink_0().text_size(rems(1.5)).font_weight(FontWeight::BOLD).child(self.title.clone()))
+            .child(h_flex().flex_shrink_0().gap_1()
                 .child(Button::new("statement-question").ghost().small().selected(!self.reference_open).icon(IconName::FileText).accessibility_label("Question").tooltip("Question")
                     .on_click(cx.listener(|this, _, _, cx| { this.reference_open = false; cx.notify(); })))
                 .child(Button::new("statement-solution").ghost().small().selected(self.reference_open).icon(IconName::Lightbulb).accessibility_label("Solution").tooltip_with_action("Solution", &crate::actions::ToggleReference, Some(crate::actions::WORKSPACE))
@@ -252,20 +258,13 @@ impl Render for Statement {
                 .when_some(self.video.clone(), |row, url| row.child(Button::new("statement-video").ghost().small().icon(IconName::Play)
                     .accessibility_label("Watch video explanation").tooltip("Watch video explanation")
                     .on_click(move |_, _, _| { let _ = open::that_detached(&url); }))))
-            .child(if self.reference_open { self.render_reference(cx).into_any_element() } else {
-                v_flex().gap_4().when(show_tags, |view| view.child(h_flex().flex_wrap().gap_1().children(self.topics.iter().map(|topic| {
+            .child(if self.reference_open { div().id("statement-content").flex_1().min_h_0().overflow_y_scroll().track_scroll(&self.scroll).child(self.render_reference(cx)).into_any_element() } else {
+                v_flex().flex_1().min_h_0().gap_3().when(show_tags, |view| view.child(h_flex().flex_shrink_0().flex_wrap().gap_1().children(self.topics.iter().map(|topic| {
                     h_flex().gap_1().px_1p5().py_0p5().rounded_md().bg(theme.muted).text_xs().text_color(theme.muted_foreground)
                         .child(Icon::new(tag_icon(topic)).size_3().text_color(rgb(0xa0c4ff))).child(topic.clone())
                 })))).child(self.render_sections(cx))
-                    .children(self.hints.iter().take(self.hints_shown).enumerate().map(|(index, hint)| {
-                        v_flex().p_3().gap_1().rounded_md().bg(theme.muted)
-                            .child(div().text_xs().font_weight(FontWeight::SEMIBOLD).text_color(theme.primary).child(format!("Hint {}", index + 1)))
-                            .child(self.markdown(format!("hint-{}-{index}", self.slug), hint.to_string(), theme.primary))
-                    }))
                     .into_any_element()
             }))
-            .when(!self.reference_open && self.blocks.iter().any(|block| matches!(block, Block::Constraints(_))), |view|
-                view.child(self.render_constraints(window.viewport_size().height.as_f32() * 0.4, cx)))
             .when(!self.reference_open && !self.hints.is_empty(), |view| view.child(
                 h_flex().flex_shrink_0().gap_2().px_4().py_2().border_t_1().border_color(theme.border).text_xs().text_color(theme.muted_foreground)
                     .child(key(&hint_key))
@@ -280,9 +279,8 @@ impl Render for Statement {
 }
 
 fn toggle_section(mut sections: [bool; 3], section: usize) -> [bool; 3] {
-    let opening = !sections[section];
-    if opening && section == 2 { sections = [false; 3]; }
-    else if opening { sections[2] = false; }
+    let opening = Sections(sections).active() != Some(section);
+    sections = [false; 3];
     sections[section] = opening;
     sections
 }
@@ -296,6 +294,6 @@ mod section_tests {
         assert_eq!(toggle_section([true, true, false], 2), [false, false, true]);
         assert_eq!(toggle_section([false, false, true], 2), [false; 3]);
         assert_eq!(toggle_section([false, false, true], 1), [false, true, false]);
-        assert_eq!(toggle_section([true, false, false], 1), [true, true, false]);
+        assert_eq!(toggle_section([true, false, false], 1), [false, true, false]);
     }
 }
