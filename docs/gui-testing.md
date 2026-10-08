@@ -19,6 +19,8 @@ remain with the report and screenshots. The operator removes temporary session
 data and bounds the fixture process to 180 seconds. Failure never falls back to
 the user's display.
 
+The chat composer fixture checks Enter sending, Shift+Enter line breaks, removal of Ctrl+Enter, empty and disabled input, and send/stop containment. It renders compact, light, dark, and 140%-zoom variants. It uses the production composer with a dropped fixture workspace, so sends do not start agents or open web chats.
+
 Native mode also checks long statement cards at regular and compact sizes, in light and dark themes, and at 140% zoom: visible headers, exclusive expansion, wheel scrolling, PageDown, and Tab/Space activation. Statement PNGs are saved alongside debugger captures.
 
 The guided-tour fixture uses isolated SQLite storage and a bundled public

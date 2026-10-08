@@ -5,7 +5,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::Disableable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::input::Textarea;
+use gpui_kit::component::input::{InputGroup, InputGroupAddon, InputGroupAddonAlignment, Textarea};
 use gpui_kit::component::{ActiveTheme as _, Theme, Icon, Sizable as _, h_flex, v_flex};
 
 use super::{Assist, Action, Phase, SendChat, Target, icon, accent};
@@ -104,13 +104,20 @@ impl Render for Assist {
                     .child(div().text_sm().child(if !has_problem { "Open a problem to chat" } else { "Ask about this problem" }))
 ))
                 .children(cards)))
-            .child(v_flex().p_3().gap_2().border_t_1().border_color(theme.border)
+            .child(self.render_composer(has_problem, web, busy, cx))
+    }
+}
+
+impl Assist {
+    pub(super) fn render_composer(&self, has_problem: bool, web: bool, busy: bool, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme().clone();
+        v_flex().p_3().gap_2().border_t_1().border_color(theme.border)
                 .when_some(self.conversation_error.clone(), |el, error| el.child(div().text_xs().text_color(theme.danger).child(error)))
                 .when(self.editing.is_some(), |el| el.child(h_flex().items_center().child(div().flex_1().text_xs().text_color(theme.muted_foreground).child("Edit as a new branch"))
                     .child(Button::new("cancel-chat-edit").ghost().xsmall().icon(IconName::X).tooltip("Cancel edit").on_click(cx.listener(|this, _, window, cx| this.cancel_edit(window, cx))))))
-                .child(Textarea::new(&self.composer).disabled(!has_problem).aria_label("Message or action instructions"))
-                .child(h_flex().gap_2().items_center().child(Icon::new(IconName::MessageCircle).small().text_color(theme.muted_foreground))
-                    .child(div().flex_1().text_xs().text_color(theme.muted_foreground).child("Ctrl+Enter"))
+                .child(InputGroup::new("chat-composer").disabled(!has_problem)
+                    .input(Textarea::new(&self.composer).aria_label("Message or action instructions"))
+                    .addon(InputGroupAddon::new("chat-composer-action").align(InputGroupAddonAlignment::InlineEnd).self_end().pb_2().pr_2()
                     .child(if busy {
                         Button::new("chat-send-stop").ghost().small().icon(IconName::CircleStop).tooltip("Stop current run").accessibility_label("Stop current run")
                             .on_click(cx.listener(|this, _, _, cx| { let ids: Vec<_> = this.runs.iter().filter(|run| Some(&run.slug) == this.slug.as_ref() && (run.phase.active() || run.phase == Phase::Confirm)).map(|run| run.id).collect(); for id in ids { this.stop(id, cx); } })).into_any_element()

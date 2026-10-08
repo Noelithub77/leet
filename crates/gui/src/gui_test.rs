@@ -62,6 +62,7 @@ pub fn run() -> Result<()> {
     cx.update(init);
     let mut reports = vec![statement::native(&mut cx, &output, pixels)?];
     reports.push(tour::native(&mut cx, &output, pixels, video)?);
+    reports.push(crate::assist::composer_fixture::native(&mut cx, &output, pixels)?);
     for slug in ["cf:1:A", "cc:GUIFIXTURE"] {
         for language in [Language::Python, Language::Cpp] {
             let name = format!("{}-{}", if slug.starts_with("cf:") { "codeforces" } else { "codechef" }, language.id());
@@ -114,7 +115,7 @@ pub fn run() -> Result<()> {
                 check_state(&debugger, cx, 1, Some(len - 1), false)
             })??;
             if pixels { capture(&mut cx, handle, &output.join(format!("{name}-final.png")))?; }
-            if video && reports.len() == 2 { motion_video(&mut cx, handle, &debugger, &output)?; }
+            if video && name == "codeforces-python" { motion_video(&mut cx, handle, &debugger, &output)?; }
             reports.push(json!({"fixture":name,"passed":true,"checks":["real recording","case clicks","step button","keyboard steps","case shortcuts","seek drag","play/pause","final verdict"],"pixels":pixels}));
             cx.update_window(handle, |_, window, _| window.remove_window())?;
             cx.run_until_parked();

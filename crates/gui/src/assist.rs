@@ -28,12 +28,9 @@ use crate::workspace::Workspace;
 gpui_kit::actions!(chat, [SendChat, NextThread, PreviousThread, OpenThread, CloseThreadList]);
 
 pub fn bind_keys(cx: &mut App) {
-    cx.bind_keys([KeyBinding::new("ctrl-enter", SendChat, Some("AgentChat")),
-        KeyBinding::new("ctrl-enter", SendChat, Some("AgentChat > Input")),
-        KeyBinding::new("down", NextThread, Some("ChatThreads")),
+    cx.bind_keys([KeyBinding::new("down", NextThread, Some("ChatThreads")),
         KeyBinding::new("up", PreviousThread, Some("ChatThreads")),
         KeyBinding::new("enter", OpenThread, Some("ChatThreads")),
-        KeyBinding::new("ctrl-enter", OpenThread, Some("ChatThreads")),
         KeyBinding::new("escape", CloseThreadList, Some("ChatThreads"))]);
 }
 
@@ -41,6 +38,10 @@ pub fn bind_keys(cx: &mut App) {
 mod chat_view;
 #[path = "conversation.rs"]
 mod conversation;
+
+#[cfg(feature = "gui-test")]
+#[path = "gui_test/composer.rs"]
+pub(crate) mod composer_fixture;
 
 const SOLVE_ATTEMPTS: usize = 5;
 
@@ -231,9 +232,9 @@ impl Assist {
     pub fn new(workspace: WeakEntity<Workspace>, db: Arc<Db>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let catalog_cache = Arc::new(agents::CatalogCache::new(db.clone()));
         let catalogs = AgentKind::ALL.into_iter().filter_map(|kind| catalog_cache.cached(kind).map(|catalog| (kind, Loadable::Ready(catalog)))).collect();
-        let composer = cx.new(|cx| TextareaState::new(window, cx).rows(3).placeholder("Ask a question or add instructions…"));
+        let composer = cx.new(|cx| TextareaState::new(window, cx).rows(3).submit_on_enter(true).placeholder("Ask a question or add instructions…"));
         cx.subscribe_in(&composer, window, |this, _, event: &InputEvent, window, cx| {
-            if matches!(event, InputEvent::PressEnter { secondary: true, .. }) { this.send(window, cx); }
+            if matches!(event, InputEvent::PressEnter { secondary: false, shift: false }) { this.send(window, cx); }
             if matches!(event, InputEvent::Change) { this.persist_draft(cx); }
             cx.notify();
         }).detach();

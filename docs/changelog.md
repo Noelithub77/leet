@@ -26,6 +26,7 @@
 
 - Multiple chat threads per problem with saved drafts, message forks, branch edits, deletion, and undo.
 - Search the open problem’s chat threads with automatic search focus.
+- Send chats with Enter, add lines with Shift+Enter, and keep send/stop inside the prompt box.
 - Use every prompt shortcut in ordinary chats, with readable prompts on hover and shared native agent capabilities.
 - Let agents write and revise native visualization artifacts directly in private files.
 - Native resizable Explorer on Alt+S, Description on Alt+A, and AI on Alt+D.
