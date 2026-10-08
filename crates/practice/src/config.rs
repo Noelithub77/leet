@@ -22,8 +22,6 @@ pub struct Config {
     pub codeforces_handle: String,
     pub onboarding_completed: bool,
     pub show_tags: bool,
-    pub companion_enabled: bool,
-    pub companion_port: u16,
     pub external_editor: String,
     pub roadmap_list: List,
     /// Web chat for Assist when no local agent is chosen.
@@ -53,8 +51,6 @@ impl Default for Config {
             codeforces_handle: String::new(),
             onboarding_completed: false,
             show_tags: false,
-            companion_enabled: true,
-            companion_port: 13337,
             external_editor: "zed".into(),
             roadmap_list: List::NeetCode150,
             web_chat: Provider::ChatGpt,

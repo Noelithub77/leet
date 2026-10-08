@@ -1,11 +1,14 @@
 <details open>
 <summary>Feat</summary>
 
-- Open global search with Ctrl+T as an alternative shortcut.
-
 - Reopen closed problem tabs with Ctrl+Shift+T, preserving their editor state.
 
+- Open global search with Ctrl+T as an alternative shortcut.
 - Label primary and alternative shortcuts; Home uses Ctrl+H with Ctrl+. as an alternative.
+
+- CodeChef provider with its logo and 100 offline beginner/intermediate problems.
+- Import CodeChef samples through CPH and run solutions locally in every supported language.
+- Background CPH listener opens Leet when closed and reuses tabs in its existing window.
 
 - Per-problem AI chat with custom action instructions, follow-up questions, and locally saved conversations.
 - Native resizable Explorer on Alt+S, Description on Alt+A, and AI on Alt+D.
@@ -42,7 +45,6 @@
 - Edit test inputs and expected values inline with a pencil or double-click.
 - Java in onboarding, language switching, highlighting, and local contest runs.
 - Onboarding checks the selected language's tools and links to missing setup.
-- Keep Competitive Companion under Provider settings when Codeforces is configured.
 - Organize Settings into General, Editor, Appearance, Provider, AI, Accounts, and Keybindings tabs.
 - Show current shortcuts with keycaps.
 - Animated panel toggles with current shortcut tooltips.
@@ -56,6 +58,10 @@
 
 <details>
 <summary>Fix</summary>
+
+- Automatically acquire three free Companion ports, retry occupied ports, and avoid VS Code CPH’s default port.
+- Remove CPH settings and suppress duplicate browser deliveries.
+- Fetch complete statements after CPH imports and select the provider from the problem URL.
 
 - Bring Leet forward after CPH imports, show listener errors, and release the import port when restarting.
 - Label browser import settings and notifications as CPH.

@@ -20,6 +20,7 @@ impl AssetSource for Assets {
             "providers/neetcode.svg" => Some(include_bytes!("../assets/providers/neetcode.svg")),
             "providers/leetcode.svg" => Some(include_bytes!("../assets/providers/leetcode.svg")),
             "providers/codeforces.svg" => Some(include_bytes!("../assets/providers/codeforces.svg")),
+            "providers/codechef.svg" => Some(include_bytes!("../assets/providers/codechef.svg")),
             "providers/chatgpt.svg" => Some(include_bytes!("../assets/providers/chatgpt.svg")),
             "providers/claude.svg" => Some(include_bytes!("../assets/providers/claude.svg")),
             "providers/gemini.svg" => Some(include_bytes!("../assets/providers/gemini.svg")),
@@ -41,7 +42,7 @@ impl AssetSource for Assets {
     fn list(&self, path: &str) -> Result<Vec<SharedString>> {
         let mut paths = gpui_kit::assets::Assets.list(path)?;
         paths.extend(HomeIcons.list(path)?);
-        paths.extend(["leet.svg", "providers/neetcode.svg", "providers/leetcode.svg", "providers/codeforces.svg", "providers/chatgpt.svg", "providers/claude.svg", "providers/gemini.svg", "providers/codex.svg", "providers/claude-code.svg", "providers/opencode.svg", "providers/antigravity.svg", "providers/gemini-cli.svg", "providers/cursor.svg", "languages/python.svg", "languages/cpp.svg", "languages/go.svg", "languages/c.svg", "languages/java.svg"].into_iter().filter(|name| name.starts_with(path)).map(Into::into));
+        paths.extend(["leet.svg", "providers/neetcode.svg", "providers/leetcode.svg", "providers/codeforces.svg", "providers/codechef.svg", "providers/chatgpt.svg", "providers/claude.svg", "providers/gemini.svg", "providers/codex.svg", "providers/claude-code.svg", "providers/opencode.svg", "providers/antigravity.svg", "providers/gemini-cli.svg", "providers/cursor.svg", "languages/python.svg", "languages/cpp.svg", "languages/go.svg", "languages/c.svg", "languages/java.svg"].into_iter().filter(|name| name.starts_with(path)).map(Into::into));
         paths.sort();
         paths.dedup();
         Ok(paths)
@@ -58,6 +59,14 @@ mod tests {
         for language in practice::language::Language::ALL {
             let icon = Assets.load(&format!("languages/{}.svg", language.id())).unwrap().expect("Language icon must be bundled");
             assert!(!icon.is_empty());
+        }
+    }
+
+    #[::core::prelude::v1::test]
+    fn every_practice_provider_icon_is_bundled() {
+        for provider in practice::language::Source::ALL {
+            let name = provider.label().to_lowercase();
+            assert!(!Assets.load(&format!("providers/{name}.svg")).unwrap().expect("Provider logo must be embedded").is_empty());
         }
     }
 

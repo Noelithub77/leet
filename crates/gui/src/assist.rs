@@ -520,12 +520,12 @@ impl Assist {
             let _ = workspace.update(cx, |ws, cx| {
                 if !ws.session.as_ref().is_some_and(|s| s.slug == slug) {
                     ws.assist.update(cx, |assist, cx| assist.fail_solve(&slug, "Open this problem before submitting".into(), cx));
-                } else if slug.starts_with("cf:") {
+                } else if practice::language::Source::for_problem(&slug).is_stdin() {
                     ws.judge(true, window, cx);
                     ws.assist.update(cx, |assist, cx| {
                         if let Some(run) = assist.runs.iter_mut().find(|run| run.id == id) {
                             run.phase = Phase::Done; run.elapsed = Some(run.started.elapsed());
-                            if let Some(solve) = &mut run.solve { solve.log.push((Tone::Default, "Copied solution; submit and check the verdict in Codeforces".into())); }
+                            if let Some(solve) = &mut run.solve { solve.log.push((Tone::Default, format!("Copied solution; submit and check the verdict in {}", practice::language::Source::for_problem(&slug).label()))); }
                         }
                         cx.notify();
                     });
@@ -1105,7 +1105,7 @@ impl Workspace {
             assist.set_problem(slug.as_deref(), cx);
             assist.sync_composer(window, cx);
         });
-        if action == Action::DryRun && !self.assist.read(cx).has_instructions(cx) && self.session.as_ref().is_some_and(|s| practice::debugger::supported(s.language) && !s.slug.starts_with("cf:")) {
+        if action == Action::DryRun && !self.assist.read(cx).has_instructions(cx) && self.session.as_ref().is_some_and(|s| practice::debugger::supported(s.language) && !s.source.is_stdin()) {
             self.set_debug(true, window, cx);
             return;
         }

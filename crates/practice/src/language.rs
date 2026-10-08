@@ -37,9 +37,16 @@ pub enum Source {
     NeetCode,
     LeetCode,
     Codeforces,
+    CodeChef,
 }
 impl Source {
-    pub const ALL: [Self; 3] = [Self::NeetCode, Self::LeetCode, Self::Codeforces];
-    pub fn label(self) -> &'static str { match self { Self::NeetCode => "NeetCode", Self::LeetCode => "LeetCode", Self::Codeforces => "Codeforces" } }
-    pub fn next(self) -> Self { match self { Self::NeetCode => Self::LeetCode, Self::LeetCode => Self::Codeforces, Self::Codeforces => Self::NeetCode } }
+    pub fn is_stdin(self) -> bool { matches!(self, Self::Codeforces | Self::CodeChef) }
+    pub fn for_problem(slug: &str) -> Self {
+        if slug.starts_with("cf:") { Self::Codeforces }
+        else if slug.starts_with("cc:") { Self::CodeChef }
+        else { Self::LeetCode }
+    }
+    pub const ALL: [Self; 4] = [Self::NeetCode, Self::LeetCode, Self::Codeforces, Self::CodeChef];
+    pub fn label(self) -> &'static str { match self { Self::NeetCode => "NeetCode", Self::LeetCode => "LeetCode", Self::Codeforces => "Codeforces", Self::CodeChef => "CodeChef" } }
+    pub fn next(self) -> Self { match self { Self::NeetCode => Self::LeetCode, Self::LeetCode => Self::Codeforces, Self::Codeforces => Self::CodeChef, Self::CodeChef => Self::NeetCode } }
 }

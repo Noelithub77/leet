@@ -6,7 +6,7 @@ A native GPUI coding-practice IDE written in safe Rust. Keep the UI calm, compac
 
 - `crates/gui`: desktop UI, editor adapters, navigation, accounts, themes, provider/language icons.
 - `crates/practice`: UI-independent clients, Diesel/SQLite cache, language servers, runners, Git history, article parsing, bundled public data.
-- `crates/practice/data/base.sqlite`: tracked public-only bundle. Full NeetCode 150; metadata only elsewhere. Never put credentials, progress, submissions, personal solutions, or tests into it.
+- `crates/practice/data/base.sqlite`: tracked public-only bundle. Full NeetCode 150 and 100 CodeChef practice statements/samples; metadata only elsewhere. Never put credentials, progress, submissions, personal solutions, or tests into it.
 - `docs/development.md`, `docs/bundle.md`, `docs/changelog.md`: workflows, data provenance/limits, user-facing milestones.
 
 ## Work and decisions

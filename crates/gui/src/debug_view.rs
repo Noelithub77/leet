@@ -136,7 +136,7 @@ impl Debugger {
         self.lines = source_lines(&source);
         self.highlighter = SyntaxHighlighter::new(snapshot.language.id());
         self.highlighter.update(None, &ropey::Rope::from_str(&source), None);
-        self.unsupported = if snapshot.slug.starts_with("cf:") { Some("Native tracing supports LeetCode function problems. Use AI Dry run for stdin problems.".into()) } else { debugger::requirement(snapshot.language, &snapshot.python).err() };
+        self.unsupported = if practice::language::Source::for_problem(&snapshot.slug).is_stdin() { Some("Native tracing supports LeetCode function problems. Use AI Dry run for stdin problems.".into()) } else { debugger::requirement(snapshot.language, &snapshot.python).err() };
         self.traces = snapshot.cases.iter().map(|_| Recording::Waiting).collect();
         self.selected = selected.min(snapshot.cases.len().saturating_sub(1));
         self.playback = Playback::new(0);

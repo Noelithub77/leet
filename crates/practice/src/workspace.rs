@@ -15,6 +15,9 @@ pub fn solution_rel(frontend_id: u32, slug: &str, language: crate::language::Lan
     if let Ok((contest, index)) = crate::codeforces::problem_id(slug) {
         return Path::new("codeforces").join(format!("{contest}{index}")).join(format!("main.{}", language.extension()));
     }
+    if let Ok(code) = crate::codechef::problem_code(slug) {
+        return Path::new("codechef").join(code).join(format!("main.{}", language.extension()));
+    }
     Path::new("leetcode").join(format!("{frontend_id:04}-{slug}.{}", language.extension()))
 }
 
@@ -50,6 +53,7 @@ mod tests {
     #[test]
     fn language_solutions_have_separate_paths_and_keep_edits() {
         let dir = tempfile::tempdir().unwrap();
+        assert_eq!(solution_rel(0, "cc:START01", Language::Python), Path::new("codechef/START01/main.py"));
         let python = solution_rel(1, "two-sum", Language::Python);
         assert_eq!(python.to_str().unwrap(), "leetcode/0001-two-sum.py");
         let path = ensure_solution(dir.path(), &python, "starter").unwrap();

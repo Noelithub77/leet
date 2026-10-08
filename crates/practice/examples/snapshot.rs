@@ -9,10 +9,10 @@ fn main() -> Result<()> {
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() { match arg.as_str() {
         "--output" => output = args.next().ok_or_else(|| anyhow::anyhow!("--output needs a path"))?.into(),
-        "--source" => source = args.next().ok_or_else(|| anyhow::anyhow!("--source needs neetcode150, leetcode, or codeforces"))?,
+        "--source" => source = args.next().ok_or_else(|| anyhow::anyhow!("--source needs neetcode150, leetcode, codeforces, or codechef"))?,
         "--import" => import = Some(PathBuf::from(args.next().ok_or_else(|| anyhow::anyhow!("--import needs Open-R1 JSONL"))?)),
         "--json" => {},
-        "--help" => { println!("snapshot --source <neetcode150|leetcode|codeforces|codeforces-index> [--output PATH] [--import OPEN_R1_JSONL] [--json]\nBundles full NeetCode 150 and metadata-only LeetCode/Codeforces catalogs; no accounts, progress, or credentials. Codeforces downloads only Open-R1 catalog metadata with DuckDB, or imports JSONL; statements load on demand. codeforces-index requires --output PATH.json and projects only lookup metadata. See docs/bundle.md."); return Ok(()); },
+        "--help" => { println!("snapshot --source <neetcode150|leetcode|codeforces|codechef|codeforces-index> [--output PATH] [--import OPEN_R1_JSONL] [--json]\nBundles full NeetCode 150 and CodeChef 100 plus metadata-only LeetCode/Codeforces catalogs; no accounts, progress, or credentials. Codeforces downloads only Open-R1 catalog metadata with DuckDB, or imports JSONL; statements load on demand. codeforces-index requires --output PATH.json and projects only lookup metadata. See docs/bundle.md."); return Ok(()); },
         _ => bail!("Unknown argument {arg}"),
     }}
     if source == "codeforces-index" {
@@ -66,6 +66,21 @@ fn main() -> Result<()> {
                 }});
             }
         },
+        "codechef" => {
+            let catalog = practice::codechef::catalog()?;
+            for (index, problem) in catalog.iter().enumerate() {
+                let slug = problem.slug()?;
+                if db.question(&slug)?.is_none() {
+                    match practice::codechef::question(&slug) {
+                        Ok(question) => { db.save_question(&question)?; },
+                        Err(error) => { failures.lock().unwrap().insert(slug.clone(), error.to_string()); },
+                    }
+                    std::thread::sleep(Duration::from_millis(350));
+                }
+                eprintln!("CodeChef {}/100: {slug}", index + 1);
+            }
+            db.set("cc-catalog", &serde_json::to_string(&catalog)?)?;
+        },
         "codeforces" => {
             let path = match import { Some(path) => path, None => download_codeforces()? };
             use std::io::BufRead as _;
@@ -92,7 +107,7 @@ fn main() -> Result<()> {
     }
     db.compact_snapshot()?;
     let failures = failures.lock().unwrap();
-    let report = json!({"environment":"local-bundle","source":source,"output":output,"bytes":std::fs::metadata(&output)?.len(),"statements":db.question_slugs()?.len(),"leetcode_catalog":db.catalog()?.len(),"content_policy":"full-neetcode150-metadata-elsewhere","failures":*failures,"upstream_omissions":*omissions.lock().unwrap()});
+    let report = json!({"environment":"local-bundle","source":source,"output":output,"bytes":std::fs::metadata(&output)?.len(),"statements":db.question_slugs()?.len(),"leetcode_catalog":db.catalog()?.len(),"content_policy":"full-neetcode150-codechef100-metadata-elsewhere","failures":*failures,"upstream_omissions":*omissions.lock().unwrap()});
     std::fs::write(output.with_extension(format!("{source}.json")),serde_json::to_vec_pretty(&report)?)?;
     println!("{report}");
     if !failures.is_empty() { bail!("{} records unavailable; bundle preserved for retry",failures.len()); }

@@ -3,6 +3,7 @@
 
 mod accounts;
 mod companion;
+mod companion_service;
 mod ai;
 mod assist;
 mod debug_view;
@@ -36,6 +37,10 @@ use gpui_kit::*;
 use practice::config::Config;
 
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some("--companion-service") {
+        if let Err(error) = companion_service::run() { eprintln!("leet CPH: {error}"); std::process::exit(1); }
+        return;
+    }
     let mut config = Config::load().unwrap_or_else(|err| {
         eprintln!("leet: {err}; using defaults");
         Config::default()

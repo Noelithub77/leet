@@ -1,0 +1,11 @@
+{
+  "environment": "local-bundle",
+  "source": "codechef",
+  "output": "crates/practice/data/base.sqlite",
+  "bytes": 11567104,
+  "statements": 250,
+  "leetcode_catalog": 4073,
+  "content_policy": "full-neetcode150-codechef100-metadata-elsewhere",
+  "failures": {},
+  "upstream_omissions": {}
+}

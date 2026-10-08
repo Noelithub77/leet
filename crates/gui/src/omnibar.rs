@@ -149,12 +149,12 @@ impl Workspace {
             text.push(format!("{} contest {} {}", contest.id().source().label(), contest.id().key(), contest.name()));
         }
         let mut problem_item = HashMap::new();
-        for p in self.catalog.iter().chain(self.sources.catalog.iter()) {
+        for p in self.catalog.iter().chain(self.sources.catalog.iter()).chain(self.sources.codechef.iter()) {
             problem_item.insert(p.slug.clone(), items.len());
             let topic = roadmap::entry(&p.slug).map_or("", |e| e.topic.as_str());
-            let provider = if p.slug.starts_with("cf:") { "Codeforces" } else if roadmap::entry(&p.slug).is_some() { "NeetCode LeetCode" } else { "LeetCode" };
+            let provider = if p.slug.starts_with("cc:") { "CodeChef" } else if p.slug.starts_with("cf:") { "Codeforces" } else if roadmap::entry(&p.slug).is_some() { "NeetCode LeetCode" } else { "LeetCode" };
             text.push(format!("{} {} {} {topic} {provider}", p.frontend_id, p.title, p.slug));
-            items.push(Item { target: Target::Problem(p.slug.clone().into()), title: format!("{}. {}", p.frontend_id, p.title).into() });
+            items.push(Item { target: Target::Problem(p.slug.clone().into()), title: format!("{}. {}", practice::codechef::problem_code(&p.slug).map(str::to_owned).unwrap_or_else(|_| p.frontend_id.to_string()), p.title).into() });
         }
         self.omni.index = Rc::new(Index::new(text));
         self.omni.items = Rc::new(items);
@@ -466,7 +466,7 @@ impl Workspace {
                 let topic = roadmap::entry(&p.slug).map(|e| e.topic.clone());
                 (
                     IconName::BookOpen,
-                    if p.slug.starts_with("cf:") { "Codeforces" } else if roadmap::entry(&p.slug).is_some() { "NeetCode" } else { "LeetCode" },
+                    if p.slug.starts_with("cc:") { "CodeChef" } else if p.slug.starts_with("cf:") { "Codeforces" } else if roadmap::entry(&p.slug).is_some() { "NeetCode" } else { "LeetCode" },
                     h_flex()
                         .gap_2()
                         .when_some(topic, |el, t| el.child(t))
@@ -485,7 +485,7 @@ impl Workspace {
             .rounded_md()
             .when(selected, |el| el.bg(theme.list_active))
             .child(match &item.target {
-                Target::Problem(slug) => crate::brand::source_icon(if slug.starts_with("cf:") { practice::language::Source::Codeforces } else if roadmap::entry(slug).is_some() { practice::language::Source::NeetCode } else { practice::language::Source::LeetCode }).small(),
+                Target::Problem(slug) => crate::brand::source_icon(if slug.starts_with("cc:") { practice::language::Source::CodeChef } else if slug.starts_with("cf:") { practice::language::Source::Codeforces } else if roadmap::entry(slug).is_some() { practice::language::Source::NeetCode } else { practice::language::Source::LeetCode }).small(),
                 _ => Icon::new(icon).small().text_color(if selected { theme.primary } else { muted }),
             })
             .child(div().flex_1().truncate().child(item.title.clone()))

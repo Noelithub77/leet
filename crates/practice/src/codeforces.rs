@@ -60,6 +60,19 @@ mod tests {
         assert_eq!(problem_url("cf:1:A").unwrap(), "https://codeforces.com/problemset/problem/1/A");
     }
     #[test]
+    fn sample_only_import_is_upgraded_without_replacing_its_cases() {
+        let dir = tempfile::tempdir().unwrap(); let db = crate::db::Db::open_unseeded(&dir.path().join("cache.db")).unwrap();
+        let import: crate::companion::Import = serde_json::from_value(serde_json::json!({"name":"Copper Squanderer","group":"CodeChef","url":"https://codeforces.com/problemset/problem/2275/G","tests":[{"input":"browser input","output":"browser output"}]})).unwrap();
+        let slug = import.cache(&db).unwrap();
+        let full = cached_question_with(&db, &slug, |slug| parse_statement(slug, "<div class=\"problem-statement\"><div class=\"title\">G. Copper Squander</div><p>Full network rebuilding description.</p></div>")).unwrap();
+        assert!(full.content.contains("Full network rebuilding description."));
+        assert_eq!(full.meta["source"], "codeforces");
+        assert_ne!(full.meta["statementSource"], "competitive-companion");
+        assert_eq!(db.test_cases(&slug).unwrap().unwrap()[0].input, "browser input");
+        let cached = cached_question_with(&db, &slug, |_| panic!("Complete cached statements must remain offline")).unwrap();
+        assert_eq!(cached.content, full.content);
+    }
+    #[test]
     #[ignore]
     fn live_public_catalog_and_statement() {
         assert!(!catalog().unwrap().is_empty());
@@ -177,8 +190,13 @@ pub fn question(slug: &str) -> Result<crate::leetcode::Question> {
 }
 
 pub fn cached_question(db: &crate::db::Db, slug: &str) -> Result<crate::leetcode::Question> {
-    if let Some(question) = db.question(slug)? { return Ok(question); }
-    let question = question(slug)?;
+    cached_question_with(db, slug, question)
+}
+fn cached_question_with(db: &crate::db::Db, slug: &str, fetch: impl FnOnce(&str) -> Result<crate::leetcode::Question>) -> Result<crate::leetcode::Question> {
+    if let Some(question) = db.question(slug)? {
+        if question.meta["statementSource"] != "competitive-companion" { return Ok(question); }
+    }
+    let question = fetch(slug)?;
     db.save_question(&question)?;
     Ok(question)
 }

@@ -224,6 +224,7 @@ impl Workspace {
                 this.client = Arc::new(Client::new(creds::load(Account::LeetCode).ok()));
                 this.flash("Refreshing…", cx);
                 if this.config.source == practice::language::Source::Codeforces { this.refresh_codeforces(true, window, cx); return; }
+                if this.config.source == practice::language::Source::CodeChef { this.refresh_codechef(window, cx); return; }
                 this.refresh_catalog(true, window, cx);
                 if this.account_names[1] != "Signed out" { this.refresh_neetcode(window, cx); }
             }))

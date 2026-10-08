@@ -348,7 +348,6 @@ impl Workspace {
         this._tasks.push(crate::update::check(window, cx));
         this.start_companion(window, cx);
         if !this.config.onboarding_completed { this.begin_onboarding(false, window, cx); }
-        else if this.config.codeforces_handle.is_empty() { this.begin_onboarding(true, window, cx); }
         if this.config.source == Source::Codeforces { this.refresh_codeforces(false, window, cx); }
         this
     }
@@ -501,6 +500,7 @@ impl Workspace {
 
     pub fn item(&self, slug: &str) -> Option<&CatalogItem> {
         if slug.starts_with("cf:") { self.sources.by_slug.get(slug).map(|&i| &self.sources.catalog[i]) }
+        else if slug.starts_with("cc:") { self.sources.codechef.iter().find(|item| item.slug == slug) }
         else { self.by_slug.get(slug).map(|&i| &self.catalog[i]) }
     }
 
@@ -672,7 +672,7 @@ impl Workspace {
             frontend_id,
             question: None,
             language,
-            source: if slug.starts_with("cf:") { Source::Codeforces } else if self.config.source == Source::Codeforces { Source::LeetCode } else { self.config.source },
+            source: if Source::for_problem(&slug).is_stdin() { Source::for_problem(&slug) } else if self.config.source.is_stdin() { Source::LeetCode } else { self.config.source },
             rel,
             path,
             disk_mtime: None,
@@ -700,6 +700,12 @@ impl Workspace {
         self.editor.update(cx, |e, cx| e.set_value("", window, cx));
         cx.notify();
 
+        self.load_problem(slug, window, cx);
+    }
+
+    pub(crate) fn load_problem(&mut self, slug: String, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(session) = &self.session else { return; };
+        let language = session.language;
         let (db, client) = (self.db.clone(), self.client.clone());
         let workspace = self.config.workspace.clone();
         cx.spawn_in(window, async move |this, cx| {
@@ -770,8 +776,11 @@ impl Workspace {
     }
 
     pub(crate) fn apply_loaded(&mut self, l: Loaded, window: &mut Window, cx: &mut Context<Self>) {
+        let preserve_draft = self.session.as_ref().is_some_and(|session| session.rel == l.rel && session.question.as_ref().is_some_and(|q| q.meta["statementSource"] == "competitive-companion"));
+        let code = if preserve_draft { self.save_now(cx); self.editor.read(cx).value().to_string() } else { l.code };
         let Some(s) = self.session.as_mut() else { return };
         let q = l.q;
+        let statement_error = q.meta["statementFetchError"].as_str().map(str::to_owned);
         let mut cases: Vec<Case> = q
             .examples
             .iter()
@@ -813,7 +822,8 @@ impl Workspace {
             *s = statement;
             cx.notify();
         });
-        self.editor.update(cx, |e, cx| e.set_value(l.code, window, cx));
+        self.editor.update(cx, |e, cx| e.set_value(code, window, cx));
+        if let Some(error) = statement_error { self.toast(Notification::warning(format!("Full statement unavailable: {error}")), window, cx); }
         if self.focus_area == Focus::Editor {
             self.focus_editor(window, cx);
         }
@@ -912,7 +922,7 @@ impl Workspace {
         if !self.require_attempt(window, cx) { return; }
         if !crate::case_editor::save(self, window, cx) { return; }
         self.save_now(cx);
-        if self.session.as_ref().is_some_and(|session| session.language != Language::Python && !session.slug.starts_with("cf:")) {
+        if self.session.as_ref().is_some_and(|session| session.language != Language::Python && !session.source.is_stdin()) {
             self.judge(false, window, cx);
             return;
         }
@@ -929,7 +939,7 @@ impl Workspace {
         s.results = vec![None; s.cases.len()];
         self.bottom = true;
         let language = s.language;
-        let is_codeforces = s.slug.starts_with("cf:");
+        let is_stdin = s.source.is_stdin();
         let (python, path, meta, cases) = (self.config.python.clone(), s.path.clone(), q.meta.clone(), s.cases.clone());
         let compare = Compare::for_statement(&q.content);
         let timeout = Duration::from_secs(self.config.test_timeout_secs);
@@ -939,7 +949,7 @@ impl Workspace {
             let outcome = cx
                 .background_spawn(async move {
                     let mut results = vec![];
-                    let compile = if is_codeforces { practice::stdin_runner::run(language, &python, &path, &cases, timeout, |r| results.push(r)) } else { runner::run(&python, &path, &meta, &cases, compare, timeout, |r| results.push(r)) };
+                    let compile = if is_stdin { practice::stdin_runner::run(language, &python, &path, &cases, timeout, |r| results.push(r)) } else { runner::run(&python, &path, &meta, &cases, compare, timeout, |r| results.push(r)) };
                     (compile, results)
                 })
                 .await;
@@ -988,8 +998,14 @@ impl Workspace {
         if !self.require_attempt(window, cx) { return; }
         if !crate::case_editor::save(self, window, cx) { return; }
         self.save_now(cx);
-        if let Some(session) = self.session.as_ref().filter(|session| session.slug.starts_with("cf:")) {
-            if submission {
+        if let Some(session) = self.session.as_ref().filter(|session| session.source.is_stdin()) {
+            if submission && session.source == Source::CodeChef {
+                if let Ok(url) = practice::codechef::problem_url(&session.slug) {
+                    cx.write_to_clipboard(ClipboardItem::new_string(self.editor.read(cx).value().to_string()));
+                    let _ = open::that_detached(url);
+                    self.toast(Notification::info("Solution copied · submit in CodeChef"), window, cx);
+                }
+            } else if submission {
                 if let Ok((contest, index)) = practice::codeforces::problem_id(&session.slug) {
                     cx.write_to_clipboard(ClipboardItem::new_string(self.editor.read(cx).value().to_string()));
                     let _ = open::that_detached(format!("https://codeforces.com/contest/{contest}/submit/{index}"));
@@ -1198,13 +1214,20 @@ fn load_question(db: &Db, client: &Client, workspace: &std::path::Path, slug: &s
     let mut q = match db.question(slug)? {
         Some(q) => q,
         None => {
-            let q = if slug.starts_with("cf:") { practice::codeforces::cached_question(&db, slug)? } else { client.question(slug)? };
+            let q = if slug.starts_with("cf:") { practice::codeforces::cached_question(&db, slug)? } else if slug.starts_with("cc:") { practice::codechef::question(slug)? } else { client.question(slug)? };
             db.save_question(&q)?;
             q
         }
     };
+    if q.meta["statementSource"] == "competitive-companion" {
+        let full = if slug.starts_with("cf:") { practice::codeforces::question(slug) } else { practice::codechef::question(slug) };
+        match full {
+            Ok(full) => { db.save_question(&full)?; q = full; }
+            Err(error) => q.meta["statementFetchError"] = serde_json::json!(error.to_string()),
+        }
+    }
     if q.starter(language).is_none() {
-        q = if slug.starts_with("cf:") { practice::codeforces::question(slug)? } else { client.question(slug)? };
+        q = if slug.starts_with("cf:") { practice::codeforces::question(slug)? } else if slug.starts_with("cc:") { practice::codechef::question(slug)? } else { client.question(slug)? };
         db.save_question(&q)?;
     }
     let frontend_id = q.frontend_id.parse().unwrap_or(0);

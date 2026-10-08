@@ -16,7 +16,12 @@ fn execute()->Result<()> {
     let args:Vec<_>=std::env::args().skip(1).collect();
     let command=args.first().map(String::as_str).unwrap_or("--help");
     if matches!(command,"--help"|"-h"|"help"){
-        println!("./ops <check|build|local:deploy|agents|snapshot|cache:fetch|contests:refresh|workspace:move|release:package|trace> [--json]\n\nagents        Detect local agents; --catalog lists live models, --smoke runs read-only JSON probes.\ncheck         Rust workspace tests.\nbuild         Release desktop build.\nlocal:deploy  Build/install leet and 1337 commands, desktop entry/icon; verify version and links.\nsnapshot      Public-only SQLite refresh; use ./ops snapshot --help.\ncache:fetch   Cache one Codeforces statement: --slug cf:CONTEST:INDEX.\ncontests:refresh  Refresh both providers; optional --contest ID or --leetcode-contest SLUG.\nworkspace:move Move solutions and Git history: --path /absolute/path; preserve a compatibility link.\nrelease:package  Package a native CI build; use ./ops release:package --help.\ntrace         Record one case; use ./ops trace --help.\n\nLocal environment. Preserves settings, credentials, cache, and Solutions. Running windows offer restart.");return Ok(());
+        println!("./ops <check|build|local:deploy|companion|agents|snapshot|cache:fetch|contests:refresh|workspace:move|release:package|trace> [--json]\n\ncompanion     Login browser-import listener; use ./ops companion --help.\n\nagents        Detect local agents; --catalog lists live models, --smoke runs read-only JSON probes.\ncheck         Rust workspace tests.\nbuild         Release desktop build.\nlocal:deploy  Build/install leet and 1337 commands, desktop entry/icon; verify version and links.\nsnapshot      Public-only SQLite refresh; use ./ops snapshot --help.\ncache:fetch   Cache one Codeforces statement: --slug cf:CONTEST:INDEX.\ncontests:refresh  Refresh both providers; optional --contest ID or --leetcode-contest SLUG.\nworkspace:move Move solutions and Git history: --path /absolute/path; preserve a compatibility link.\nrelease:package  Package a native CI build; use ./ops release:package --help.\ntrace         Record one case; use ./ops trace --help.\n\nLocal environment. Preserves settings, credentials, cache, and Solutions. Running windows offer restart.");return Ok(());
+    }
+    if command == "companion" {
+        let status = Command::new("cargo").args(["run", "--quiet", "-p", "practice", "--example", "companion_service", "--"]).args(&args[1..]).status()?;
+        if !status.success() { bail!("Companion service command failed"); }
+        return Ok(());
     }
     if command == "trace" { return trace(&args[1..]); }
     if command == "agents" {
@@ -220,7 +225,7 @@ fn desktop(home:&Path,command:&Path)->Result<()> {
     std::fs::create_dir_all(&icons)?;std::fs::create_dir_all(&apps)?;
     std::fs::copy("crates/gui/assets/leet.svg",icons.join("leet.svg"))?;
     let exec=command.to_string_lossy().replace('\\',"\\\\").replace('"',"\\\"").replace('`',"\\`").replace('$',"\\$");
-    let entry=format!("[Desktop Entry]\nType=Application\nName=leet\nGenericName=Coding practice IDE\nComment=NeetCode, LeetCode and Codeforces practice\nExec=\"{exec}\"\nIcon=leet\nTerminal=false\nStartupWMClass=leet\nCategories=Development;\nKeywords=leetcode;neetcode;codeforces;1337;\n");
+    let entry=format!("[Desktop Entry]\nType=Application\nName=leet\nGenericName=Coding practice IDE\nComment=NeetCode, LeetCode, Codeforces and CodeChef practice\nExec=\"{exec}\"\nIcon=leet\nTerminal=false\nStartupWMClass=leet\nCategories=Development;\nKeywords=leetcode;neetcode;codeforces;codechef;1337;\n");
     std::fs::write(apps.join("leet.desktop"),entry)?;
     // Retire only our old launcher; unrelated user desktop entries stay untouched.
     let old=apps.join("vg.desktop");

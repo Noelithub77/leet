@@ -246,6 +246,8 @@ impl Workspace {
             (self.rows.iter().filter(|row| matches!(row, Row::Catalog(index) if solved.contains(&self.active_catalog()[*index].slug))).count(), self.rows.len())
         } else if self.config.source == practice::language::Source::Codeforces {
             (self.sources.solved.len(), self.sources.catalog.len())
+        } else if self.config.source == practice::language::Source::CodeChef {
+            (0, self.sources.codechef.len())
         } else { (self.solved.len(), self.catalog.len()) };
         v_flex().size_full().gap_2()
             .child(h_flex().h_9().px_2().gap_2().items_center()
@@ -302,7 +304,7 @@ impl Workspace {
                 let (_, color) = difficulty(item.level, cx);
                 let rating = self.sources.ratings.get(&item.slug).map(u32::to_string);
                 let label = rating.unwrap_or_else(|| difficulty(item.level, cx).0.into());
-                let id = practice::codeforces::problem_id(&item.slug).map(|(contest, index)| format!("{contest}{index}")).unwrap_or_else(|_| item.frontend_id.to_string());
+                let id = practice::codechef::problem_code(&item.slug).map(str::to_owned).or_else(|_| practice::codeforces::problem_id(&item.slug).map(|(contest, index)| format!("{contest}{index}"))).unwrap_or_else(|_| item.frontend_id.to_string());
                 base.child(div().w_3().text_color(if solved { theme.success } else { theme.muted_foreground }).child(if solved { "✓" } else { "·" }))
                     .child(div().flex_1().truncate().child(format!("{id}. {}", item.title)))
                     .child(div().text_xs().text_color(color).child(label)).into_any_element()

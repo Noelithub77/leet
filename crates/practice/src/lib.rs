@@ -7,6 +7,7 @@ pub mod config;
 pub mod debugger;
 pub mod language;
 pub mod codeforces;
+pub mod codechef;
 pub mod creds;
 pub mod db;
 pub mod git;

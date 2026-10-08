@@ -117,7 +117,7 @@ impl Db {
         let imported = conn.transaction(|conn| {
             diesel::sql_query("INSERT OR IGNORE INTO questions SELECT * FROM bundled.questions").execute(conn)?;
             diesel::sql_query("INSERT OR IGNORE INTO problems SELECT * FROM bundled.problems").execute(conn)?;
-            diesel::sql_query("INSERT OR IGNORE INTO kv SELECT * FROM bundled.kv WHERE key IN ('cf-catalog','reference-index') OR key LIKE 'article:%' OR key LIKE 'reference:%' OR key LIKE 'editorial:%'").execute(conn)?;
+            diesel::sql_query("INSERT OR IGNORE INTO kv SELECT * FROM bundled.kv WHERE key IN ('cf-catalog','cc-catalog','reference-index') OR key LIKE 'article:%' OR key LIKE 'reference:%' OR key LIKE 'editorial:%'").execute(conn)?;
             diesel::replace_into(kv::table).values((kv::key.eq("bundle-version"), kv::value.eq(&version))).execute(conn)?;
             diesel::QueryResult::Ok(())
         });
@@ -329,7 +329,15 @@ mod tests {
         db.save_question(&cached).unwrap(); db.set("bundle-version", "previous-build").unwrap();
         drop(db); let db = Db::open(&path).unwrap(); assert_eq!(db.get("last").unwrap().as_deref(), Some("my-question"));
         assert_eq!(db.question("cf:4:A").unwrap().unwrap().content, "Existing user cache");
-        assert_eq!(db.question_slugs().unwrap().len(), 151);
+        let codechef: Vec<crate::codechef::Problem> = serde_json::from_str(&db.get("cc-catalog").unwrap().unwrap()).unwrap();
+        assert_eq!(codechef.len(), 100);
+        for problem in codechef {
+            let q = db.question(&problem.slug().unwrap()).unwrap().expect("Bundled CodeChef statement");
+            assert!(!q.content.is_empty() && !q.examples.is_empty());
+            assert_eq!(q.examples.len(), q.outputs.len());
+            for language in crate::language::Language::ALL { assert!(q.starter(language).is_some()); }
+        }
+        assert_eq!(db.question_slugs().unwrap().len(), 251);
     }
 
     #[test]

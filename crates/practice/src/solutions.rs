@@ -28,7 +28,7 @@ fn index(db: &Db) -> Result<Vec<Entry>> {
     let index = serde_json::from_str(&raw)?; db.set("reference-index", &raw)?; Ok(index)
 }
 pub fn get(db: &Db, slug: &str, language: Language) -> Result<Reference> {
-    if slug.starts_with("cf:") { bail!("NeetCode reference code is available for LeetCode problems"); }
+    if crate::language::Source::for_problem(slug).is_stdin() { bail!("NeetCode reference code is available for LeetCode problems"); }
     let key = format!("reference:neetcode:{slug}:{}", language.id());
     let loader = loader(&key); let _guard = loader.lock().unwrap_or_else(|error| error.into_inner());
     if let Some(raw) = db.get(&key)? { if let Ok(reference) = serde_json::from_str(&raw) { return Ok(reference); } }

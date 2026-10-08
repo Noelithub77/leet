@@ -24,8 +24,6 @@ pub enum Setting {
     Language,
     LanguageServer,
     Codeforces,
-    CompanionEnabled,
-    CompanionPort,
     LeetCode,
     NeetCode,
     Theme,
@@ -54,14 +52,12 @@ pub enum Kind {
 }
 
 impl Setting {
-    pub const ALL: [Setting; 25] = [
+    pub const ALL: [Setting; 23] = [
         Setting::Onboarding,
         Setting::ResetSettings,
         Setting::Language,
         Setting::LanguageServer,
         Setting::Codeforces,
-        Setting::CompanionEnabled,
-        Setting::CompanionPort,
         Setting::LeetCode,
         Setting::NeetCode,
         Setting::Theme,
@@ -90,8 +86,6 @@ impl Setting {
             Setting::Language => "Preferred language",
             Setting::LanguageServer => "Restart language server",
             Setting::Codeforces => "Codeforces handle",
-            Setting::CompanionEnabled => "CPH",
-            Setting::CompanionPort => "CPH port",
             Setting::LeetCode => "LeetCode account",
             Setting::NeetCode => "NeetCode account",
             Setting::Theme => "Theme",
@@ -123,8 +117,6 @@ impl Setting {
             Setting::Language => "language python cpp c++ go c java preferred",
             Setting::LanguageServer => "lsp intellisense completion diagnostics hover definitions restart",
             Setting::Codeforces => "codeforces handle account sign in",
-            Setting::CompanionEnabled => "cph competitive programming helper competitive companion browser import enable disable",
-            Setting::CompanionPort => "cph browser import port localhost",
             Setting::LeetCode | Setting::NeetCode => "login session account sign in sync",
             Setting::Theme => "color appearance dark light vesper",
             Setting::Font => "fonts typography font family liberation sans system",
@@ -147,9 +139,9 @@ impl Setting {
     pub fn kind(self) -> Kind {
         match self {
             Setting::Language | Setting::Theme | Setting::List | Setting::TestTimeout | Setting::AiAgent | Setting::AiReasoning | Setting::WebChat => Kind::Choice,
-            Setting::CompanionEnabled | Setting::AiFast => Kind::Toggle,
+            Setting::AiFast => Kind::Toggle,
             Setting::AiModel | Setting::Install(_) | Setting::PlatformGroup(_) => Kind::Action,
-            Setting::Python | Setting::ExternalEditor | Setting::Workspace | Setting::CompanionPort | Setting::Keybinding(_) => Kind::Text,
+            Setting::Python | Setting::ExternalEditor | Setting::Workspace | Setting::Keybinding(_) => Kind::Text,
             Setting::Onboarding | Setting::ResetSettings | Setting::LanguageServer | Setting::Codeforces | Setting::OpenFile | Setting::Font | Setting::Keybindings | Setting::LeetCode | Setting::NeetCode => Kind::Action,
         }
     }
@@ -161,8 +153,6 @@ impl Setting {
             Setting::Language => c.preferred_language.label().into(),
             Setting::LanguageServer => ws.intelligence.label(ws.session.as_ref().map_or(c.preferred_language, |session| session.language)),
             Setting::Codeforces => if c.codeforces_handle.is_empty() { "Not set".into() } else { c.codeforces_handle.clone() },
-            Setting::CompanionEnabled => if c.companion_enabled { "On".into() } else { "Off".into() },
-            Setting::CompanionPort => c.companion_port.to_string(),
             Setting::LeetCode => ws.account_names[0].clone(),
             Setting::NeetCode => ws.account_names[1].clone(),
             Setting::Theme => cx.theme().theme_name().to_string(),
@@ -205,14 +195,13 @@ impl SettingsTab {
             Self::General => &[Setting::List, Setting::Workspace, Setting::Onboarding, Setting::OpenFile, Setting::ResetSettings],
             Self::Editor => &[Setting::Language, Setting::Python, Setting::ExternalEditor, Setting::TestTimeout, Setting::LanguageServer],
             Self::Appearance => &[Setting::Theme, Setting::Font],
-            Self::Platform => &[Setting::LeetCode, Setting::NeetCode, Setting::Codeforces, Setting::CompanionEnabled, Setting::CompanionPort],
+            Self::Platform => &[Setting::LeetCode, Setting::NeetCode, Setting::Codeforces],
             Self::Ai => &[Setting::AiAgent, Setting::AiModel, Setting::AiReasoning, Setting::AiFast, Setting::WebChat, Setting::Install(AgentKind::OpenCode), Setting::Install(AgentKind::Antigravity)],
             Self::Keybindings => &[],
         }
     }
-    fn setting_visible(self, setting: Setting, codeforces_configured: bool) -> bool {
+    fn setting_visible(self, setting: Setting, _codeforces_configured: bool) -> bool {
         self.settings().contains(&setting)
-            && (!matches!(setting, Setting::CompanionEnabled | Setting::CompanionPort) || codeforces_configured)
     }
     fn for_setting(setting: Setting) -> Self {
         if matches!(setting, Setting::PlatformGroup(_)) { return Self::Platform; }
@@ -225,14 +214,15 @@ fn platform_index(setting: Setting) -> Option<usize> {
     match setting {
         Setting::LeetCode | Setting::PlatformGroup(Source::LeetCode) => Some(0),
         Setting::NeetCode | Setting::PlatformGroup(Source::NeetCode) => Some(1),
-        Setting::Codeforces | Setting::CompanionEnabled | Setting::CompanionPort | Setting::PlatformGroup(Source::Codeforces) => Some(2),
+        Setting::Codeforces | Setting::PlatformGroup(Source::Codeforces) => Some(2),
+        Setting::PlatformGroup(Source::CodeChef) => Some(3),
         _ => None,
     }
 }
 
-fn platform_rows(open: [bool; 3], codeforces_configured: bool) -> Vec<Setting> {
+fn platform_rows(open: [bool; 4], codeforces_configured: bool) -> Vec<Setting> {
     let mut rows = Vec::new();
-    for (index, source) in [Source::LeetCode, Source::NeetCode, Source::Codeforces].into_iter().enumerate() {
+    for (index, source) in [Source::LeetCode, Source::NeetCode, Source::Codeforces, Source::CodeChef].into_iter().enumerate() {
         rows.push(Setting::PlatformGroup(source));
         if open[index] {
             rows.extend(SettingsTab::Platform.settings().iter().copied().filter(|setting| {
@@ -244,7 +234,7 @@ fn platform_rows(open: [bool; 3], codeforces_configured: bool) -> Vec<Setting> {
 }
 
 pub struct SettingsState {
-    pub platform_open: [bool; 3],
+    pub platform_open: [bool; 4],
     pub tabs_focused: bool,
     pub selected: usize,
     pub tab: SettingsTab,
@@ -254,7 +244,7 @@ pub struct SettingsState {
 
 impl SettingsState {
     pub fn new() -> Self {
-        Self { platform_open: [true; 3], tabs_focused: false, scroll: ScrollHandle::new(), tab: SettingsTab::default(), selected: 0, editing: None }
+        Self { platform_open: [true; 4], tabs_focused: false, scroll: ScrollHandle::new(), tab: SettingsTab::default(), selected: 0, editing: None }
     }
 
     fn move_selection(&mut self, delta: isize, len: usize) {
@@ -413,13 +403,6 @@ impl Workspace {
                 self.rebuild_library();
             }
             Setting::Language => self.config.preferred_language = self.config.preferred_language.next(),
-            Setting::CompanionEnabled => {
-                self.config.companion_enabled = !self.config.companion_enabled;
-                self.save_config(window, cx);
-                self.start_companion(window, cx);
-                cx.notify();
-                return;
-            }
             Setting::TestTimeout => {
                 self.config.test_timeout_secs = (self.config.test_timeout_secs as i64 + delta as i64).clamp(1, 120) as u64;
             }
@@ -511,20 +494,6 @@ impl Workspace {
                 self.omni.stale = true;
             }
             Setting::Python if !value.is_empty() => self.config.python = value,
-            Setting::CompanionPort => match value.parse::<u16>() {
-                Ok(port) if port != 0 => {
-                    self.config.companion_port = port;
-                    self.save_config(window, cx);
-                    self.settings_cancel_edit(window, cx);
-                    self.start_companion(window, cx);
-                    self.flash("CPH port saved", cx);
-                    return;
-                }
-                _ => {
-                    self.toast(gpui_kit::component::notification::Notification::error("Enter a port from 1 to 65535"), window, cx);
-                    return;
-                }
-            },
             Setting::ExternalEditor if !value.is_empty() => self.config.external_editor = value,
             Setting::Workspace if !value.is_empty() => {
                 let expanded = value.strip_prefix("~/").map_or(value.clone().into(), |rest| dirs::home_dir().unwrap_or_default().join(rest));
@@ -657,6 +626,7 @@ mod tests {
             Setting::PlatformGroup(Source::LeetCode), Setting::LeetCode,
             Setting::PlatformGroup(Source::NeetCode), Setting::NeetCode,
             Setting::PlatformGroup(Source::Codeforces), Setting::Codeforces,
+            Setting::PlatformGroup(Source::CodeChef),
         ]);
     }
 
@@ -672,15 +642,6 @@ mod tests {
         assert!(SettingsTab::for_setting(Setting::Theme) == SettingsTab::Appearance);
         assert!(SettingsTab::for_setting(Setting::LeetCode) == SettingsTab::Platform);
         assert!(SettingsTab::for_setting(Setting::Codeforces) == SettingsTab::Platform);
-    }
-
-    #[test]
-    fn codeforces_companion_settings_require_a_configured_account() {
-        assert!(!SettingsTab::Platform.setting_visible(Setting::CompanionEnabled, false));
-        assert!(!SettingsTab::Platform.setting_visible(Setting::CompanionPort, false));
-        assert!(SettingsTab::Platform.setting_visible(Setting::CompanionEnabled, true));
-        assert!(SettingsTab::Platform.setting_visible(Setting::CompanionPort, true));
-        assert!(SettingsTab::Platform.setting_visible(Setting::Codeforces, false));
     }
 
     #[test]
@@ -703,18 +664,14 @@ mod tests {
 
     #[test]
     fn collapsed_platforms_keep_headers_and_expose_only_their_own_settings() {
-        use super::{platform_index, platform_rows};
-        let closed = platform_rows([false; 3], true);
-        assert_eq!(closed.len(), 3);
+        use super::platform_rows;
+        let closed = platform_rows([false; 4], true);
+        assert_eq!(closed.len(), 4);
         assert!(closed.iter().all(|row| matches!(row, Setting::PlatformGroup(_))));
-        let rows = platform_rows([true, false, false], true);
+        let rows = platform_rows([true, false, false, false], true);
         assert!(rows.contains(&Setting::LeetCode));
         assert!(!rows.contains(&Setting::NeetCode));
-        assert!(!rows.contains(&Setting::CompanionPort));
-        let rows = platform_rows([false, false, true], false);
+        let rows = platform_rows([false, false, true, false], false);
         assert!(rows.contains(&Setting::Codeforces));
-        assert!(!rows.contains(&Setting::CompanionPort));
-        assert!(platform_rows([false, false, true], true).contains(&Setting::CompanionPort));
-        assert_eq!(platform_index(Setting::CompanionPort), platform_index(Setting::Codeforces));
     }
 }

@@ -47,7 +47,7 @@ impl Workspace {
             let fetch_slug=slug.clone();
             let result=cx.background_spawn(async move{
                 let mut versions=vec![]; let mut status=vec![];
-                if !fetch_slug.starts_with("cf:") {
+                if !practice::language::Source::for_problem(&fetch_slug).is_stdin() {
                     if let Some(identity)=client.cache_identity(){
                         let key=format!("submissions:{identity}:{fetch_slug}");
                         let cached=db.get(&key)?.and_then(|raw|serde_json::from_str::<Vec<RemoteVersion>>(&raw).ok());

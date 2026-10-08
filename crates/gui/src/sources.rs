@@ -15,6 +15,7 @@ use crate::workspace::{Focus, Workspace};
 #[derive(Default)]
 pub struct SourcesState {
     pub catalog: Vec<CatalogItem>,
+    pub codechef: Vec<CatalogItem>,
     pub by_slug: HashMap<String, usize>,
     pub ratings: HashMap<String, u32>,
     pub solved: HashSet<String>,
@@ -25,6 +26,19 @@ impl SourcesState {
         let mut state = Self::default();
         if let Some(raw) = db.get("cf-catalog").ok().flatten() {
             if let Ok(problems) = serde_json::from_str(&raw) { state.set_catalog(problems); }
+        }
+        if let Some(raw) = db.get("cc-catalog").ok().flatten() {
+            if let Ok(problems) = serde_json::from_str::<Vec<practice::codechef::Problem>>(&raw) {
+                state.codechef = problems.iter().filter_map(|problem| problem.item().ok()).collect();
+            }
+        }
+        if let Ok(slugs) = db.question_slugs() {
+            for slug in slugs.into_iter().filter(|slug| slug.starts_with("cc:")) {
+                if state.codechef.iter().any(|item| item.slug == slug) { continue; }
+                if let Ok(Some(q)) = db.question(&slug) {
+                    state.codechef.push(CatalogItem { slug, frontend_id: 0, title: q.title, level: 1, paid_only: false, ac_rate: 0., status: None });
+                }
+            }
         }
         state.solved = db.get(&format!("cf-progress:{handle}")).ok().flatten().map(|raw| raw.lines().map(str::to_owned).collect()).unwrap_or_default();
         state
@@ -79,7 +93,7 @@ fn short_topic(index: usize) -> &'static str {
 
 impl Workspace {
     pub fn active_catalog(&self) -> &[CatalogItem] {
-        if self.config.source == Source::Codeforces { &self.sources.catalog } else { &self.catalog }
+        match self.config.source { Source::Codeforces => &self.sources.catalog, Source::CodeChef => &self.sources.codechef, _ => &self.catalog }
     }
     pub fn choose_source(&mut self, source: Source, window: &mut Window, cx: &mut Context<Self>) {
         self.contests.selected = None;
@@ -97,6 +111,29 @@ impl Workspace {
         } else if source == Source::NeetCode { self.focus_nav(Focus::Explorer, window, cx); }
         else { self.focus_nav(Focus::Sidebar, window, cx); }
         cx.notify();
+    }
+    pub fn refresh_codechef(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let db = self.db.clone();
+        cx.spawn_in(window, async move |this, cx| {
+            let result = cx.background_spawn(async move {
+                let problems = practice::codechef::catalog()?;
+                let items = problems.iter().map(practice::codechef::Problem::item).collect::<anyhow::Result<Vec<_>>>()?;
+                db.set("cc-catalog", &serde_json::to_string(&problems)?)?;
+                anyhow::Ok(items)
+            }).await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                match result {
+                    Ok(mut items) => {
+                        for item in &this.sources.codechef { if !items.iter().any(|new| new.slug == item.slug) { items.push(item.clone()); } }
+                        this.sources.codechef = items;
+                        this.rebuild_rows(); this.omni.stale = true;
+                        this.toast(Notification::success("CodeChef catalog refreshed"), window, cx);
+                    },
+                    Err(error) => this.toast(Notification::error(format!("CodeChef catalog: {error}")), window, cx),
+                }
+                cx.notify();
+            });
+        }).detach();
     }
     pub fn refresh_codeforces(&mut self, force: bool, window: &mut Window, cx: &mut Context<Self>) {
         if self.sources.loading { return; }
@@ -178,7 +215,7 @@ impl Workspace {
                     }
                     menu
                 });
-                for source in [Source::LeetCode, Source::Codeforces] {
+                for source in [Source::LeetCode, Source::Codeforces, Source::CodeChef] {
                     let weak = weak.clone();
                     menu = menu.item(PopupMenuItem::new(source.label()).icon(crate::brand::source_icon(source)).checked(current == source).on_click(move |_, window, cx| {
                         let _ = weak.update(cx, |ws, cx| ws.choose_source(source, window, cx));

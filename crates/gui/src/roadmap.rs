@@ -36,6 +36,7 @@ pub fn panel_width(window: &Window, open: bool) -> f32 {
 
 pub fn problem_url(source: practice::language::Source, slug: &str) -> String {
     if let Ok(url) = practice::codeforces::problem_url(slug) { return url; }
+    if let Ok(url) = practice::codechef::problem_url(slug) { return url; }
     if source == practice::language::Source::LeetCode { return format!("https://leetcode.com/problems/{slug}/"); }
     practice::roadmap::entry(slug).map_or_else(
         || format!("https://leetcode.com/problems/{slug}/"),

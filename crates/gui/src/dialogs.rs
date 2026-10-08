@@ -86,7 +86,7 @@ fn open_test_case(ws: &mut Workspace, window: &mut Window, cx: &mut Context<Work
     let expected = cx.new(|cx| TextareaState::new(window, cx).rows(2).placeholder("Expected output (optional)"));
     let Some(session) = ws.session.as_ref() else { return; };
     let origin = session.slug.clone();
-    let is_stdin = session.source == practice::language::Source::Codeforces;
+    let is_stdin = session.source.is_stdin();
     let weak = cx.weak_entity();
     let save: Rc<dyn Fn(&mut Window, &mut App)> = {
         let (input, expected, weak) = (input.clone(), expected.clone(), weak.clone());

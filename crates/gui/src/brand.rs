@@ -30,6 +30,7 @@ pub fn source_icon(source: practice::language::Source) -> Icon {
         practice::language::Source::NeetCode => ("providers/neetcode.svg", 0x99ffe4),
         practice::language::Source::LeetCode => ("providers/leetcode.svg", 0xffc799),
         practice::language::Source::Codeforces => ("providers/codeforces.svg", 0xa0c4ff),
+        practice::language::Source::CodeChef => ("providers/codechef.svg", 0xffc799),
     };
     Icon::default().path(path).text_color(rgb(color))
 }
