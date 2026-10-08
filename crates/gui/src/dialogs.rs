@@ -2,7 +2,8 @@
 
 use std::rc::Rc;
 
-use gpui_kit::component::button::Button;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::notification::Notification;
 use gpui_kit::component::input::{InputEvent, Textarea, TextareaState};
 use gpui_kit::component::{ActiveTheme as _, WindowExt as _, h_flex, v_flex};
 use gpui_kit::*;
@@ -23,6 +24,47 @@ fn after_close(
             ws.focus_editor(window, cx);
             f(ws, window, cx);
         });
+    });
+}
+
+pub fn open_reset_settings(window: &mut Window, cx: &mut Context<Workspace>) {
+    let workspace = cx.weak_entity();
+    window.open_dialog(cx, move |dialog, _, _| {
+        let workspace = workspace.clone();
+        dialog.title("Reset app settings?").w(px(480.))
+            .child(v_flex().gap_2()
+                .child("Restore default preferences and restart into onboarding.")
+                .child("Solutions, Git history, accounts, progress, and cached questions are kept."))
+            .footer(h_flex().gap_2().justify_end()
+                .child(Button::new("cancel-reset-settings").label("Cancel")
+                    .on_click(|_, window, cx| window.close_dialog(cx)))
+                .child(Button::new("confirm-reset-settings").danger().label("Reset and restart")
+                    .on_click(move |_, window, cx| {
+                        after_close(workspace.clone(), window, cx, |ws, window, cx| {
+                            if ws.release_update.downloading {
+                                ws.toast(Notification::error("Wait for the app update to finish."), window, cx);
+                                return;
+                            }
+                            ws.save_now(cx);
+                            if let Some(session) = ws.session.as_ref().filter(|session| session.question.is_some()) {
+                                if std::fs::read_to_string(&session.path).ok().as_deref() != Some(ws.editor.read(cx).value().as_ref()) {
+                                    ws.toast(Notification::error("Could not save solution; settings reset canceled."), window, cx);
+                                    return;
+                                }
+                            }
+                            match ws.config.reset_settings() {
+                                Ok(config) => {
+                                    ws.config = config;
+                                    ws.release_update.error = None;
+                                    crate::update::restart(ws, cx);
+                                    if let Some(error) = ws.release_update.error.clone() {
+                                        ws.toast(Notification::error(error), window, cx);
+                                    }
+                                }
+                                Err(error) => ws.toast(Notification::error(format!("Settings reset failed: {error}")), window, cx),
+                            }
+                        });
+                    })))
     });
 }
 

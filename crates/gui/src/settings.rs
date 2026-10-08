@@ -15,6 +15,7 @@ use crate::workspace::{Center, Focus, Workspace};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Setting {
     Onboarding,
+    ResetSettings,
     Language,
     LanguageServer,
     Codeforces,
@@ -48,8 +49,9 @@ pub enum Kind {
 }
 
 impl Setting {
-    pub const ALL: [Setting; 24] = [
+    pub const ALL: [Setting; 25] = [
         Setting::Onboarding,
+        Setting::ResetSettings,
         Setting::Language,
         Setting::LanguageServer,
         Setting::Codeforces,
@@ -78,6 +80,7 @@ impl Setting {
     pub fn label(self) -> &'static str {
         match self {
             Setting::Onboarding => "Run onboarding again",
+            Setting::ResetSettings => "Reset app settings",
             Setting::Language => "Preferred language",
             Setting::LanguageServer => "Restart language server",
             Setting::Codeforces => "Codeforces account",
@@ -109,6 +112,7 @@ impl Setting {
     pub fn keywords(self) -> &'static str {
         match self {
             Setting::Onboarding => "setup onboarding welcome language account sign in",
+            Setting::ResetSettings => "reset defaults preferences fresh start onboarding",
             Setting::Language => "language python cpp c++ go c java preferred",
             Setting::LanguageServer => "lsp intellisense completion diagnostics hover definitions restart",
             Setting::Codeforces => "codeforces handle account sign in",
@@ -139,14 +143,14 @@ impl Setting {
             Setting::CompanionEnabled | Setting::AiFast => Kind::Toggle,
             Setting::AiModel | Setting::Install(_) => Kind::Action,
             Setting::Python | Setting::ExternalEditor | Setting::Workspace | Setting::CompanionPort | Setting::Keybinding(_) => Kind::Text,
-            Setting::Onboarding | Setting::LanguageServer | Setting::Codeforces | Setting::OpenFile | Setting::Font | Setting::Keybindings | Setting::LeetCode | Setting::NeetCode => Kind::Action,
+            Setting::Onboarding | Setting::ResetSettings | Setting::LanguageServer | Setting::Codeforces | Setting::OpenFile | Setting::Font | Setting::Keybindings | Setting::LeetCode | Setting::NeetCode => Kind::Action,
         }
     }
 
     pub fn value(self, ws: &Workspace, cx: &App) -> String {
         let c = &ws.config;
         match self {
-            Setting::Onboarding => String::new(),
+            Setting::Onboarding | Setting::ResetSettings => String::new(),
             Setting::Language => c.preferred_language.label().into(),
             Setting::LanguageServer => ws.intelligence.label(ws.session.as_ref().map_or(c.preferred_language, |session| session.language)),
             Setting::Codeforces => if c.codeforces_handle.is_empty() { "Not set".into() } else { c.codeforces_handle.clone() },
@@ -191,7 +195,7 @@ impl SettingsTab {
     }
     fn settings(self) -> &'static [Setting] {
         match self {
-            Self::General => &[Setting::List, Setting::Workspace, Setting::Onboarding, Setting::OpenFile],
+            Self::General => &[Setting::List, Setting::Workspace, Setting::Onboarding, Setting::OpenFile, Setting::ResetSettings],
             Self::Editor => &[Setting::Language, Setting::Python, Setting::ExternalEditor, Setting::TestTimeout, Setting::LanguageServer],
             Self::Appearance => &[Setting::Theme, Setting::Font],
             Self::Provider => &[Setting::Codeforces, Setting::CompanionEnabled, Setting::CompanionPort],
@@ -376,6 +380,7 @@ impl Workspace {
             Kind::Toggle => self.settings_cycle(1, window, cx),
             Kind::Action if setting == Setting::LanguageServer => self.restart_language_server(window, cx),
             Kind::Action if setting == Setting::Onboarding => self.begin_onboarding(false, window, cx),
+            Kind::Action if setting == Setting::ResetSettings => crate::dialogs::open_reset_settings(window, cx),
             Kind::Action if setting == Setting::Codeforces => self.begin_onboarding(true, window, cx),
             Kind::Action if setting == Setting::Font => {
                 self.omni_open(crate::omnibar::Scope::Fonts, window, cx);

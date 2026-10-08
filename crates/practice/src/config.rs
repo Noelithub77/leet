@@ -109,6 +109,17 @@ impl Config {
         self.save_to(&Self::path())
     }
 
+    /// Restores app preferences without touching solutions, credentials, or the cache.
+    pub fn reset_settings(&self) -> Result<Self> {
+        self.reset_settings_to(&Self::path())
+    }
+
+    fn reset_settings_to(&self, path: &Path) -> Result<Self> {
+        let defaults = Self { workspace: self.workspace.clone(), codeforces_handle: self.codeforces_handle.clone(), ..Self::default() };
+        defaults.save_to(path)?;
+        Ok(defaults)
+    }
+
     pub fn save_to(&self, path: &Path) -> Result<()> {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
@@ -144,6 +155,32 @@ pub fn database_path() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reset_only_replaces_app_preferences_and_keeps_personal_data() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let workspace = dir.path().join("custom-solutions");
+        std::fs::create_dir_all(workspace.join(".git")).unwrap();
+        let protected = [workspace.join("solution.py"), workspace.join(".git/HEAD"), dir.path().join("leet.db"), dir.path().join("credentials.json")];
+        for file in &protected { std::fs::write(file, "keep me").unwrap(); }
+        let mut config = Config { workspace: workspace.clone(), codeforces_handle: "tourist".into(), onboarding_completed: true, theme: "Sarah Pink".into(), ..Config::default() };
+        config.keybindings.insert("Search".into(), "ctrl-alt-k".into());
+        config.save_to(&path).unwrap();
+        let reset = config.reset_settings_to(&path).unwrap();
+        assert_eq!(reset.workspace, workspace);
+        assert_eq!(reset.codeforces_handle, "tourist");
+        assert!(!reset.onboarding_completed);
+        assert_eq!(reset.theme, "Vesper");
+        assert!(reset.keybindings.is_empty());
+        let saved = Config::load_from(&path).unwrap();
+        assert!(!saved.onboarding_completed);
+        assert_eq!(saved.workspace, workspace);
+        for file in protected { assert_eq!(std::fs::read_to_string(file).unwrap(), "keep me"); }
+        // A failed write must leave the existing in-memory preferences intact.
+        assert!(config.reset_settings_to(&workspace).is_err());
+        assert!(config.onboarding_completed);
+    }
 
     #[cfg(unix)]
     #[test]

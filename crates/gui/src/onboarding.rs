@@ -28,6 +28,7 @@ pub struct Setup {
     step: usize,
     language: Language,
     source: Source,
+    python: String,
     handle: Entity<InputState>,
     busy: bool,
     error: Option<String>,
@@ -46,6 +47,7 @@ impl Workspace {
         let setup = cx.new(|cx| Setup {
             focus: cx.focus_handle(), workspace, step: usize::from(accounts),
             language: config.preferred_language, source: config.source,
+            python: config.python.clone(),
             handle: cx.new(|cx| InputState::new(window, cx).placeholder("Codeforces handle").default_value(config.codeforces_handle)),
             busy: false, error: None, requirements: None, checking: false, check_epoch: 0, check_task: Task::ready(()),
         });
@@ -72,7 +74,8 @@ impl Setup {
         self.check_epoch = self.check_epoch.wrapping_add(1);
         let epoch = self.check_epoch;
         let language = self.language;
-        let python = self.workspace.upgrade().map(|ws| ws.read(cx).config.python.clone()).unwrap_or_else(|| practice::config::Config::default().python);
+        // Setup can start while Workspace is still being updated.
+        let python = self.python.clone();
         self.check_task = cx.spawn_in(window, async move |this, cx| {
             let requirements = cx.background_spawn(async move { practice::toolchain::check(language, &python) }).await;
             let _ = this.update(cx, |this, cx| {

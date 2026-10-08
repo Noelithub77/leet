@@ -1,6 +1,7 @@
 <details open>
 <summary>Feat</summary>
 
+- Reset app settings and reopen onboarding while keeping solutions, accounts, progress, and cache.
 - LeetCode weekly and biweekly contests alongside Codeforces, with native problem explorers.
 - Continue stopped solves or retry interrupted AI actions from their result cards.
 - Assist panel with hints, I'm stuck, find bugs, edge cases, complexity, optimize, visualize, dry run, pattern, explain, and solve.
@@ -35,6 +36,7 @@
 <details>
 <summary>Fix</summary>
 
+- Prevent onboarding requirements checks from crashing when opened from Settings.
 - Provider icons and a hover submenu for the active NeetCode list.
 - Show function icons for calls, returns, and stack frames in Debug mode.
 - Show “Just a template” instead of executing untouched templates in every language.
