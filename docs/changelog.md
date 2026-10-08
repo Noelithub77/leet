@@ -1,6 +1,8 @@
 <details open>
 <summary>Feat</summary>
 
+- Separate Description, Examples, and Constraints into cards with subtle pastel rails.
+
 - Replay Python and C++ Codeforces and CodeChef programs in Debug, including CPH samples.
 
 - Click NeetCode to return to the saved list; hover to choose another list.

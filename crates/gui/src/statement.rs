@@ -72,8 +72,12 @@ impl Statement {
 
     fn section_button(&self, section: usize, label: &'static str, cx: &mut Context<Self>) -> Button {
         let open = cx.global::<Sections>().0[section];
-        Button::new(("statement-section", section)).ghost().small().label(label)
-            .icon(if open { IconName::ChevronDown } else { IconName::ChevronRight }).selected(open)
+        Button::new(("statement-section", section)).ghost().small().w_full().h_9().px_3().rounded_none()
+            .accessibility_label(label)
+            .child(h_flex().w_full().justify_between().gap_2()
+                .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(label))
+                .child(Icon::new(if open { IconName::ChevronDown } else { IconName::ChevronRight })
+                    .size_4().text_color(cx.theme().muted_foreground)))
             .on_click(cx.listener(move |this, _, window, cx| {
                 let sections = toggle_section(cx.global::<Sections>().0, section);
                 let Some(db) = &this.db else { return; };
@@ -86,6 +90,18 @@ impl Statement {
                 cx.set_global(Sections(sections));
                 cx.refresh_windows();
             }))
+    }
+    fn section_card(&self, section: usize, label: &'static str, cx: &mut Context<Self>) -> Div {
+        let theme = cx.theme();
+        let accent = rgb(match (section, theme.mode.is_dark()) {
+            (0, true) => 0x99dfce, (0, false) => 0x397e6d,
+            (1, true) => 0xa0c4ff, (1, false) => 0x536aae,
+            (_, true) => 0xd8b4fe, (_, false) => 0x9561b7,
+        });
+        v_flex().relative().min_w_0().flex_shrink_0().rounded_lg().overflow_hidden()
+            .border_1().border_color(theme.border.opacity(0.65)).bg(theme.muted.opacity(0.2))
+            .child(div().absolute().left_0().top_0().bottom_0().w(px(3.)).bg(accent.opacity(0.7)))
+            .child(self.section_button(section, label, cx))
     }
     pub fn toggle_reference(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.reference_open = !self.reference_open;
@@ -127,8 +143,7 @@ impl Statement {
             let id = format!("statement-{}-{index}", self.slug);
             match block {
                 Block::Markdown(markdown) => self.markdown(id, markdown.clone(), theme.primary).into_any_element(),
-                Block::Constraints(markdown) => v_flex().gap_2().p_3().rounded_lg().border_1().border_color(lavender.opacity(0.35)).bg(lavender.opacity(0.06)).child(div().text_color(lavender).font_weight(FontWeight::SEMIBOLD).child("Constraints"))
-                    .child(self.markdown(id, markdown.clone(), lavender.into())).into_any_element(),
+                Block::Constraints(markdown) => self.markdown(id, markdown.clone(), lavender.into()).into_any_element(),
                 Block::Example { title, parts } => v_flex().gap_2().child(div().font_weight(FontWeight::SEMIBOLD).child(title.clone()))
                     .child(v_flex().p_3().gap_3().rounded_lg().bg(theme.muted).children(parts.iter().enumerate().map(|(part_index, part)| {
                         let id = format!("{id}-{part_index}");
@@ -151,17 +166,18 @@ impl Statement {
             let exists = self.blocks.iter().any(|block| match block {
                 Block::Markdown(_) => section == 0, Block::Example { .. } => section == 1, Block::Constraints(_) => false,
             });
-            exists.then(|| v_flex().gap_3().child(self.section_button(section, label, cx))
-                .when(sections[section], |view| view.child(self.render_blocks(section, cx))))
+            exists.then(|| self.section_card(section, label, cx)
+                .when(sections[section], |view| view.child(div().px_3().pb_3().pt_1().child(self.render_blocks(section, cx)))))
         }))
     }
 
     fn render_constraints(&self, max_height: f32, cx: &mut Context<Self>) -> impl IntoElement {
-        v_flex().flex_shrink_0().min_h_0().px_4().py_2().gap_2()
-            .child(self.section_button(2, "Constraints", cx))
-            .when(cx.global::<Sections>().0[2], |view| view.child(div().id("statement-constraints")
-                .max_h(px(max_height)).overflow_y_scroll().track_scroll(&self.constraints_scroll)
-                .child(self.render_blocks(2, cx))))
+        let open = cx.global::<Sections>().0[2];
+        v_flex().flex_shrink_0().min_h_0().px_4().py_2()
+            .child(self.section_card(2, "Constraints", cx)
+                .when(open, |view| view.child(div().id("statement-constraints")
+                    .max_h(px(max_height)).overflow_y_scroll().track_scroll(&self.constraints_scroll)
+                    .px_3().pb_3().pt_1().child(self.render_blocks(2, cx)))))
     }
 
     fn render_reference(&self, cx: &mut Context<Self>) -> impl IntoElement {
