@@ -439,6 +439,9 @@ impl Workspace {
     fn set_catalog(&mut self, items: Vec<CatalogItem>, solved: Vec<String>, cx: &mut Context<Self>) {
         self.by_slug = items.iter().enumerate().map(|(i, p)| (p.slug.clone(), i)).collect();
         self.catalog = Rc::new(items);
+        if let Some(id) = self.contests.selected.clone() {
+            if let Ok(problems) = practice::contests::cached_contest_problems(&self.db, &id) { self.apply_contest_problems(&id, problems); }
+        }
         self.solved = solved.into_iter().collect();
         self.omni.stale = true;
         self.rebuild_library();
@@ -503,7 +506,11 @@ impl Workspace {
                 self.rows.extend(topic.entries.iter().map(|&entry| Row::Problem(entry)));
             }
         } else {
-            self.rows = self.active_catalog().iter().enumerate().filter(|(_, item)| !item.paid_only && (self.config.source != Source::Codeforces || self.contests.selected.is_none_or(|id| practice::codeforces::problem_id(&item.slug).is_ok_and(|(contest, _)| contest == id)))).map(|(index, _)| Row::Catalog(index)).collect();
+            if let Some(id @ practice::contests::ContestId::LeetCode(_)) = self.contests.selected.as_ref().filter(|id| id.source() == self.config.source) {
+                self.rows = self.contests.members.get(id).into_iter().flatten().filter_map(|slug| self.by_slug.get(slug).copied()).filter(|&index| !self.catalog[index].paid_only).map(Row::Catalog).collect();
+            } else {
+                self.rows = self.active_catalog().iter().enumerate().filter(|(_, item)| !item.paid_only && self.contests.includes(self.config.source, &item.slug)).map(|(index, _)| Row::Catalog(index)).collect();
+            }
         }
         if let Some(i) = selected.and_then(|sel| self.rows.iter().position(|r| *r == sel)) {
             self.sidebar_sel = i;

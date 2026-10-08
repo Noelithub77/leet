@@ -1,6 +1,7 @@
 <details open>
 <summary>Feat</summary>
 
+- LeetCode weekly and biweekly contests alongside Codeforces, with native problem explorers.
 - Continue stopped solves or retry interrupted AI actions from their result cards.
 - Assist panel with hints, I'm stuck, find bugs, edge cases, complexity, optimize, visualize, dry run, pattern, explain, and solve.
 - Run Codex, Claude Code, OpenCode, Antigravity, Gemini CLI, or Cursor Agent locally with live models, reasoning levels, and Fast tier.
@@ -34,6 +35,7 @@
 <details>
 <summary>Fix</summary>
 
+- Provider icons and a hover submenu for the active NeetCode list.
 - Show function icons for calls, returns, and stack frames in Debug mode.
 - Show “Just a template” instead of executing untouched templates in every language.
 - Keep the source, case tabs, and debugger controls visible before recording steps.
@@ -59,7 +61,7 @@
 - The update icon stays visible without a network connection.
 - Language changes keep each language's saved solution.
 - Keep AI options in their popup and remove duplicate Settings controls and basic navigation hints.
-- Move Contests toward the right edge with a wider gap from Recent and an Open in web button on every contest row.
+- Move Contests toward the right edge with a wider gap from Recent and an accent-colored browser icon on every contest row.
 - Remove the upcoming-contest explanatory text.
 
 </details>

@@ -228,6 +228,26 @@ impl Client {
             .collect())
     }
 
+    pub fn contests(&self) -> Result<Vec<crate::contests::LeetCodeContest>> {
+        let body = self.post(&format!("{BASE}/graphql/"), &format!("{BASE}/contest/"),
+            &json!({"query": "query { topTwoContests { title titleSlug startTime duration } pastContests(pageNo: 1, numPerPage: 10) { data { title titleSlug startTime duration } } }"}))?;
+        let mut contests: Vec<crate::contests::LeetCodeContest> = serde_json::from_value(body["data"]["topTwoContests"].clone()).context("LeetCode upcoming contest list shape")?;
+        let past: Vec<crate::contests::LeetCodeContest> = serde_json::from_value(body["data"]["pastContests"]["data"].clone()).context("LeetCode past contest list shape")?;
+        contests.extend(past);
+        Ok(contests)
+    }
+
+    pub fn contest_problem_slugs(&self, slug: &str) -> Result<Vec<String>> {
+        if !crate::contests::valid_leetcode_slug(slug) { bail!("Invalid LeetCode contest slug"); }
+        let body = self.post(&format!("{BASE}/graphql/"), &format!("{BASE}/contest/{slug}/"),
+            &json!({"query": "query($slug: String!) { contest(titleSlug: $slug) { titleSlug questions { titleSlug } } }", "variables": {"slug": slug}}))?;
+        let contest = &body["data"]["contest"];
+        if contest["titleSlug"].as_str() != Some(slug) { bail!("LeetCode returned another contest or no contest"); }
+        let questions = contest["questions"].as_array().context("LeetCode contest problems shape")?;
+        if questions.len() > 20 { bail!("LeetCode returned too many contest problems"); }
+        questions.iter().map(|question| question["titleSlug"].as_str().filter(|slug| !slug.is_empty()).map(str::to_owned).context("LeetCode contest problem slug missing")).collect()
+    }
+
     pub fn question(&self, slug: &str) -> Result<Question> {
         let query = "query q($titleSlug: String!) { question(titleSlug: $titleSlug) { \
             questionId questionFrontendId title titleSlug difficulty isPaidOnly content metaData \

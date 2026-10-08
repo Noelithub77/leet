@@ -69,6 +69,22 @@ Modifier shortcuts follow the user's VS Code bindings. Bare arrows, `enter` and 
 | `ctrl+alt+r` | Refresh the catalog and solved progress |
 | `ctrl+q` | Quit |
 
+## Contests
+
+Home lists up to three upcoming Codeforces rounds and both upcoming LeetCode contests,
+ordered by start time. Expand past contests for the ten most recent rounds across
+both providers. Rows open native problem explorers; the accent-colored link icon
+opens the contest website. Unpublished problems appear when the contest starts.
+LeetCode contest problems reuse the usual editor, local tests, and LeetCode judge.
+Provider icons identify each source; hover the active NeetCode list in the provider
+menu to select 150, 250, or All from its submenu.
+
+`./ops contests:refresh --json` refreshes both public lists in the local user cache,
+retaining each provider's last successful list on failure. Use `--contest ID` for
+Codeforces problems or `--leetcode-contest weekly-contest-522` for LeetCode problems.
+The command reports its database, provider errors, and actual cached problem data;
+partial provider refreshes exit unsuccessfully. No account setup or bundle writes.
+
 ## Tests
 
 Local runs execute every case in one Python process through `crates/practice/src/harness.py`. The harness parses LeetCode inputs from the question's metadata: lists, strings, `ListNode`, `TreeNode`, in-place (`void`) outputs, and design-class call sequences. Common imports (`collections`, `heapq`, `typing`, ...) are preloaded like on LeetCode. Outputs compare as JSON; statements that say "any order" compare order-insensitively, and floats within 1e-5. The default timeout is 10 s for a whole run.

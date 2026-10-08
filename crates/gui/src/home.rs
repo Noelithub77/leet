@@ -137,7 +137,7 @@ impl Workspace {
     pub fn show_home(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.save_now(cx);
         self.refresh_contests(window, cx);
-        if let Some(id) = self.contests.selected { self.refresh_contest_problems(id, window, cx); }
+        if let Some(id) = self.contests.selected.clone() { self.refresh_contest_problems(id, window, cx); }
         self.center = Center::Home;
         self.history_mode = false;
         self.settings.editing = None;
@@ -185,7 +185,7 @@ impl Workspace {
     pub fn home_open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         match self.home.list {
             HomeList::Recent => if let Some(slug) = self.recent_slugs.get(self.home.selected).cloned() { self.open_problem(slug, window, cx); },
-            HomeList::Contests => if let Some(contest) = self.contests.visible().get(self.home.selected) { self.open_contest(contest.id, window, cx); },
+            HomeList::Contests => if let Some(contest) = self.contests.visible().get(self.home.selected) { self.open_contest(contest.id(), window, cx); },
         }
     }
 

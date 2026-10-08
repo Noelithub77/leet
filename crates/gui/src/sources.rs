@@ -4,7 +4,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::notification::Notification;
-use gpui_kit::component::{Icon, Sizable as _, h_flex, v_flex};
+use gpui_kit::component::{Side, Icon, Sizable as _, h_flex, v_flex};
 use gpui_kit::*;
 use practice::db::Db;
 use practice::language::Source;
@@ -124,7 +124,7 @@ impl Workspace {
                     Ok((catalog, progress)) => {
                         if let Some(catalog) = catalog {
                             this.sources.set_catalog(catalog);
-                            if let Some(id) = this.contests.selected { this.sources.upsert_problems(practice::contests::cached_problems(&this.db, id).unwrap_or_default()); }
+                            if let Some(practice::contests::ContestId::Codeforces(id)) = this.contests.selected { this.sources.upsert_problems(practice::contests::cached_problems(&this.db, id).unwrap_or_default()); }
                         }
                         if this.config.codeforces_handle == account {
                             match progress {
@@ -150,30 +150,43 @@ impl Workspace {
     }
     pub fn render_source_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let weak = cx.weak_entity();
-        let label = if self.config.source == Source::NeetCode { self.config.roadmap_list.label().to_owned() } else if let Some(id) = self.contests.selected.filter(|_| self.config.source == Source::Codeforces) { format!("Contest {id}") } else { self.config.source.label().to_owned() };
+        let label = if self.config.source == Source::NeetCode { self.config.roadmap_list.label().to_owned() }
+            else if let Some(id) = self.contests.selected.as_ref().filter(|id| id.source() == self.config.source) {
+                match id {
+                    practice::contests::ContestId::Codeforces(id) => format!("Contest {id}"),
+                    practice::contests::ContestId::LeetCode(slug) => self.contests.list.iter().find(|c| c.id() == *id).map(|c| c.name().to_owned()).unwrap_or_else(|| slug.clone()),
+                }
+            } else { self.config.source.label().to_owned() };
         let current = self.config.source;
         let current_list = self.config.roadmap_list;
         Button::new("practice-source").ghost().small().label(label).icon(IconName::ChevronDown)
             .accessibility_label("Practice source").tooltip_with_action("Practice source", &crate::actions::CycleSource, Some(crate::actions::WORKSPACE))
-            .dropdown_menu(move |mut menu, _, _| {
-                for source in Source::ALL {
-                    let weak = weak.clone();
-                    menu = menu.item(PopupMenuItem::new(source.label()).checked(current == source).on_click(move |_, window, cx| {
-                        let _ = weak.update(cx, |ws, cx| ws.choose_source(source, window, cx));
-                    }));
-                }
-                if current == Source::NeetCode {
-                    menu = menu.separator();
+            .dropdown_menu(move |menu, window, cx| {
+                let lists_weak = weak.clone();
+                let mut menu = menu.check_side(Side::Right).submenu_with_icon(Some(crate::brand::source_icon(Source::NeetCode)), current_list.label(), window, cx, move |mut menu, _, _| {
+                    menu = menu.check_side(Side::Right);
                     for list in [List::NeetCode150, List::NeetCode250, List::All] {
-                        let weak = weak.clone();
-                        menu = menu.item(PopupMenuItem::new(list.label()).checked(current_list == list).on_click(move |_, window, cx| {
-                            let _ = weak.update(cx, |ws, cx| { ws.config.roadmap_list = list; ws.save_config(window, cx); ws.rebuild_library(); cx.notify(); });
+                        let weak = lists_weak.clone();
+                        menu = menu.item(PopupMenuItem::new(list.label()).checked(current == Source::NeetCode && current_list == list).on_click(move |_, window, cx| {
+                            let _ = weak.update(cx, |ws, cx| {
+                                ws.config.roadmap_list = list;
+                                ws.rebuild_library();
+                                ws.choose_source(Source::NeetCode, window, cx);
+                            });
                         }));
                     }
+                    menu
+                });
+                for source in [Source::LeetCode, Source::Codeforces] {
+                    let weak = weak.clone();
+                    menu = menu.item(PopupMenuItem::new(source.label()).icon(crate::brand::source_icon(source)).checked(current == source).on_click(move |_, window, cx| {
+                        let _ = weak.update(cx, |ws, cx| ws.choose_source(source, window, cx));
+                    }));
                 }
                 menu
             })
     }
+
     pub fn render_topic_grid(&self, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex().px_2().gap_1().children(TOPICS.chunks(TOPIC_COLUMNS as usize).enumerate().map(|(row, topics)| {
             h_flex().gap_1().children(topics.iter().enumerate().map(|(column, topic)| {

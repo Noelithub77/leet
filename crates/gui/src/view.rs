@@ -137,22 +137,23 @@ impl Workspace {
         let theme = cx.theme().clone();
         let (solved, total) = if self.config.source == practice::language::Source::NeetCode {
             (self.library.solved, self.library.total)
+        } else if self.contests.selected.as_ref().is_some_and(|id| id.source() == self.config.source) {
+            let solved = if self.config.source == practice::language::Source::Codeforces { &self.sources.solved } else { &self.solved };
+            (self.rows.iter().filter(|row| matches!(row, Row::Catalog(index) if solved.contains(&self.active_catalog()[*index].slug))).count(), self.rows.len())
         } else if self.config.source == practice::language::Source::Codeforces {
-            if self.contests.selected.is_some() {
-                (self.rows.iter().filter(|row| matches!(row, Row::Catalog(index) if self.sources.solved.contains(&self.sources.catalog[*index].slug))).count(), self.rows.len())
-            } else { (self.sources.solved.len(), self.sources.catalog.len()) }
+            (self.sources.solved.len(), self.sources.catalog.len())
         } else { (self.solved.len(), self.catalog.len()) };
         v_flex().size_full().gap_2()
             .child(h_flex().h_9().px_2().gap_2().items_center()
                 .child(self.render_source_menu(cx))
                 .child(div().flex_1().text_xs().text_color(theme.muted_foreground).child(format!("{solved}/{total}")))
-                .when_some(self.contests.selected.filter(|_| self.config.source == practice::language::Source::Codeforces), |row, id| row
+                .when_some(self.contests.selected.as_ref().filter(|id| id.source() == self.config.source).cloned(), |row, id| row
                     .child(gpui_kit::component::button::Button::new("explorer-contest-browser").ghost().xsmall()
-                        .icon(gpui_kit::assets::IconName::ExternalLink).accessibility_label("Open contest in browser").tooltip("Open contest in browser")
-                        .on_click(move |_, _, _| { let _ = open::that_detached(format!("https://codeforces.com/contest/{id}")); }))
+                        .icon(gpui_kit::component::Icon::new(gpui_kit::assets::IconName::ExternalLink).text_color(theme.primary)).accessibility_label("Open contest in browser").tooltip("Open contest in browser")
+                        .on_click({ let url = id.url(); move |_, _, _| { let _ = open::that_detached(url.clone()); } }))
                     .child(gpui_kit::component::button::Button::new("explorer-contest-refresh").ghost().xsmall()
                         .icon(gpui_kit::assets::IconName::RefreshCw).accessibility_label("Refresh contest problems").tooltip("Refresh contest problems")
-                        .on_click(cx.listener(move |this, _, window, cx| this.refresh_contest_problems(id, window, cx)))))
+                        .on_click(cx.listener(move |this, _, window, cx| this.refresh_contest_problems(id.clone(), window, cx)))))
                 .child(gpui_kit::component::button::Button::new("explorer-roadmap").ghost().xsmall()
                     .icon(gpui_kit::assets::IconName::Map).accessibility_label("Roadmap")
                     .tooltip_with_action("Roadmap", &crate::actions::ToggleRoadmap, Some(crate::actions::WORKSPACE))
@@ -161,7 +162,7 @@ impl Workspace {
                 .child(self.render_topic_grid(cx))
                 .child(h_flex().px_3().gap_2().child(div().flex_1().truncate().text_xs().font_weight(FontWeight::SEMIBOLD).child(TOPICS[self.explorer_topic].name))
                     .child(div().text_xs().text_color(theme.muted_foreground).child({ let (done, total) = self.library.progress(TOPICS[self.explorer_topic].name); format!("{done}/{total}") }))))
-            .when_some(self.contests.selected.filter(|_| self.config.source == practice::language::Source::Codeforces), |view, id| view
+            .when_some(self.contests.selected.as_ref().filter(|id| id.source() == self.config.source).cloned(), |view, id| view
                 .when(self.contests.loading.contains(&id), |view| view.child(div().px_3().text_xs().text_color(theme.muted_foreground).child("Refreshing contest problems…")))
                 .when_some(self.contests.problem_status.as_ref(), |view, status| view.child(div().px_3().text_xs().text_color(theme.muted_foreground).child(status.clone()))))
             .child(uniform_list("sidebar", self.rows.len(), cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {

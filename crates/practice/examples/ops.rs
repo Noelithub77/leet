@@ -16,7 +16,7 @@ fn execute()->Result<()> {
     let args:Vec<_>=std::env::args().skip(1).collect();
     let command=args.first().map(String::as_str).unwrap_or("--help");
     if matches!(command,"--help"|"-h"|"help"){
-        println!("./ops <check|build|local:deploy|agents|snapshot|cache:fetch|contests:refresh|workspace:move|release:package|trace> [--json]\n\nagents        Detect local agents; --catalog lists live models, --smoke runs read-only JSON probes.\ncheck         Rust workspace tests.\nbuild         Release desktop build.\nlocal:deploy  Build/install leet and 1337 commands, desktop entry/icon; verify version and links.\nsnapshot      Public-only SQLite refresh; use ./ops snapshot --help.\ncache:fetch   Cache one Codeforces statement: --slug cf:CONTEST:INDEX.\ncontests:refresh  Refresh cached Codeforces contests; optional --contest ID.\nworkspace:move Move solutions and Git history: --path /absolute/path; preserve a compatibility link.\nrelease:package  Package a native CI build; use ./ops release:package --help.\ntrace         Record one case; use ./ops trace --help.\n\nLocal environment. Preserves settings, credentials, cache, and Solutions. Running windows offer restart.");return Ok(());
+        println!("./ops <check|build|local:deploy|agents|snapshot|cache:fetch|contests:refresh|workspace:move|release:package|trace> [--json]\n\nagents        Detect local agents; --catalog lists live models, --smoke runs read-only JSON probes.\ncheck         Rust workspace tests.\nbuild         Release desktop build.\nlocal:deploy  Build/install leet and 1337 commands, desktop entry/icon; verify version and links.\nsnapshot      Public-only SQLite refresh; use ./ops snapshot --help.\ncache:fetch   Cache one Codeforces statement: --slug cf:CONTEST:INDEX.\ncontests:refresh  Refresh both providers; optional --contest ID or --leetcode-contest SLUG.\nworkspace:move Move solutions and Git history: --path /absolute/path; preserve a compatibility link.\nrelease:package  Package a native CI build; use ./ops release:package --help.\ntrace         Record one case; use ./ops trace --help.\n\nLocal environment. Preserves settings, credentials, cache, and Solutions. Running windows offer restart.");return Ok(());
     }
     if command == "trace" { return trace(&args[1..]); }
     if command == "agents" {
@@ -84,21 +84,35 @@ fn execute()->Result<()> {
         return Ok(());
     }
     if command == "contests:refresh" {
-        let mut id = None; let mut index = 1;
+        if args.iter().skip(1).any(|arg| matches!(arg.as_str(), "--help" | "-h")) {
+            println!("./ops contests:refresh [--contest ID | --leetcode-contest SLUG] [--json]\nRefresh public Codeforces and LeetCode lists in the local user cache. Optional contest selection also caches its problems. Reports partial failures and preserves previous provider data.");
+            return Ok(());
+        }
+        let mut id = None; let mut leetcode = None; let mut index = 1;
         while index < args.len() {
             match args[index].as_str() {
                 "--json" => index += 1,
-                "--contest" if id.is_none() => {
+                "--contest" if id.is_none() && leetcode.is_none() => {
                     index += 1; let parsed: u32 = args.get(index).context("--contest requires an ID")?.parse()?;
                     if parsed == 0 { bail!("Contest ID must be positive"); } id = Some(parsed); index += 1;
                 }
-                _ => bail!("Use ./ops contests:refresh [--contest ID] [--json]"),
+                "--leetcode-contest" if leetcode.is_none() && id.is_none() => {
+                    index += 1; let slug = args.get(index).context("--leetcode-contest requires a slug")?;
+                    if !practice::contests::valid_leetcode_slug(slug) { bail!("Invalid LeetCode contest slug"); }
+                    leetcode = Some(slug.clone()); index += 1;
+                }
+                _ => bail!("Use ./ops contests:refresh [--contest ID | --leetcode-contest SLUG] [--json]"),
             }
         }
         let path = practice::config::database_path(); let db = practice::db::Db::open(&path)?;
-        let contests = practice::contests::refresh_list(&db)?;
+        let (entries, errors) = practice::contests::refresh_entries(&db)?;
+        let contests: Vec<_> = entries.iter().filter_map(|entry| match entry { practice::contests::ContestEntry::Codeforces(contest) => Some(contest), _ => None }).collect();
+        let leetcode_contests: Vec<_> = entries.iter().filter_map(|entry| match entry { practice::contests::ContestEntry::LeetCode(contest) => Some(contest), _ => None }).collect();
+        let leetcode_problems = leetcode.as_ref().map(|slug| practice::contests::refresh_contest_problems(&db, &practice::contests::ContestId::LeetCode(slug.clone()), &practice::leetcode::Client::new(None))).transpose()?;
+        let leetcode_problems = match leetcode_problems { Some(practice::contests::ContestProblems::LeetCode(items)) => Some(items), _ => None };
         let problems = id.map(|id| practice::contests::refresh_problems(&db, id)).transpose()?;
-        println!("{}", json!({"command":command,"environment":"local-user-cache","database":path,"contests":contests.len(),"upcoming":contests.iter().filter(|contest| !contest.past()).take(3).collect::<Vec<_>>(),"contest_id":id,"problems":problems.map(|problems|problems.len())}));
+        println!("{}", json!({"command":command,"environment":"local-user-cache","database":path,"contests":contests.len(),"upcoming":contests.iter().filter(|contest| !contest.past()).take(3).collect::<Vec<_>>(),"leetcode_contests":leetcode_contests,"leetcode_contest":leetcode,"leetcode_problems":leetcode_problems,"errors":errors,"success":errors.is_empty(),"contest_id":id,"problems":problems.map(|problems|problems.len())}));
+        if !errors.is_empty() { bail!("Some contest providers failed to refresh; cached lists were preserved"); }
         return Ok(());
     }
     if args.iter().skip(1).any(|arg|arg!="--json"){bail!("Unexpected argument; use ./ops --help");}

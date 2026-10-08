@@ -29,7 +29,7 @@ pub enum Target {
     Roadmap,
     Command(usize),
     ContextShortcut(usize),
-    Contest(u32),
+    Contest(practice::contests::ContestId),
     Setting(Setting),
     List(List),
     Topic(&'static str),
@@ -145,8 +145,8 @@ impl Workspace {
             items.push(Item { target: Target::Font(name.clone().into()), title: name.into() });
         }
         for contest in &self.contests.list {
-            items.push(Item { target: Target::Contest(contest.id), title: contest.name.clone().into() });
-            text.push(format!("Codeforces contest {} {}", contest.id, contest.name));
+            items.push(Item { target: Target::Contest(contest.id()), title: contest.name().to_owned().into() });
+            text.push(format!("{} contest {} {}", contest.id().source().label(), contest.id().key(), contest.name()));
         }
         let mut problem_item = HashMap::new();
         for p in self.catalog.iter().chain(self.sources.catalog.iter()) {
@@ -429,7 +429,7 @@ impl Workspace {
         let selected = pos == self.omni.selected;
         let muted = theme.muted_foreground;
         let (icon, kind, detail): (IconName, &str, AnyElement) = match &item.target {
-            Target::Contest(_) => (IconName::CalendarRange, "Contest", div().child("Codeforces").into_any_element()),
+            Target::Contest(id) => (IconName::CalendarRange, "Contest", div().child(id.source().label()).into_any_element()),
             Target::Roadmap => (IconName::Map, "View", key(crate::actions::key_for("ToggleRoadmap", &self.config)).into_any_element()),
             Target::Command(c) => (IconName::SquareTerminal, "Command", crate::view::shortcut_keys(COMMANDS[*c].effective_key(&self.config)).into_any_element()),
             Target::ContextShortcut(index) => {
