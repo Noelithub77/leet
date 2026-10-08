@@ -31,6 +31,7 @@ else
   platform=linux
 fi
 
+
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 repo=https://github.com/Noelithub77/leet
