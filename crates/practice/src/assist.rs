@@ -81,7 +81,7 @@ impl Action {
             Self::Optimize => "Your complexity against the best, with a nudge",
             Self::Pattern => "The pattern, a template, and similar problems",
             Self::DryRun => "Trace your code on a case and find the first wrong step",
-            Self::Solve => "Solve, test, and submit until accepted",
+            Self::Solve => "Write a solution quickly, then confirm submission",
             Self::Ask => "Ask about this problem or your code",
             Self::Review => "Correctness, complexity, improvements, and a visual dry run",
         }
@@ -113,7 +113,7 @@ impl Action {
             Self::Pattern => "Identify the algorithmic pattern this problem belongs to, the cues in the statement that reveal it, a short generic code template of the pattern in the required language (not the solution to this problem), and 3 to 5 similar problems chosen ONLY from the candidate list below, using their exact slugs.",
             Self::DryRun => "Dry-run my attempt on the given case exactly as the code executes, not as it was intended. Produce frames for each meaningful step (at most 30) with `line` set to the executed 1-based line and structures showing the variables at that moment. Set `wrong_frame` to the first frame whose state diverges from a correct solution's state, explain why, and give a fix hint without rewriting the code.",
             Self::Ask => "Answer my question about this problem and my current code. Use the prior conversation when relevant, but treat the current code and test results as the latest state. Use native tools when needed and respond concisely. Edit files only when requested. Leave judge submission to the app confirmation. Do not reveal a full solution unless I ask for one.",
-            Self::Solve => "Solve this problem in the solution file at the path given below, in the required language, preserving the judge interface exactly. Edit only that file. Write a clean, optimal solution. Run it on the examples if a local runtime is available. When done, reply with a short report of the approach and complexity.",
+            Self::Solve => "Quick solve: use the supplied statement and code to write a correct, efficient solution directly to the specified solution file, preserving the judge interface and required language. Edit only that file. This is a single write-and-report task, not a verification loop. On the first attempt, do not plan aloud, research, inspect unrelated files, run commands or tests, perform verification, or create artifacts. Use a direct file write/edit and immediately return a solve report with one sentence for the approach, time and space complexity, and a brief summary. Do not claim tests passed. The app handles submission confirmation and judge feedback. When failure feedback is supplied, fix that specific failure and use only focused investigation or checks needed for the fix.",
         }
     }
 }
@@ -429,8 +429,9 @@ pub fn prompt(action: Action, ctx: &Context) -> String {
     let mut out = environment_prompt(false);
     out.push_str(&format!("\n## Request shortcut\n{}\n{}\n", action.label(), action.instructions()));
     out.push_str("Return one JSON object with a `response` containing a tagged native answer: {\"response\":{\"action\":\"chat\",\"answer\":\"Markdown here\"}}. Choose any supported response kind appropriate to the user's request, regardless of the shortcut.\n");
+    if action == Action::Solve { out.push_str("Use the solve response kind for this task. Return the report in your final JSON reply; do not write a response artifact.\n"); }
     push_problem(&mut out, ctx);
-    out.push_str(VISUAL_GUIDE);
+    if action != Action::Solve { out.push_str(VISUAL_GUIDE); }
     if let (Action::DryRun, Some(trace)) = (action, ctx.trace) {
         out.push_str("\n## Recorded execution of the focus case\nThis is the real trace from running my code, one step per line: `#step Lline event function | variables`. Do not simulate; read it. Set `wrong_step` to the `#` of the first step whose state diverges from a correct solution, and make `scene` 3 to 6 key frames around it.\n");
         out.push_str(trace);
@@ -629,6 +630,9 @@ mod tests {
         assert!(prompt.contains("/tmp/1-two-sum.py") && prompt.contains("Wrong Answer on [3,3]"));
         assert!(!prompt.contains("Do not use tools"));
         assert_eq!(Action::Solve.access(), Access::Full);
+        assert!(prompt.contains("single write-and-report task") && prompt.contains("do not plan aloud"));
+        assert!(!prompt.contains(VISUAL_GUIDE));
+        assert!(prompt.contains("do not write a response artifact"));
     }
 
     #[test]

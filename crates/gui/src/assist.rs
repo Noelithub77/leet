@@ -132,6 +132,10 @@ pub struct TraceReview {
     pub fix_hint: String,
 }
 
+fn solve_written_phase(action: Action, attempt: usize) -> Phase {
+    if action == Action::Solve && attempt == 1 { Phase::Confirm } else { Phase::Testing }
+}
+
 struct SolveState {
     attempt: usize,
     session: Option<String>,
@@ -203,7 +207,6 @@ pub struct Assist {
     threads: Vec<practice::chat::history::Thread>,
     selected_thread: Option<i64>,
     loaded_threads: HashSet<i64>,
-    root_scope: bool,
     show_threads: bool,
     thread_scroll: UniformListScrollHandle,
     thread_search: Entity<InputState>,
@@ -240,14 +243,9 @@ impl Assist {
             if matches!(event, InputEvent::Change) { this.thread_query = input.read(cx).value().to_string(); this.thread_selection = 0; this.refresh_threads(); cx.notify(); }
         }).detach();
         let mut this = Self { workspace, db, agents: vec![], detecting: false, catalogs, catalog_cache, requested_catalogs: HashSet::new(), installing: None,
-            runs: vec![], next_id: 0, slug: None, ticker: None, scroll: ScrollHandle::new(), composer, composer_thread: None, threads: vec![], selected_thread: None, loaded_threads: HashSet::new(), root_scope: false, show_threads: true, thread_scroll: UniformListScrollHandle::new(), thread_search, thread_query: String::new(), thread_selection: 0, conversation_error: None, editing: None, ai_tab: 0, context_key: None };
+            runs: vec![], next_id: 0, slug: None, ticker: None, scroll: ScrollHandle::new(), composer, composer_thread: None, threads: vec![], selected_thread: None, loaded_threads: HashSet::new(), show_threads: true, thread_scroll: UniformListScrollHandle::new(), thread_search, thread_query: String::new(), thread_selection: 0, conversation_error: None, editing: None, ai_tab: 0, context_key: None };
         if let Err(error) = this.db.migrate_chats() { this.conversation_error = Some(error.to_string()); }
-        this.root_scope = this.db.get("chat:scope").ok().flatten().as_deref() == Some("root");
         this.refresh_threads();
-        if this.root_scope {
-            let saved = this.db.get(&this.selection_key()).ok().flatten().and_then(|value| value.parse::<i64>().ok());
-            if let Some(id) = saved.filter(|id| this.threads.iter().any(|thread| thread.id == *id)) { this.load_thread(id); }
-        }
         this.detect(cx);
         this
     }
@@ -312,20 +310,18 @@ impl Assist {
         }).detach();
     }
 
-    /// Problem navigation preserves a selected root conversation across problems.
+    /// Restore the open problem’s own conversation selection.
     pub fn set_problem(&mut self, slug: Option<&str>, cx: &mut Context<Self>) {
         if self.slug.as_deref() == slug { return; }
         self.slug = slug.map(str::to_owned);
-        if !self.root_scope {
-            self.selected_thread = None;
-            self.editing = None;
-            self.refresh_threads();
-            let key = self.selection_key();
-            let saved = self.db.get(&key).ok().flatten().and_then(|value| value.parse::<i64>().ok());
-            let selected = saved.filter(|id| self.threads.iter().any(|thread| thread.id == *id))
-                .or_else(|| self.threads.first().map(|thread| thread.id));
-            if let Some(id) = selected { self.load_thread(id); }
-        } else { self.refresh_threads(); }
+        self.selected_thread = None;
+        self.editing = None;
+        self.refresh_threads();
+        let key = self.selection_key();
+        let saved = self.db.get(&key).ok().flatten().and_then(|value| value.parse::<i64>().ok());
+        let selected = saved.filter(|id| self.threads.iter().any(|thread| thread.id == *id))
+            .or_else(|| self.threads.first().map(|thread| thread.id));
+        if let Some(id) = selected { self.load_thread(id); }
         if let Some(slug) = slug {
             match self.db.latest_chat_review(slug) { Ok(Some(message)) => self.restore_message(message), Ok(None) => {}, Err(error) => self.conversation_error = Some(error.to_string()) }
         }
@@ -513,14 +509,15 @@ impl Assist {
                             solve.log.push((Tone::Done, format!("Attempt {} written", solve.attempt)));
                         }
                         if answer.is_some() { run.set_answer(answer); }
-                        run.phase = Phase::Testing;
+                        run.phase = solve_written_phase(run.action, run.solve.as_ref().map_or(1, |solve| solve.attempt));
+                        let test = run.phase == Phase::Testing;
                         let (workspace, slug) = (self.workspace.clone(), run.slug.clone());
                         window.defer(cx, move |window, cx| {
                             let _ = workspace.update(cx, |ws, cx| {
                                 if ws.session.as_ref().is_some_and(|s| s.slug == slug) {
                                     if ws.session.as_ref().is_some_and(|s| s.running || matches!(s.judge, Some(crate::workspace::Judge::Running { .. }))) {
-                                        ws.assist.update(cx, |assist, cx| assist.fail_solve(&slug, "Current tests or judge run must finish before testing this solution".into(), cx));
-                                    } else { ws.reload_solution(&slug, window, cx); ws.run_tests(window, cx); }
+                                        ws.assist.update(cx, |assist, cx| assist.fail_solve(&slug, "Current tests or judge run must finish before proceeding".into(), cx));
+                                    } else { ws.reload_solution(&slug, window, cx); if test { ws.run_tests(window, cx); } }
                                 }
                                 else { ws.assist.update(cx, |assist, cx| assist.fail_solve(&slug, "Problem changed; solve stopped".into(), cx)); }
                             });
@@ -533,7 +530,7 @@ impl Assist {
                 }
             }
         }
-        if let Some((slug, owner)) = self.runs.iter().find(|run| run.id == id && run.solve.is_some() && run.phase == Phase::Testing).map(|run| (run.slug.clone(), run.id)) {
+        if let Some((slug, owner)) = self.runs.iter().find(|run| run.id == id && run.solve.is_some() && matches!(run.phase, Phase::Testing | Phase::Confirm)).map(|run| (run.slug.clone(), run.id)) {
             let previous: Vec<_> = self.runs.iter().filter(|run| run.id != owner && run.slug == slug && run.solve.is_some() && (run.phase.active() || run.phase == Phase::Confirm)).map(|run| run.id).collect();
             for other in previous { self.stop(other, cx); }
         }
@@ -616,7 +613,7 @@ impl Assist {
     }
 
     pub fn fail_solve(&mut self, slug: &str, error: String, cx: &mut Context<Self>) {
-        if let Some(run) = self.runs.iter_mut().find(|run| run.slug == slug && run.solve.is_some() && run.phase.active()) {
+        if let Some(run) = self.runs.iter_mut().find(|run| run.slug == slug && run.solve.is_some() && (run.phase.active() || run.phase == Phase::Confirm)) {
             run.cancel.cancel(); run.phase = Phase::Failed(first_line(&error)); run.elapsed = Some(run.started.elapsed());
         }
         cx.notify();
@@ -721,6 +718,12 @@ impl Assist {
 
 #[cfg(test)]
 mod recovery_tests {
+    #[test]
+    fn quick_solve_checks_only_after_the_first_rejection() {
+        assert_eq!(super::solve_written_phase(practice::assist::Action::Solve, 1), super::Phase::Confirm);
+        assert_eq!(super::solve_written_phase(practice::assist::Action::Solve, 2), super::Phase::Testing);
+        assert_eq!(super::solve_written_phase(practice::assist::Action::Ask, 1), super::Phase::Testing);
+    }
     use super::Run;
     use practice::assist::Action;
     use practice::agents::Cancel;
@@ -881,8 +884,7 @@ impl Assist {
         v_flex().id(("assist-card", id)).p_3().gap_2p5().rounded_lg().bg(theme.background.opacity(0.55)).border_1()
             .border_color(if active { color.opacity(0.45) } else { theme.border })
             .child(v_flex().gap_1().pb_2().border_b_1().border_color(theme.border)
-                .child(h_flex().gap_2().child(div().text_xs().text_color(theme.muted_foreground).child("You"))
-                    .when(self.root_scope, |el| el.child(div().min_w_0().truncate().text_xs().text_color(theme.muted_foreground).child(if run.problem_title.is_empty() { run.slug.clone() } else { run.problem_title.clone() }))))
+                .child(div().text_xs().text_color(theme.muted_foreground).child("You"))
                 .when(run.action != Action::Ask, |el| el.child(h_flex().id(("chat-action-prompt", id)).gap_2().items_center().child(Icon::new(icon(run.action)).small().text_color(color)).child(div().text_sm().child(run.action.label()))
                     .tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(request_prompt.clone()).build(window, cx))))
                 .when(!run.instructions.is_empty(), |el| el.child(TextView::markdown(SharedString::from(format!("chat-request-{id}")), run.instructions.clone()).selectable(true))))
@@ -1180,9 +1182,7 @@ impl Workspace {
         });
         if action == Action::Solve && self.session.as_ref().is_some_and(|s| s.running || matches!(s.judge, Some(crate::workspace::Judge::Running { .. }))) { self.flash("Wait for the current test or submission", cx); return; }
         self.save_now(cx);
-        let snapshot = if let Some(snapshot) = self.assist_snapshot(cx) { snapshot } else if action == Action::Ask && self.assist.read(cx).root_scope {
-            Snapshot { slug: String::new(), title: "General".into(), difficulty: String::new(), url: String::new(), statement_html: String::new(), code: String::new(), starter: String::new(), language: self.config.preferred_language, cases: vec![], focus_case: 0, solution_path: PathBuf::new(), workspace: self.config.workspace.clone(), trace: None }
-        } else { self.flash("Open a problem first", cx); return };
+        let Some(snapshot) = self.assist_snapshot(cx) else { self.flash("Open a problem first", cx); return; };
         if action.needs_attempt() && !snapshot.has_attempt() { self.flash("Write some code first", cx); return; }
         let target = self.assist.read(cx).target(&self.config);
         if action == Action::Solve && matches!(target, Target::Web(_)) {

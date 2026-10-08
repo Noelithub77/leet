@@ -108,7 +108,7 @@ impl Render for Assist {
                 .when_some(self.conversation_error.clone(), |el, error| el.child(div().text_xs().text_color(theme.danger).child(error)))
                 .when(self.editing.is_some(), |el| el.child(h_flex().items_center().child(div().flex_1().text_xs().text_color(theme.muted_foreground).child("Edit as a new branch"))
                     .child(Button::new("cancel-chat-edit").ghost().xsmall().icon(IconName::X).tooltip("Cancel edit").on_click(cx.listener(|this, _, window, cx| this.cancel_edit(window, cx))))))
-                .child(Textarea::new(&self.composer).disabled(!has_problem && !self.root_scope).aria_label("Message or action instructions"))
+                .child(Textarea::new(&self.composer).disabled(!has_problem).aria_label("Message or action instructions"))
                 .child(h_flex().gap_2().items_center().child(Icon::new(IconName::MessageCircle).small().text_color(theme.muted_foreground))
                     .child(div().flex_1().text_xs().text_color(theme.muted_foreground).child("Ctrl+Enter"))
                     .child(if busy {
@@ -117,7 +117,7 @@ impl Render for Assist {
                     } else {
                         Button::new("chat-send").primary().small().icon(if web { IconName::ExternalLink } else { IconName::ArrowUp })
                             .tooltip(if web { "Open question in web chat" } else { "Send question" }).accessibility_label("Send question")
-                            .disabled((!has_problem && !self.root_scope) || (self.editing.is_none() && self.composer.read(cx).value().trim().is_empty()))
+                            .disabled((!has_problem) || (self.editing.is_none() && self.composer.read(cx).value().trim().is_empty()))
                             .on_click(cx.listener(|this, _, window, cx| this.send(window, cx))).into_any_element()
                     })))
     }

@@ -4,7 +4,7 @@ use gpui_kit::component::notification::Notification;
 use gpui_kit::component::WindowExt as _;
 
 impl Assist {
-    pub(super) fn selection_key(&self) -> String { format!("chat:selected:{}", if self.root_scope { "root" } else { self.slug.as_deref().unwrap_or("root") }) }
+    pub(super) fn selection_key(&self) -> String { format!("chat:selected:{}", self.slug.as_deref().unwrap_or("")) }
     pub(super) fn refresh_threads(&mut self) {
         match self.db.visible_chat_threads(self.slug.as_deref(), &self.thread_query) {
             Ok(threads) => { self.threads = threads; self.thread_selection = self.thread_selection.min(self.threads.len().saturating_sub(1)); },
@@ -12,6 +12,7 @@ impl Assist {
         }
     }
     pub(super) fn load_thread(&mut self, id: i64) {
+        if !self.db.chat_thread(id).is_ok_and(|thread| thread.problem.is_some() && thread.problem.as_deref() == self.slug.as_deref()) { return; }
         if !self.loaded_threads.contains(&id) {
             match self.db.chat_messages(id) {
                 Ok(messages) => {
@@ -24,8 +25,6 @@ impl Assist {
             }
         }
         self.refresh_artifacts(id);
-        self.root_scope = self.db.chat_thread(id).is_ok_and(|thread| thread.problem.is_none());
-        if let Err(error) = self.db.set("chat:scope", if self.root_scope { "root" } else { "problem" }) { self.conversation_error = Some(error.to_string()); }
         self.selected_thread = Some(id);
         if let Err(error) = self.db.set(&self.selection_key(), &id.to_string()) { self.conversation_error = Some(error.to_string()); }
     }
@@ -42,10 +41,9 @@ impl Assist {
     }
     pub(super) fn ensure_thread(&mut self) -> anyhow::Result<i64> {
         if let Some(id) = self.selected_thread { return Ok(id); }
-        let problem = if self.root_scope { None } else { self.slug.as_deref() };
-        let thread = self.db.create_chat(problem, "New chat")?;
+        let problem = self.slug.as_deref().ok_or_else(|| anyhow::anyhow!("Open a problem first"))?;
+        let thread = self.db.create_chat(Some(problem), "New chat")?;
         self.selected_thread = Some(thread.id); self.loaded_threads.insert(thread.id); self.refresh_threads();
-        self.db.set("chat:scope", if self.root_scope { "root" } else { "problem" })?;
         self.db.set(&self.selection_key(), &thread.id.to_string())?;
         Ok(thread.id)
     }
@@ -65,8 +63,8 @@ impl Assist {
             if let Err(error) = self.db.save_chat_draft(id, self.composer.read(cx).value().as_ref()) { self.conversation_error = Some(error.to_string()); }
         }
     }
-    pub(super) fn new_thread(&mut self, root: bool, window: &mut Window, cx: &mut Context<Self>) {
-        self.persist_draft(cx); self.root_scope = root; self.selected_thread = None; self.editing = None;
+    pub(super) fn new_thread(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.persist_draft(cx); self.selected_thread = None; self.editing = None;
         match self.ensure_thread() {
             Ok(_) => { self.sync_composer(window, cx); self.ai_tab = 2; self.show_threads = false; }
             Err(error) => self.conversation_error = Some(error.to_string()),
@@ -116,8 +114,7 @@ impl Assist {
                         self.runs.retain(|run| run.thread_id != thread); self.loaded_threads.remove(&thread);
                     }
                 }
-                if let Some(id) = id && let Ok(thread) = self.db.chat_thread(id) {
-                    self.root_scope = thread.problem.is_none();
+                if let Some(id) = id && self.db.chat_thread(id).is_ok_and(|thread| thread.problem.is_some() && thread.problem.as_deref() == self.slug.as_deref()) {
                     self.refresh_threads(); self.select_thread(id, window, cx);
                 } else { self.selected_thread = None; self.refresh_threads(); self.sync_composer(window, cx); }
                 self.editing = None;
@@ -157,17 +154,13 @@ impl Assist {
         let theme = cx.theme().clone();
         let title = self.selected_thread.and_then(|id| self.db.chat_thread(id).ok()).map(|thread| thread.title).unwrap_or_else(|| "Threads".into());
         let weak = cx.entity().downgrade(); let has_thread = self.selected_thread.is_some();
-        let new_chat = weak.clone(); let has_problem = self.slug.is_some();
+        let has_problem = self.slug.is_some();
         v_flex().px_3().pb_2().gap_2()
             .child(h_flex().gap_1().min_w_0()
                 .child(Button::new("chat-thread-picker").ghost().small().icon(if self.show_threads { IconName::ChevronDown } else { IconName::ChevronRight }).label(title).flex_1().min_w_0()
                     .tooltip("Conversation threads").on_click(cx.listener(|this, _, window, cx| { if this.show_threads { this.show_threads = false; cx.notify(); } else { this.open_thread_list(window, cx); } })))
                 .child(Button::new("chat-new-thread").ghost().small().icon(IconName::Plus).tooltip("New thread").accessibility_label("New thread")
-                    .dropdown_menu(move |menu, _, _| {
-                        let problem = new_chat.clone(); let root = new_chat.clone();
-                        menu.item(PopupMenuItem::new("New problem chat").disabled(!has_problem).on_click(move |_, window, cx| { let _ = problem.update(cx, |this, cx| this.new_thread(false, window, cx)); }))
-                            .item(PopupMenuItem::new("New Root chat").on_click(move |_, window, cx| { let _ = root.update(cx, |this, cx| this.new_thread(true, window, cx)); }))
-                    }))
+                    .disabled(!has_problem).on_click(cx.listener(|this, _, window, cx| this.new_thread(window, cx))))
                 .child(Button::new("chat-undo").ghost().small().icon(IconName::Undo2).tooltip("Undo latest branch or deletion").accessibility_label("Undo latest branch or deletion").disabled(!self.db.can_undo_chat())
                     .on_click(cx.listener(|this, _, window, cx| this.undo_thread(window, cx))))
                 .child(Button::new("chat-thread-options").ghost().small().icon(IconName::Ellipsis).tooltip("Thread options").disabled(!has_thread)
@@ -189,7 +182,6 @@ impl Assist {
                             .hover(|el| el.bg(theme.list_hover))
                             .child(Icon::new(if thread.fork_of.is_some() { IconName::GitBranch } else { IconName::MessageCircle }).xsmall().text_color(theme.muted_foreground))
                             .child(div().flex_1().min_w_0().truncate().text_sm().child(thread.title.clone()))
-                            .child(div().text_xs().text_color(theme.muted_foreground).child(if thread.problem.is_none() { "Root" } else { "Problem" }))
                             .on_click(cx.listener(move |this, _, window, cx| this.select_thread(id, window, cx))).into_any_element()
                     })).collect()
                 })).track_scroll(&self.thread_scroll).w_full().h(px(self.threads.len().min(5) as f32 * 34.)))))

@@ -82,3 +82,13 @@ UI and keyboard behavior where available, commit focused changes, then run
   selection, draft restoration, artifact rendering, and fork/undo behavior.
 - Focused commit and local release deployment complete this milestone; other
   providers have adapter coverage but were not exercised with live accounts.
+
+## Latest scope
+
+- **[CHOSEN]** User removed Root chats. Show, search, and create only threads
+  belonging to the open problem. Keep older Root records stored without exposing
+  them or restoring them as the active conversation.
+
+- **[CHOSEN]** Quick Solve is a single write-and-report request. Skip first-attempt
+  sample runs and visualization guidance. Keep submission confirmation, and use
+  judge feedback plus focused checks on retries after rejection.

@@ -13,8 +13,8 @@
 - Import CodeChef samples through CPH and run solutions locally in every supported language.
 - Background CPH listener opens Leet when closed and reuses tabs in its existing window.
 
-- Multiple problem and shared Root chat threads with saved drafts, message forks, branch edits, deletion, and undo.
-- List problem and Root chats together, with automatic search focus.
+- Multiple chat threads per problem with saved drafts, message forks, branch edits, deletion, and undo.
+- Search the open problem’s chat threads with automatic search focus.
 - Use every prompt shortcut in ordinary chats, with readable prompts on hover and shared native agent capabilities.
 - Let agents write and revise native visualization artifacts directly in private files.
 - Native resizable Explorer on Alt+S, Description on Alt+A, and AI on Alt+D.
@@ -36,7 +36,7 @@
 - Assist panel with hints, I'm stuck, find bugs, edge cases, complexity, optimize, visualize, dry run, pattern, explain, and solve.
 - Run Codex, Claude Code, OpenCode, Antigravity, Gemini CLI, or Cursor Agent locally with live models, reasoning levels, and Fast tier.
 - Install OpenCode or Antigravity from the AI menu to use free models.
-- Solve edits, tests, and retries LeetCode submissions, asking before each submit.
+- Quick Solve writes first and asks to submit; checks and fixes follow a rejected attempt.
 - Ctrl+` switches between Code and Debug mode.
 - Show cached AI models immediately and refresh once per agent per app session.
 - Antigravity defaults to the latest available Flash model with low reasoning.
