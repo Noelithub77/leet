@@ -33,6 +33,7 @@ impl Workspace {
                 if this.center == Center::Editor { this.close_problem(window, cx); }
             }))
             .on_action(cx.listener(|this, _: &ToggleLeft, window, cx| {
+                this.practice_tour_step(cx);
                 if this.center == Center::Home {
                     this.home.sidebar = !this.home.sidebar;
                     this.zen = false;
@@ -69,6 +70,7 @@ impl Workspace {
                 this.flash(if this.right { "AI" } else { "AI hidden" }, cx);
             }))
             .on_action(cx.listener(|this, _: &ToggleDescription, window, cx| {
+                this.practice_tour_step(cx);
                 this.description = !this.description;
                 this.zen = false;
                 if !this.description { this.focus_editor(window, cx); }

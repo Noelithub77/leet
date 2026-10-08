@@ -21,9 +21,10 @@ pub fn bind_keys(cx: &mut App) {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Step { Problem, Editor, Tests, Assist, Debugger, Playback }
+enum Step { Problem, Explorer, Description, Editor, Tests, Assist, Debugger, Playback }
 
-const STEPS: [Step; 6] = [Step::Problem, Step::Editor, Step::Tests, Step::Assist, Step::Debugger, Step::Playback];
+pub(crate) const STEP_COUNT: usize = 8;
+const STEPS: [Step; STEP_COUNT] = [Step::Problem, Step::Explorer, Step::Description, Step::Editor, Step::Tests, Step::Assist, Step::Debugger, Step::Playback];
 
 #[derive(Clone, Copy)]
 struct Layout { left: bool, home_sidebar: bool, right: bool, bottom: bool, zen: bool, description: bool, history: bool, debug: bool, center: Center, had_problem: bool }
@@ -70,10 +71,10 @@ impl Workspace {
             self.home.sidebar = true;
         } else {
             self.center = Center::Editor;
-            self.left = false;
+            self.left = step == Step::Explorer;
             self.right = step == Step::Assist;
             self.bottom = step == Step::Tests;
-            self.description = step == Step::Assist;
+            self.description = matches!(step, Step::Description | Step::Assist);
             self.history_mode = false;
             if matches!(step, Step::Debugger | Step::Playback) { self.preview_debug(window, cx); }
             else { self.set_debug(false, window, cx); }
@@ -123,9 +124,11 @@ pub fn panel(workspace: &Workspace, cx: &mut Context<Workspace>) -> Option<AnyEl
     let step = STEPS[tour.index];
     let (title, tip, icon, command) = match step {
         Step::Problem => ("Pick your first problem", "Choose a problem in Explorer, or search by name.", IconName::Search, "FindProblem"),
+        Step::Explorer => ("Toggle the left sidebar", "Hide or show Explorer to make room for your solution.", IconName::PanelLeft, "ToggleLeft"),
+        Step::Description => ("Toggle the problem description", "Keep the statement nearby, or hide it while you code.", IconName::FileText, "ToggleDescription"),
         Step::Editor => ("Write your solution", "Focus the editor and try a few lines of code.", IconName::Code, "FocusEditor"),
         Step::Tests => ("Run your tests", "Run the samples and inspect each result below the editor.", IconName::Play, "RunTests"),
-        Step::Assist => ("Get a little help", "Use AI for a hint, an explanation, or a solution review.", IconName::Sparkles, "ToggleRight"),
+        Step::Assist => ("Toggle the right sidebar", "Show or hide AI for hints, explanations, and solution reviews.", IconName::PanelRight, "ToggleRight"),
         Step::Debugger => ("See your code in motion", "Switch between Code and Debug to inspect your solution.", IconName::Code, "ToggleDebug"),
         Step::Playback => ("Explore every step", "Follow variables and output as your solution runs.", IconName::Play, ""),
     };
@@ -158,7 +161,7 @@ pub fn panel(workspace: &Workspace, cx: &mut Context<Workspace>) -> Option<AnyEl
                         window.dispatch_action(Box::new(crate::debug_view::PlayPause), cx);
                     }))).into_any_element()
         } else {
-            Button::new("tour-try").outline().label(match step { Step::Problem => "Find a problem", Step::Editor => "Focus editor", Step::Tests => "Run tests", Step::Assist => "Toggle AI", _ => "Switch Code / Debug" })
+            Button::new("tour-try").outline().label(match step { Step::Problem => "Find a problem", Step::Explorer => "Toggle Explorer", Step::Description => "Toggle description", Step::Editor => "Focus editor", Step::Tests => "Run tests", Step::Assist => "Toggle AI", _ => "Switch Code / Debug" })
                 .child(crate::view::key(crate::actions::key_for(command, &workspace.config)))
                 .on_click(move |_, window, cx| { if let Some(action) = action { window.dispatch_action(action(), cx); } }).into_any_element()
         }))

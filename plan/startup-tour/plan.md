@@ -7,7 +7,7 @@
 - Verify startup persistence and real tour input in isolated fixtures, inspect screenshots, run operator checks, commit, and deploy locally.
 
 Implementation and verification are complete. The fixture covers persistence
-across workspaces, all six steps, mouse and keyboard actions, guide placement,
+across workspaces, all eight steps, mouse and keyboard actions, guide placement,
 light and dark themes, minimum window size, and zoom. Operator checks pass;
-the tour recording contains 180 offscreen frames encoded at 60 fps. Native
+the tour recording contains 240 offscreen frames encoded at 60 fps. Native
 macOS rendering and physical compositor performance remain unverified.

@@ -23,12 +23,12 @@ Native mode also checks long statement cards at regular and compact sizes, in li
 
 The guided-tour fixture uses isolated SQLite storage and a bundled public
 question. It checks startup defaults, automatic display, search actions, Skip
-and Done persistence, replay, Escape after shortcut reload, all six steps,
-keyboard actions, guide movement during practice, and layout restoration.
+and Done persistence, replay, Escape after shortcut reload, all eight steps,
+Explorer, description and AI toggle actions, guide movement during practice, and layout restoration.
 It checks minimum window size, a light theme, and 140% zoom.
 Tour PNGs are saved alongside the other captures; no
 account loading, agent detection, language servers, or network jobs run.
-With `--video`, `tour-motion.mp4` shows the six step transitions using 180
+With `--video`, `tour-motion.mp4` shows the eight step transitions using 240
 offscreen frames encoded at 60 fps. This does not measure real-time performance.
 
 Native mode checks real recorder results, case selection, step buttons, arrow

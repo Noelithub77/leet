@@ -42,6 +42,7 @@
 - Reset app settings and reopen onboarding while keeping solutions, accounts, progress, and cache.
 - A centered, animated guided tour appears once for every user, with step icons, clickable actions, and native shortcut keycaps.
 - The tour moves aside when you try a step with its action or keyboard shortcut.
+- Learn the Explorer, problem description, and AI sidebar toggles in the guided tour.
 - Start with Explorer open and NeetCode 150 selected on new installs.
 - Collapse Assist result cards while keeping run status and recovery controls visible.
 - LeetCode weekly and biweekly contests alongside Codeforces, with native problem explorers.

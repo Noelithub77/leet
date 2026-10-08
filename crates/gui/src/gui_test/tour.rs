@@ -51,6 +51,12 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool, v
         std::fs::write(&path, &question.python)?;
         workspace.update(cx, |view, cx| {
             view.editor.update(cx, |editor, cx| editor.set_value(question.python.clone(), window, cx));
+            view.statement.update(cx, |statement, cx| {
+                statement.slug = question.slug.clone().into();
+                statement.title = question.title.clone().into();
+                statement.blocks = practice::description::parse(&question.content);
+                cx.notify();
+            });
             view.session = Some(Session {
                 slug: question.slug.clone(), title: question.title.clone(), frontend_id: 1, question: Some(question),
                 language: Language::Python, source: Source::NeetCode, rel: "tour.py".into(), path,
@@ -63,7 +69,7 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool, v
         });
         Ok(())
     })??;
-    for step in 0..6 {
+    for step in 0..crate::tour::STEP_COUNT {
         cx.run_until_parked();
         cx.update_window(handle, |_, window, cx| window.render_frame(cx))?;
         if video {
@@ -71,6 +77,8 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool, v
             std::fs::create_dir_all(&frames)?;
             for frame in 0..30 {
                 let started = Instant::now();
+                cx.advance_clock(Duration::from_secs_f64(1. / 60.));
+                cx.run_until_parked();
                 cx.update_window(handle, |_, window, cx| window.render_frame(cx))?;
                 cx.capture_screenshot(handle)?.save(frames.join(format!("frame-{:04}.png", step * 30 + frame)))?;
                 if let Some(delay) = Duration::from_secs_f64(1. / 60.).checked_sub(started.elapsed()) { std::thread::sleep(delay); }
@@ -78,6 +86,7 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool, v
         } else if pixels {
             // GPUI's unsynchronized transitions use wall-clock time.
             std::thread::sleep(Duration::from_millis(320));
+            cx.advance_clock(Duration::from_millis(320));
         }
         cx.run_until_parked();
         if pixels {
@@ -88,10 +97,17 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool, v
             let top = window.find("skip-tour").bounds();
             let bottom = window.find("tour-next").bounds();
             ensure!(top.top() >= px(0.) && bottom.right() <= window.viewport_size().width && bottom.bottom() <= window.viewport_size().height, "Tour card escaped the window");
+            if step == 3 {
+                window.click("tour-try", cx);
+            }
             if step == 1 {
                 window.click("tour-try", cx);
             }
-            if step == 3 {
+            if step == 2 {
+                window.press("alt-a", cx);
+                ensure!(!workspace.read(cx).description, "Tour shortcut did not hide the problem description");
+            }
+            if step == 5 {
                 window.press("alt-d", cx);
                 ensure!(!workspace.read(cx).right, "Tour shortcut did not toggle AI");
             }
@@ -99,8 +115,13 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool, v
         })??;
         cx.run_until_parked();
         cx.update_window(handle, |_, window, cx| -> Result<()> {
-            if step == 1 { ensure!(workspace.read(cx).center == Center::Editor, "Editor action did not reach editor"); }
-            if matches!(step, 1 | 3) {
+            if step == 1 {
+                ensure!(!workspace.read(cx).left, "Tour action did not hide Explorer");
+                window.press("alt-s", cx);
+                ensure!(workspace.read(cx).left, "Tour shortcut did not reopen Explorer");
+            }
+            if step == 3 { ensure!(workspace.read(cx).center == Center::Editor, "Editor action did not reach editor"); }
+            if matches!(step, 1 | 2 | 3 | 5) {
                 window.render_frame(cx);
                 ensure!(window.find("skip-tour").bounds().top() < px(100.), "Guide did not move aside for practice");
             }
@@ -153,5 +174,5 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool, v
         cx.run_until_parked();
     }
     cx.update(|cx| { crate::theme::apply("Vesper", cx); crate::theme::set_zoom(1., cx); });
-    Ok(json!({"fixture":"guided-tour","passed":true,"checks":["Explorer and NeetCode 150 defaults","automatic start","problem required","clickable search and editor","AI keyboard shortcut","guide moves aside for practice","Skip persistence across workspaces","manual replay","Escape after shortcut reload","six steps and Done","layout restoration","dark/light, minimum size and zoom bounds"],"pixels":pixels,"video":video}))
+    Ok(json!({"fixture":"guided-tour","passed":true,"checks":["Explorer and NeetCode 150 defaults","automatic start","problem required","clickable search and editor","Explorer action and shortcut","description and AI keyboard shortcuts","guide moves aside for practice","Skip persistence across workspaces","manual replay","Escape after shortcut reload","eight steps and Done","layout restoration","dark/light, minimum size and zoom bounds"],"pixels":pixels,"video":video}))
 }
