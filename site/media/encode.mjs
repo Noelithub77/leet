@@ -1,5 +1,27 @@
 import { mkdir, readdir, readFile, writeFile, rm } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { captures, output, run, files, probe } from './process.mjs';
+
+export async function encodeReadme() {
+  const destination = fileURLToPath(new URL('../../docs/assets/', import.meta.url));
+  const metadata = JSON.parse(await readFile(`${captures}/capture.json`, 'utf8'));
+  if (metadata.ai?.completed !== true) throw new Error('The AI capture must be complete before encoding README demos');
+  await mkdir(destination, { recursive: true });
+  const demos = [];
+  for (const [name, stem, width] of [['flow', 'workspace', null], ['debugger', 'debugger', 1280], ['ai', 'ai', 1280]]) {
+    const master = `${captures}/${name}.mp4`;
+    const info = await probe(master);
+    const pixels = width ?? info.width;
+    const timing = name === 'ai' && info.duration > 10 ? ['-ss', String(info.duration - 8)] : [];
+    const path = `${destination}${stem}-demo.webp`;
+    await run('ffmpeg', ['-v', 'error', '-y', ...timing, '-i', master, '-t', '8',
+      '-vf', `fps=12,scale=${pixels}:-1:flags=lanczos,format=bgra`, '-c:v', 'libwebp_anim',
+      '-lossless', '1', '-compression_level', '6', '-loop', '0', '-an', path]);
+    demos.push({ ...((await files([path]))[0]), width: pixels, height: info.height * pixels / info.width,
+      fps: 12, duration: Math.min(8, info.duration) });
+  }
+  return { command: 'media:readme', environment: 'local-media', success: true, files: demos };
+}
 
 export async function encode() {
   await mkdir(output, { recursive: true });

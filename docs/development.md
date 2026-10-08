@@ -57,6 +57,8 @@ Full-resolution losslessly compressed PNGs, high-quality H.264 120 fps masters, 
 
 `pnpm --dir site ops media:encode --json` regenerates AVIF/WebP stills at 1600×1000 and 800×500, 60 fps AV1/H.264 clips, and 1280×800 120 fps AV1 variants for Flow and Debugger, plus `site/public/media/manifest.json`, using only the tracked captures and system FFmpeg. JSON results identify `environment: "omabox"` and enumerate file sizes. Encoding does not launch an app. Run `pnpm --dir site ops check --json` after operator changes.
 
+The README previews use a separate quality preset: `pnpm --dir site ops media:readme --json`. It encodes 12 fps looping WebP directly from the original masters with lossless compression, retaining the full workspace resolution and 1280px for the paired debugger/AI previews. The AI preview uses the final eight seconds of its completed capture. Outputs live in `docs/assets/`; website video variants are unchanged.
+
 ## Keys
 
 Modifier shortcuts follow the user's VS Code bindings. Bare arrows, `enter` and `escape` navigate only the focused Home, sidebar, Settings, or roadmap. `ctrl+shift+p` lists every command with its key.

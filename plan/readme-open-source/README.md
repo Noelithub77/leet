@@ -1,6 +1,6 @@
 # README and open-source setup
 
-[chosen] GitHub-compatible Markdown with Vesper-colored declarative SVG artwork, an executable download link, GitHub’s built-in code-block copying, compact looping WebP previews linked to the existing optimized recordings. No new dependency.
+[chosen] GitHub-compatible Markdown with Vesper-colored declarative SVG artwork, an executable download link, GitHub’s built-in code-block copying, lossless looping WebP previews encoded from the original masters and linked to the full recordings. Refresh them with `pnpm --dir site ops media:readme --json`. No new dependency.
 
 [chosen] GNU AGPL v3 only for current source, with matching Cargo metadata and preserved third-party notices. Prior tags retain their own license.
 
