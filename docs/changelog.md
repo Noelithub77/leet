@@ -43,6 +43,9 @@
 <details>
 <summary>Fix</summary>
 
+- Bring Leet forward after CPH imports, show listener errors, and release the import port when restarting.
+- Label browser import settings and notifications as CPH.
+
 - Keep each problem’s AI instructions when launching actions with chat hidden.
 
 - Keep global shortcuts working when returning to Debug from Roadmap or Settings.

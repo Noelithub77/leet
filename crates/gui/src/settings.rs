@@ -90,8 +90,8 @@ impl Setting {
             Setting::Language => "Preferred language",
             Setting::LanguageServer => "Restart language server",
             Setting::Codeforces => "Codeforces handle",
-            Setting::CompanionEnabled => "Competitive Companion",
-            Setting::CompanionPort => "Browser import port",
+            Setting::CompanionEnabled => "CPH",
+            Setting::CompanionPort => "CPH port",
             Setting::LeetCode => "LeetCode account",
             Setting::NeetCode => "NeetCode account",
             Setting::Theme => "Theme",
@@ -123,8 +123,8 @@ impl Setting {
             Setting::Language => "language python cpp c++ go c java preferred",
             Setting::LanguageServer => "lsp intellisense completion diagnostics hover definitions restart",
             Setting::Codeforces => "codeforces handle account sign in",
-            Setting::CompanionEnabled => "competitive companion browser import enable disable",
-            Setting::CompanionPort => "browser import port localhost",
+            Setting::CompanionEnabled => "cph competitive programming helper competitive companion browser import enable disable",
+            Setting::CompanionPort => "cph browser import port localhost",
             Setting::LeetCode | Setting::NeetCode => "login session account sign in sync",
             Setting::Theme => "color appearance dark light vesper",
             Setting::Font => "fonts typography font family liberation sans system",
@@ -517,7 +517,7 @@ impl Workspace {
                     self.save_config(window, cx);
                     self.settings_cancel_edit(window, cx);
                     self.start_companion(window, cx);
-                    self.flash("Browser import port saved", cx);
+                    self.flash("CPH port saved", cx);
                     return;
                 }
                 _ => {

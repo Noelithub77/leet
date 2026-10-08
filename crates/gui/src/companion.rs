@@ -10,7 +10,11 @@ impl Workspace {
         if !self.config.companion_enabled { return; }
         let (mut events, stop) = match practice::companion::start(self.config.companion_port) {
             Ok(receiver) => receiver,
-            Err(error) => { eprintln!("leet: browser import unavailable: {error}"); return; }
+            Err(error) => {
+                eprintln!("leet: browser import unavailable: {error}");
+                self.toast(Notification::error(format!("CPH unavailable on port {}. Close another Leet instance or change CPH port.", self.config.companion_port)), window, cx);
+                return;
+            }
         };
         self.companion_task = Some(cx.spawn_in(window, async move |this, cx| {
             let _stop = stop;
@@ -24,7 +28,7 @@ impl Workspace {
                             this.register_codeforces_question(&q);
                             this.open_problem(slug.clone(), window, cx);
                             if let Err(error) = this.apply_imported_question(q.clone(), window, cx) {
-                                this.toast(Notification::error(format!("Open browser import: {error}")), window, cx);
+                                this.toast(Notification::error(format!("Open CPH import: {error}")), window, cx);
                                 return;
                             }
                             let cases = this.db.test_cases(&slug).ok().flatten().unwrap_or_default();
@@ -37,9 +41,11 @@ impl Workspace {
                                 }
                             }
                             this.bottom = true;
-                            this.toast(Notification::success("Browser samples imported"), window, cx);
+                            cx.activate(true);
+                            window.activate_window();
+                            this.toast(Notification::success("CPH samples imported"), window, cx);
                         }
-                        Err(error) => this.toast(Notification::error(format!("Browser import: {error}")), window, cx),
+                        Err(error) => this.toast(Notification::error(format!("CPH import: {error}")), window, cx),
                     }
                     cx.notify();
                 });

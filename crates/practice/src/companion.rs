@@ -51,8 +51,17 @@ impl Import {
     }
 }
 
-pub struct Stop(Option<tokio::sync::oneshot::Sender<()>>);
-impl Drop for Stop { fn drop(&mut self) { if let Some(stop) = self.0.take() { let _ = stop.send(()); } } }
+pub struct Stop {
+    signal: Option<tokio::sync::oneshot::Sender<()>>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+impl Drop for Stop {
+    fn drop(&mut self) {
+        if let Some(stop) = self.signal.take() { let _ = stop.send(()); }
+        // Release the port before Settings starts a replacement receiver.
+        if let Some(thread) = self.thread.take() { let _ = thread.join(); }
+    }
+}
 type Queue = Arc<Mutex<mpsc::Sender<Import>>>;
 async fn receive(State(queue): State<Queue>, Json(import): Json<Import>) -> (StatusCode, String) {
     if let Err(error) = import.slug() { return (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()); }
@@ -69,15 +78,21 @@ pub fn start(port: u16) -> Result<(mpsc::Receiver<Import>, Stop)> {
     let app = Router::new().route("/", post(receive)).layer(DefaultBodyLimit::max(1 << 20))
         .with_state(Arc::new(Mutex::new(sender)));
     let (stop, stopped) = tokio::sync::oneshot::channel();
-    std::thread::Builder::new().name("companion-receiver".into()).spawn(move || {
+    let thread = std::thread::Builder::new().name("companion-receiver".into()).spawn(move || {
         runtime.block_on(async move {
             match tokio::net::TcpListener::from_std(listener) {
-                Ok(listener) => { let _ = axum::serve(listener, app).with_graceful_shutdown(async { let _ = stopped.await; }).await; }
+                Ok(listener) => {
+                    use std::future::IntoFuture;
+                    // Cancel active connections too, so an incomplete browser request cannot hold the port open.
+                    let server = axum::serve(listener, app).into_future();
+                    futures::pin_mut!(server, stopped);
+                    let _ = futures::future::select(server, stopped).await;
+                }
                 Err(error) => eprintln!("leet companion: {error}"),
             }
         });
     })?;
-    Ok((events, Stop(Some(stop))))
+    Ok((events, Stop { signal: Some(stop), thread: Some(thread) }))
 }
 
 #[cfg(test)]
@@ -109,5 +124,17 @@ mod tests {
         import.cache(&db).unwrap(); assert_eq!(db.question("cf:4:A").unwrap().unwrap().content, "full statement");
         let mut bad = import.clone(); bad.url = "https://example.com/contest/4/problem/A".into(); assert!(bad.slug().is_err());
         bad = import; bad.interactive = true; assert!(bad.slug().is_err());
+    }
+    #[test]
+    fn stopping_releases_the_port_before_restarting() {
+        let reservation = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = reservation.local_addr().unwrap().port(); drop(reservation);
+        for _ in 0..5 {
+            let (_events, stop) = start(port).unwrap();
+            assert!(start(port).is_err());
+            drop(stop);
+            let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port)).unwrap();
+            drop(listener);
+        }
     }
 }
