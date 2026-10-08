@@ -1,4 +1,4 @@
-export const installCommand = 'curl -fsSL https://noelithub77.github.io/leet/install.sh | sh';
+export const installCommand = 'curl -fsSL https://leet.allpyq.in/install.sh | sh';
 
 export function detectPlatform(platform, userAgent) {
   const value = `${platform} ${userAgent}`;
