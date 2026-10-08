@@ -42,7 +42,7 @@
       h1{margin:26px 0 0;font-family:"Nunito","Liberation Sans",sans-serif;font-size:clamp(46px,9vw,112px);line-height:1.08;font-weight:700;letter-spacing:-.045em}
       .hz{color:var(--fg);display:inline-block;white-space:nowrap}
       .at-sign{color:var(--peach)}
-      .word-peach{color:var(--peach)}.word-mint{color:var(--mint)}
+      .hero-word [data-spelling=leet]{opacity:0}.word-peach{color:var(--peach)}.word-mint{color:var(--mint)}
       .lede{max-width:580px;margin:24px auto 0;color:#bdbdbd;font-size:clamp(16px,1.9vw,19px);line-height:1.6}
       .install{width:min(100%,780px);margin-top:38px;padding:8px;border:1px solid var(--line);border-radius:var(--radius);background:var(--card);box-shadow:var(--shadow);text-align:left}
       .install-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 4px 10px 10px}
@@ -54,13 +54,13 @@
       .command-row code{flex:1;min-width:0;font:13px/1.6 ui-monospace,"SF Mono","JetBrains Mono","Liberation Mono",Consolas,monospace;color:#d6eee7;white-space:nowrap;overflow-x:auto;scrollbar-width:none}
       .prompt{color:var(--peach);font-family:ui-monospace,monospace}
       .copy,.download{display:inline-flex;align-items:center;gap:10px;border:0;border-radius:999px;padding:10px 12px 10px 16px;background:var(--mint);color:var(--ink);font:700 14px/1 inherit;cursor:pointer;white-space:nowrap;box-shadow:0 6px 20px -8px #99ffe499}
-      .download{justify-content:space-between;width:100%;padding:16px 20px;border-radius:16px}
+      .download{justify-content:space-between;width:100%;padding:13px 16px;border-radius:16px;background:#0e0e0e;color:var(--fg);border:1px solid var(--line);box-shadow:none}.download span{color:var(--muted);font-size:13px}.copy{padding:4px;gap:5px;border-radius:10px;background:transparent;color:var(--fg);box-shadow:none}.copy-label{display:none}
       kbd{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 6px;border-radius:7px;font:700 11px/1 inherit}
-      .copy kbd{background:#0f211c14;border:1px solid #0f211c2e}
+      .copy kbd{height:30px;min-width:30px;padding:0 9px;border-radius:6px;background:#252525;border:1px solid #3b3b3b;border-bottom:3px solid #454545;color:#e3e3e3;font:600 12px/1 ui-monospace,"SF Mono","Liberation Mono",monospace}.copy kbd[data-mod]{min-width:46px}.copy kbd.is-mac{min-width:30px;font:500 20px/1 "Liberation Sans",sans-serif}
       .marks{display:flex;gap:18px;justify-content:center;margin:26px 0 0;padding:0;list-style:none;color:#6f6f6f}
       .marks i{display:block;width:20px;height:20px;background:currentColor;mask:var(--icon) center/contain no-repeat;-webkit-mask:var(--icon) center/contain no-repeat}
       [hidden]{display:none!important}
-      @media (max-width:640px){.command-row{flex-direction:column;align-items:stretch;padding:12px}.command-row code{white-space:normal;overflow-wrap:anywhere}.copy{justify-content:center;padding:13px}.copy kbd,.install-head span,.command-row .prompt{display:none}}
+      @media (max-width:640px){.command-row{flex-direction:column;align-items:stretch;padding:12px}.command-row code{white-space:normal;overflow-wrap:anywhere}.copy{justify-content:center;align-self:center;padding:4px}.install-head span,.command-row .prompt{display:none}}
     </style>
     <script type="module" src="/src/main.js"></script>
   </head>
@@ -102,7 +102,7 @@
             <div class="command-row" data-panel="unix">
               <span class="prompt" aria-hidden="true">$</span>
               <code data-command>curl -fsSL https://noelithub77.github.io/leet/install.sh | sh</code>
-              <button class="copy" type="button" data-copy aria-keyshortcuts="Control+C Meta+C"><span class="copy-label" data-copy-label aria-live="polite">Copy</span><kbd data-mod>Ctrl</kbd><kbd>C</kbd></button>
+              <button class="copy" type="button" aria-label="Copy install command" data-copy aria-keyshortcuts="Control+C Meta+C"><span class="copy-label" data-copy-label aria-live="polite"></span><kbd data-mod>Ctrl</kbd><kbd>C</kbd></button>
             </div>
             <a class="download" data-panel="windows" hidden href="https://github.com/Noelithub77/leet/releases/latest/download/leet-windows-x86_64.exe">Download for Windows <span aria-hidden="true">.exe ↓</span></a>
           </div>
@@ -329,7 +329,7 @@
             <div class="command-row" data-panel="unix">
               <span class="prompt" aria-hidden="true">$</span>
               <code data-command>curl -fsSL https://noelithub77.github.io/leet/install.sh | sh</code>
-              <button class="copy" type="button" data-copy aria-keyshortcuts="Control+C Meta+C"><span class="copy-label" data-copy-label aria-live="polite">Copy</span><kbd data-mod>Ctrl</kbd><kbd>C</kbd></button>
+              <button class="copy" type="button" aria-label="Copy install command" data-copy aria-keyshortcuts="Control+C Meta+C"><span class="copy-label" data-copy-label aria-live="polite"></span><kbd data-mod>Ctrl</kbd><kbd>C</kbd></button>
             </div>
             <a class="download" data-panel="windows" hidden href="https://github.com/Noelithub77/leet/releases/latest/download/leet-windows-x86_64.exe">Download for Windows <span aria-hidden="true">.exe ↓</span></a>
           </div>

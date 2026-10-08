@@ -27,11 +27,11 @@ h2, h3, .dbg-title, .cph-title { font-family: "Nunito", "Liberation Sans", sans-
 .bar-progress { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: linear-gradient(90deg, var(--peach), var(--mint)); transform: scaleX(0); transform-origin: 0 50%; opacity: .85; }
 
 /* Hero */
-.hero h1 { white-space: nowrap; font-size: clamp(46px, 8.2vw, 104px); }
+.hero h1 { margin-top: 46px; white-space: nowrap; font-size: clamp(46px, 8.2vw, 104px); }
 .hero-word { display: inline-grid; min-width: 3.35em; text-align: center; overflow: clip; padding-block: .08em; margin-block: -.08em; vertical-align: bottom; }
 .hero-word > span { grid-area: 1 / 1; perspective: 600px; }
 .spelling-char { transform-origin: 50% 50%; backface-visibility: hidden; }
-.hero-word [data-spelling="1337"] { opacity: 0; transform: translateY(85%); }
+.hero-word [data-spelling="leet"] { opacity: 0; }
 .hero .mark { position: relative; top: 30px; }
 .mark { transition: opacity .3s ease; }
 .mark.is-ghost { opacity: 0; }
@@ -50,7 +50,7 @@ h2, h3, .dbg-title, .cph-title { font-family: "Nunito", "Liberation Sans", sans-
 @media (min-width: 900px) and (max-height: 850px) {
   .hero { padding-top: 76px; padding-bottom: 90px; }
   .hero .mark { width: clamp(220px, 32vh, 290px); }
-  .hero h1 { font-size: clamp(64px, 7.5vw, 96px); margin-top: 14px; }
+  .hero h1 { font-size: clamp(64px, 7.5vw, 96px); margin-top: 34px; }
   .hero .lede { margin-top: 18px; }
   .hero .install { margin-top: 26px; }
   .hero .marks { margin-top: 18px; }
@@ -62,11 +62,14 @@ h2, h3, .dbg-title, .cph-title { font-family: "Nunito", "Liberation Sans", sans-
 .command-row { position: relative; transition: border-color .3s, box-shadow .4s var(--ease); }
 .command-row.is-copied { border-color: #99ffe455; box-shadow: 0 0 0 4px #99ffe412; }
 .copy, .download { position: relative; transition: transform .2s var(--ease), background .2s, box-shadow .3s; }
-.copy:hover, .download:hover { background: #b6fff0; box-shadow: 0 8px 26px -8px #99ffe4bb; }
+.copy:hover kbd { background: #303530; border-color: #58655e; color: var(--mint); }
+.download:hover { background: #99ffe409; border-color: #99ffe455; color: var(--mint); }
 .copy:active { transform: scale(.96); }
 .copy kbd { transition: transform .12s var(--ease), background .12s; }
-.copy kbd.is-pressed { transform: translateY(2px); background: #0f211c33; }
-.copy-label { display: inline-flex; align-items: center; gap: 6px; min-width: 4.6em; }
+.copy kbd.is-pressed, .copy:active kbd { transform: translateY(2px); border-bottom-width: 1px; background: #303530; }
+.copy-label { display: none; }
+.is-copied .copy-label { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding-inline: 8px; color: var(--mint); }
+.is-copied .copy kbd { display: none; }
 .copy-label svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 20; animation: tick .45s var(--ease) both; }
 @keyframes tick { from { stroke-dashoffset: 20; } to { stroke-dashoffset: 0; } }
 .spark { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; border-radius: 2px; pointer-events: none; }
@@ -291,7 +294,7 @@ h2, h3, .dbg-title, .cph-title { font-family: "Nunito", "Liberation Sans", sans-
   .command-row .copy { justify-content: center; }
   .hero { padding: 90px 20px 100px; }
   .hero .mark { width: clamp(140px, 36vw, 180px); top: 12px; }
-  .hero h1 { font-size: clamp(34px, 9.4vw, 56px); margin-top: 20px; }
+  .hero h1 { font-size: clamp(34px, 9.4vw, 56px); margin-top: 32px; }
   .hero .lede { margin-top: 18px; }
   .hero .install { margin-top: 26px; }
   .stats { grid-template-columns: repeat(2, 1fr); gap: 10px; }

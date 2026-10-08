@@ -9,6 +9,7 @@ import 'lenis/dist/lenis.css';
 import { mountDebugger } from './debugger.js';
 import { colors, pointsAttribute, strokeAt } from './logo.js';
 import { snapRefreshRate } from './refresh.js';
+import { createHeroCycle } from './hero-motion.js';
 
 gsap.registerPlugin(ScrollTrigger, SplitText, DrawSVGPlugin, ScrambleTextPlugin);
 
@@ -66,13 +67,14 @@ const marks = $$('[data-mark]').map(svg => {
   draw();
   const loop = gsap.timeline({ paused: true, repeat: -1, yoyo: true, repeatDelay: 1.5, delay: 1.2 }).to(strokes, { p: 1 - initial, ...morph });
   const mark = { svg, hold: false, visible: false, ghosted: false };
+  mark.setMorph = value => { strokes.forEach(stroke => { stroke.p = value; }); draw(); };
   mark.to = target => { loop.pause(); return gsap.to(strokes, { p: target, ...morph, overwrite: true }); };
   mark.resume = () => { if (!mark.hold && !mark.ghosted && mark.visible && !reduced) mark.to(initial).then(() => !mark.hold && loop.restart(true)); };
   // Particles take over the hero mark; the SVG keeps its layout and accessible name.
   mark.ghost = () => { mark.ghosted = true; loop.pause(); svg.classList.add('is-ghost'); };
   whileVisible(svg, visible => {
     mark.visible = visible;
-    if (visible && !mark.hold && !mark.ghosted && !reduced) loop.play();
+    if (visible && !svg.closest('.hero') && !mark.hold && !mark.ghosted && !reduced) loop.play();
     else loop.pause();
   });
   if (!svg.closest('.hero')) {
@@ -108,21 +110,8 @@ const particlesReady = !reduced && !saveData && marks[0] ? import('./particles.j
   marks[0].ghost();
   root.classList.remove('hero-pending');
   canvas.classList.add('is-live');
-  const { uMorph } = particles.uniforms;
-  const loop = gsap.timeline({ repeat: -1, paused: true })
-    .set(uMorph, { value: 1 })
-    .to(uMorph, { value: 0, duration: 1, ease: 'power2.inOut', delay: 1.5 })
-    .to(uMorph, { value: 1, duration: 1, ease: 'power2.inOut', delay: 1.5 })
-    .to({}, { duration: 1.5 });
-  particles.hold = on => {
-    loop.pause();
-    gsap.to(uMorph, { value: 1, duration: 1.1, ease: 'power2.inOut', overwrite: true, onComplete: () => !on && loop.restart(true) });
-  };
   const render = time => particles.render(time);
-  whileVisible(hero, visible => {
-    if (visible) { gsap.ticker.add(render); if (!root.classList.contains('eleet')) loop.play(); }
-    else { gsap.ticker.remove(render); loop.pause(); }
-  });
+  whileVisible(hero, visible => visible ? gsap.ticker.add(render) : gsap.ticker.remove(render));
   const x = gsap.quickTo(particles.pointer, 'x', { duration: 0.12, ease: 'power2.out' });
   const y = gsap.quickTo(particles.pointer, 'y', { duration: 0.12, ease: 'power2.out' });
   hero.addEventListener('pointermove', event => {
@@ -135,25 +124,32 @@ const particlesReady = !reduced && !saveData && marks[0] ? import('./particles.j
   return particles;
 }).catch(() => { root.classList.remove('hero-pending'); return null; }) : Promise.resolve(null);
 
-/* SplitText gives each stable-width spelling a staggered, rotating letter transition. */
-const heroWord = $('[data-hero-word]');
-if (heroWord && !reduced && !saveData) {
+/* One clock keeps the particle/SVG morph and letter flip paired, including after pauses. */
+const heroMotionReady = particlesReady.then(particles => {
+  const heroWord = $('[data-hero-word]');
+  if (!heroWord || reduced || saveData) return null;
   const leet = heroWord.querySelector('[data-spelling="leet"]');
   const digits = heroWord.querySelector('[data-spelling="1337"]');
   const letters = SplitText.create(leet, { type: 'chars', charsClass: 'spelling-char' });
   const numbers = SplitText.create(digits, { type: 'chars', charsClass: 'spelling-char' });
-  const from = { yPercent: 12, rotationX: -45, opacity: 0, filter: 'blur(2px)' };
-  gsap.set(numbers.chars, from);
-  gsap.set(digits, { opacity: 1, y: 0 });
-  const out = { yPercent: -12, rotationX: 45, opacity: 0, filter: 'blur(2px)', duration: 0.14, stagger: 0.008, ease: 'power2.in' };
-  const into = { yPercent: 0, rotationX: 0, opacity: 1, filter: 'blur(0px)', duration: 0.24, stagger: 0.01, ease: 'power3.out', immediateRender: false };
-  const spelling = gsap.timeline({ repeat: -1, paused: true })
-    .to(letters.chars, { ...out, delay: 2.8 })
-    .fromTo(numbers.chars, from, into, '<+0.06')
-    .to(numbers.chars, { ...out, delay: 2.4 })
-    .fromTo(letters.chars, from, into, '<+0.06');
-  whileVisible(hero, visible => visible ? spelling.play() : spelling.pause());
-}
+  const morph = particles?.uniforms.uMorph ?? { value: 1 };
+  const cycle = createHeroCycle(morph, letters.chars, numbers.chars,
+    particles ? undefined : () => marks[0].setMorph(morph.value));
+  gsap.set([leet, digits], { opacity: 1, y: 0 });
+  let visible = false;
+  const hold = on => {
+    cycle.pause();
+    if (on) cycle.totalTime(0);
+    else { cycle.totalTime(0); if (visible) cycle.play(); }
+  };
+  whileVisible(hero, on => {
+    visible = on;
+    if (on && !root.classList.contains('eleet')) cycle.play();
+    else cycle.pause();
+  });
+  if (root.classList.contains('eleet')) hold(true);
+  return { hold };
+});
 
 /* Scroll scenes, per viewport */
 const debuggerCard = $('[data-debugger]');
@@ -369,8 +365,8 @@ document.addEventListener('keydown', event => {
   if (typedKeys !== '1337') return;
   typedKeys = '';
   const on = root.classList.toggle('eleet');
-  for (const mark of marks) { mark.hold = on; on ? mark.to(1) : mark.resume(); }
-  void particlesReady.then(particles => particles?.hold(on));
+  for (const mark of marks.filter(mark => !mark.svg.closest('.hero'))) { mark.hold = on; on ? mark.to(1) : mark.resume(); }
+  void heroMotionReady.then(motion => motion?.hold(on));
   if (!reduced) {
     const glyphs = Array.from({ length: 28 }, (_, index) => {
       const glyph = Object.assign(document.createElement('span'), { className: 'glyph', textContent: '1337'[index % 4] });

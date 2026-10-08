@@ -6,7 +6,11 @@ const detected = detectPlatform(navigator.userAgentData?.platform ?? navigator.p
 const modifier = detected === 'macos' ? '⌘' : 'Ctrl';
 let platform = detected === 'windows' ? 'windows' : 'unix';
 
-for (const key of document.querySelectorAll('[data-mod]')) key.textContent = modifier;
+for (const key of document.querySelectorAll('[data-mod]')) {
+  key.textContent = modifier;
+  key.classList.toggle('is-mac', detected === 'macos');
+  if (detected === 'macos') key.setAttribute('aria-label', 'Command');
+}
 // Phones and tablets have no Ctrl+C to advertise.
 if (!detected) document.querySelector('[data-press-hint]')?.setAttribute('hidden', '');
 
@@ -36,7 +40,7 @@ function celebrate(button) {
   row.classList.add('is-copied');
   clearTimeout(timers.get(button));
   timers.set(button, setTimeout(() => {
-    label.textContent = 'Copy';
+    label.textContent = '';
     row.classList.remove('is-copied');
   }, 1800));
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;

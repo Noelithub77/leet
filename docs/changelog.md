@@ -2,6 +2,7 @@
 <summary>Feat</summary>
 
 - New landing page with real app footage, an interactive debugger replay, and keyboard copy with feedback.
+- Synchronize the hero logo and title, add breathing room, and refine installation keycaps and Windows download.
 
 - Keep Description, Examples, and Constraints visible as pastel-bordered cards with one section open at a time.
 
