@@ -1,6 +1,8 @@
 <details open>
 <summary>Feat</summary>
 
+- Label primary and alternative shortcuts; Home uses Ctrl+H with Ctrl+. as an alternative.
+
 - Per-problem AI chat with custom action instructions, follow-up questions, and locally saved conversations.
 - Native resizable Explorer on Alt+S, Description on Alt+A, and AI on Alt+D.
 - General, My solution, and Conversation AI tabs with a combined solution review and visual dry run.

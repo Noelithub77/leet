@@ -20,7 +20,7 @@ Opening a recent problem uses the cached statement and existing Solution.
 Each problem keeps its own editor, undo history, cursor, and test results.
 Opening an already open problem selects its existing tab. Background runs finish
 in their originating tab. Switching back to Home keeps every problem intact.
-Hover the house icon for its tooltip. Ctrl+. opens Home; its tooltip shows the current shortcut. Ctrl+Tab and Ctrl+Shift+Tab cycle forward and backward through problem tabs, skipping Home. Typing on Home opens universal search with the typed text. Ctrl+W closes the problem tab after saving;
+Hover the house icon for its tooltip. Ctrl+H opens Home (Ctrl+. also works); its tooltip shows the current shortcut. Ctrl+Tab and Ctrl+Shift+Tab cycle forward and backward through problem tabs, skipping Home. Typing on Home opens universal search with the typed text. Ctrl+W closes the problem tab after saving;
 Home stays pinned. Up/down and Enter navigate the focused recent list.
 
 Every panel has one toggle, and a spring animation shows or hides it. Drag the boundary above Results to resize its height; the app remembers it. Constraints remains accessible below the scrolling statement; opening it closes Description and Examples.
@@ -42,7 +42,7 @@ Modifier shortcuts follow the user's VS Code bindings. Bare arrows, `enter` and 
 
 | Key | Action |
 | --- | --- |
-| `ctrl+.` | Open the pinned Home view |
+| `ctrl+h` / `ctrl+.` | Open the pinned Home view |
 | `ctrl+tab` / `ctrl+shift+tab` | Next / previous tab |
 | `ctrl+w` | Close current problem tab |
 | `ctrl+p` | Find any free LeetCode problem (fuzzy, by name or number) |
@@ -72,6 +72,8 @@ Modifier shortcuts follow the user's VS Code bindings. Bare arrows, `enter` and 
 | `ctrl+alt+m` | Toggle NeetCode completion |
 | `ctrl+alt+r` | Refresh the catalog and solved progress |
 | `ctrl+q` | Quit |
+
+Shortcut settings use one field: primary first, then optional alternatives separated by `|`. The primary appears in tooltips. Clear the field to restore defaults, or enter `none` to disable a command. Existing `[keybindings]` overrides keep the same format: primary first, then alternatives separated by `|`.
 
 ## Contests
 

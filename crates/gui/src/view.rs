@@ -34,6 +34,15 @@ pub fn shortcut_keys(keys: &str) -> impl IntoElement + use<> {
         .children(keys.split('|').filter(|keys| !keys.is_empty()).map(|keys| key(keys).into_any_element()))
 }
 
+/// Explicit roles in shortcut settings; compact hints elsewhere keep the primary only.
+pub fn shortcut_roles(keys: &str) -> impl IntoElement + use<> {
+    let (primary, alternatives) = keys.split_once('|').unwrap_or((keys, ""));
+    v_flex().gap_1()
+        .child(h_flex().gap_2().child(div().text_xs().child("Primary")).child(shortcut_keys(primary)))
+        .when(!alternatives.is_empty(), |column| column.child(h_flex().gap_2()
+            .child(div().text_xs().child("Alternatives")).child(shortcut_keys(alternatives))))
+}
+
 pub fn difficulty(level: u8, cx: &App) -> (&'static str, Hsla) {
     match level {
         1 => ("E", cx.theme().success),

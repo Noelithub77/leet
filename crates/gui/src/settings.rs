@@ -548,6 +548,7 @@ impl Workspace {
         v_flex().size_full().items_center()
             .child(v_flex().w_full().max_w(px(780.)).h_full().min_h_0().px_4().pt_10().gap_4()
                 .child(div().flex_shrink_0().text_xl().font_weight(FontWeight::SEMIBOLD).child("Settings"))
+                .when(self.settings.tab == SettingsTab::Keybindings, |column| column.child(div().text_xs().text_color(theme.muted_foreground).child("Primary first; separate alternatives with |")))
                 .child(Tabs::new("settings-tabs").flex().flex_row().flex_nowrap().flex_shrink_0().gap_1()
                     .children(SettingsTab::ALL.into_iter().enumerate().map(|(index, tab)| {
                         Tab::new(("settings-tab", index)).selected(self.settings.tab == tab).set_position(index + 1, SettingsTab::ALL.len())
@@ -593,7 +594,7 @@ impl Workspace {
                                 .child(div().text_right().child(value))
                                 .child(div().text_color(theme.muted_foreground).child("›"))
                                 .into_any_element(),
-                            (None, Kind::Text) if matches!(setting, Setting::Keybinding(_)) => crate::view::shortcut_keys(&value).into_any_element(),
+                            (None, Kind::Text) if matches!(setting, Setting::Keybinding(_)) => crate::view::shortcut_roles(&value).into_any_element(),
                             (None, Kind::Text) => div()
                                 .w(px(320.))
                                 .truncate()
@@ -635,7 +636,7 @@ impl Workspace {
                         view.children(crate::actions::contextual_shortcuts(&bindings, &self.config).into_iter().map(|shortcut| {
                             h_flex().px_4().py_3().gap_4().justify_between()
                                 .child(v_flex().gap_1().child(shortcut.label).child(div().text_xs().text_color(theme.muted_foreground).child(shortcut.context)))
-                                .child(crate::view::shortcut_keys(&shortcut.keys))
+                                .child(crate::view::shortcut_roles(&shortcut.keys))
                         }))
                     })))
     }

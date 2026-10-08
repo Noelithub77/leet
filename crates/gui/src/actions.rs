@@ -86,7 +86,7 @@ pub const NAV: &str = "VgNav";
 pub struct Command {
     pub id: &'static str,
     pub label: &'static str,
-    /// Default key; `|` separates alternatives, the first is shown.
+    /// Default shortcuts; the first is primary and `|` separates alternatives.
     pub key: &'static str,
     pub action: fn() -> Box<dyn Action>,
 }
@@ -99,7 +99,7 @@ macro_rules! cmd {
 
 /// Global commands. Keys follow the user's VS Code bindings (modifiers only, no bare letters).
 pub const COMMANDS: &[Command] = &[
-    cmd!("Show Home", "ctrl-.", ShowHome),
+    cmd!("Show Home", "ctrl-h|ctrl-.", ShowHome),
     cmd!("Close problem tab", "ctrl-w", CloseProblem),
     cmd!("Next tab", "ctrl-tab", CycleTabs),
     cmd!("Previous tab", "ctrl-shift-tab", PreviousTab),
@@ -227,7 +227,7 @@ pub fn reload_keys(config: &practice::config::Config, cx: &mut App) {
 pub fn bind_keys(config: &practice::config::Config, cx: &mut App) {
     let mut bindings: Vec<KeyBinding> = COMMANDS
         .iter()
-        .flat_map(|c| c.effective_key(config).split('|').filter(|k| !k.is_empty()).map(move |k| (c, k)))
+        .flat_map(|c| c.effective_key(config).split('|').rev().filter(|k| !k.is_empty()).map(move |k| (c, k)))
         .filter_map(|(c, key)| {
             KeyBinding::load(key, (c.action)(), None, false, None, cx.keyboard_mapper().as_ref())
                 .map_err(|error| eprintln!("leet: invalid shortcut for {}: {error}", c.label)).ok()
@@ -235,7 +235,7 @@ pub fn bind_keys(config: &practice::config::Config, cx: &mut App) {
         .collect();
     // Apply the same keys in inputs, where component bindings take precedence.
     for command in COMMANDS {
-        for key in command.effective_key(config).split('|').filter(|key| !key.is_empty()) {
+        for key in command.effective_key(config).split('|').rev().filter(|key| !key.is_empty()) {
             let context = KeyBindingContextPredicate::parse("Workspace > Input").expect("valid context");
             if let Ok(binding) = KeyBinding::load(key, (command.action)(), Some(context.into()), false, None, cx.keyboard_mapper().as_ref()) {
                 bindings.push(binding);
@@ -277,6 +277,11 @@ pub fn validate_key(index: usize, value: &str, config: &practice::config::Config
         }).collect()
     };
     let proposed = parse(value)?;
+    for (index, keys) in proposed.iter().enumerate() {
+        if proposed[..index].iter().any(|existing| keys.starts_with(existing) || existing.starts_with(keys)) {
+            return Err("Primary and alternatives must use distinct, non-overlapping shortcuts.".into());
+        }
+    }
     for (i, command) in COMMANDS.iter().enumerate() {
         if i == index { continue; }
         let existing = parse(command.effective_key(config))?;
@@ -316,6 +321,20 @@ mod tests {
         assert!(validate_key(COMMANDS.iter().position(|c| c.id == "Search").unwrap(), "shift-k", &config).is_err());
         assert!(validate_key(COMMANDS.iter().position(|c| c.id == "Search").unwrap(), "ctrl-alt-k", &config).is_ok());
         assert!(validate_key(COMMANDS.iter().position(|c| c.id == "Search").unwrap(), "", &config).is_ok());
+    }
+
+    #[::core::prelude::v1::test]
+    fn home_primary_and_alternative_are_valid_and_conflict_checked() {
+        let config = practice::config::Config::default();
+        let home = COMMANDS.iter().position(|c| c.id == "ShowHome").unwrap();
+        let search = COMMANDS.iter().position(|c| c.id == "Search").unwrap();
+        assert_eq!(COMMANDS[home].effective_key(&config), "ctrl-h|ctrl-.");
+        assert!(validate_key(home, COMMANDS[home].key, &config).is_ok());
+        for keys in ["ctrl-h", "ctrl-.", "ctrl-alt-j|ctrl-h"] {
+            assert!(validate_key(search, keys, &config).is_err());
+        }
+        assert!(validate_key(home, "ctrl-h|ctrl-h", &config).is_err());
+        assert!(validate_key(home, "ctrl-h|ctrl-h ctrl-j", &config).is_err());
     }
 
     #[::core::prelude::v1::test]
