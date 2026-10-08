@@ -309,11 +309,14 @@ impl Render for Debugger {
             .child(self.code(step, trace, window, cx))
             .child(v_flex().flex_1().min_w_0().h_full()
                 .when_some(self.snapshot.as_ref().and_then(|s| s.cases.get(self.selected)), |el, case| {
-                    el.child(v_flex().flex_shrink_0().p_4().gap_1p5().border_b_1().border_color(theme.border)
-                        .child(div().text_xs().font_weight(FontWeight::MEDIUM).text_color(theme.muted_foreground).child("Input"))
-                        .child(v_flex().id(("debug-input", self.selected)).max_h(px(128.)).overflow_scroll()
-                            .text_xs().font_family(theme.mono_font_family.clone())
-                            .children(case.input.lines().map(|line| div().whitespace_nowrap().child(line.to_owned())))))
+                    el.child(v_flex().flex_shrink_0().p_4()
+                        .child(v_flex().p_3().gap_2().rounded_lg().bg(theme.info.opacity(0.08))
+                            .border_1().border_color(theme.info.opacity(0.3)).border_l_4()
+                            .child(h_flex().gap_2().items_center().text_sm().font_weight(FontWeight::SEMIBOLD).text_color(theme.info)
+                                .child(Icon::new(IconName::FlaskConical).size_4()).child("Input"))
+                            .child(v_flex().id(("debug-input", self.selected)).max_h(px(160.)).overflow_scroll()
+                                .text_size(px(16.)).font_weight(FontWeight::MEDIUM).text_color(theme.info).font_family(theme.mono_font_family.clone())
+                                .children(case.input.lines().map(|line| div().whitespace_nowrap().child(line.to_owned()))))))
                 })
                 .child(div().flex().flex_1().min_h_0().child(state)));
         let markers: Vec<player::Marker> = trace.map(|t| {
