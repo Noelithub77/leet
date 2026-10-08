@@ -1,14 +1,14 @@
 # leet
 
 <p align="center">
-  <a href="https://noelithub77.github.io/leet/"><img src="docs/assets/hero.svg" alt="Leeting @ 120Hz — animated 1337 to leet logo, in peach and mint on Vesper black" width="1000"></a>
+  <a href="https://leet.allpyq.in/"><img src="docs/assets/hero.svg" alt="Leeting @ 120Hz — animated 1337 to leet logo, in peach and mint on Vesper black" width="1000"></a>
 </p>
 
 <p align="center">
   <a href="https://github.com/Noelithub77/leet/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Noelithub77/leet?style=flat&amp;color=99ffe4&amp;labelColor=161616"></a>
   <a href="LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-ffc799?style=flat&amp;labelColor=161616"></a>
   <a href="https://github.com/Noelithub77/leet/actions/workflows/release.yml"><img alt="Native builds" src="https://img.shields.io/github/actions/workflow/status/Noelithub77/leet/release.yml?branch=main&amp;label=native%20builds&amp;style=flat&amp;color=99ffe4&amp;labelColor=161616"></a>
-  <a href="https://github.com/Noelithub77/leet/actions/workflows/pages.yml"><img alt="Website build" src="https://img.shields.io/github/actions/workflow/status/Noelithub77/leet/pages.yml?branch=main&amp;label=website&amp;style=flat&amp;color=99ffe4&amp;labelColor=161616"></a>
+  <a href="https://leet.allpyq.in/"><img alt="Website status" src="https://img.shields.io/website?url=https%3A%2F%2Fleet.allpyq.in&amp;label=website&amp;style=flat&amp;up_message=up&amp;up_color=99ffe4&amp;down_message=down&amp;down_color=ff5263&amp;labelColor=161616"></a>
   <a href="https://github.com/Noelithub77/leet/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/Noelithub77/leet?style=flat&amp;color=ffc799&amp;labelColor=161616"></a>
 </p>
 
@@ -21,13 +21,13 @@ Built to follow your display’s refresh rate; actual frame cadence depends on y
 **Linux & macOS** — copy into your terminal; the installer downloads and launches leet.
 
 ```sh
-curl -fsSL https://noelithub77.github.io/leet/install.sh | sh
+curl -fsSL https://leet.allpyq.in/install.sh | sh
 ```
 
 <p align="center">
   <a href="https://github.com/Noelithub77/leet/releases/latest/download/leet-windows-x86_64.exe"><img alt="Download Windows x64 executable" src="docs/assets/download-windows.svg" width="260" height="48"></a>
   &nbsp;&nbsp;
-  <a href="https://noelithub77.github.io/leet/"><img alt="Visit the leet website" src="docs/assets/visit-website.svg" width="260" height="48"></a>
+  <a href="https://leet.allpyq.in/"><img alt="Visit the leet website" src="docs/assets/visit-website.svg" width="260" height="48"></a>
 </p>
 
 ## See it in motion
