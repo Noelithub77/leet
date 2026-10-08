@@ -30,16 +30,11 @@ A native, keyboard-first coding-practice IDE in **idiomatic Rust**, powered by *
 
 ## See it in motion
 
-[![Leet editor, problem statement, local cases and results in the Vesper theme](site/public/media/problem.webp)](site/public/media/flow.mp4)
-
-**[▶ Workspace video · MP4](site/public/media/flow.mp4)** · [120 fps WebM](site/public/media/flow-120.webm) · [Watch all demos on the website](https://noelithub77.github.io/leet/#tour)
+[![Leet editor, problem statement, local cases and results in the Vesper theme](docs/assets/workspace-demo.webp)](site/public/media/flow.mp4)
 
 | Deterministic visual debugger | Your local AI agents |
 | --- | --- |
-| [![Debugger timeline and program state](site/public/media/debugger-800.webp)](site/public/media/debugger.mp4) | [![Native AI chat and coding assistance](site/public/media/ai-800.webp)](site/public/media/ai.mp4) |
-| [▶ Debugger video](site/public/media/debugger.mp4) · [120 fps WebM](site/public/media/debugger-120.webm) | [▶ AI video](site/public/media/ai.mp4) |
-
-The videos show the real desktop app. Click a preview to open its recording, or use the website for inline playback and the interactive debugger replay.
+| [![Debugger timeline and program state](docs/assets/debugger-demo.webp)](site/public/media/debugger.mp4) | [![Native AI chat and coding assistance](docs/assets/ai-demo.webp)](site/public/media/ai.mp4) |
 
 ## A complete practice workspace
 

@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="440" viewBox="0 0 1200 440" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="370" viewBox="0 0 1200 370" role="img" aria-labelledby="title desc">
 <title id="title">Leeting @ 120Hz</title><desc id="desc">1337 transforms into the leet logo as 1337ing becomes Leeting. Peach and mint accents on a Vesper background.</desc>
 <style>.static{display:none}@media(prefers-reduced-motion:reduce){.motion{display:none}.static{display:inline}}</style>
 <defs><radialGradient id="glow"><stop stop-color="#99ffe4" stop-opacity=".06"/><stop offset="1" stop-color="#99ffe4" stop-opacity="0"/></radialGradient><pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="12" cy="12" r=".7" fill="#ffffff" opacity=".07"/></pattern></defs>
-<rect width="1200" height="440" rx="24" fill="#101010"/><rect x="1" y="1" width="1198" height="438" rx="23" fill="url(#dots)" stroke="#252525"/>
+<rect width="1200" height="370" rx="24" fill="#101010"/><rect x="1" y="1" width="1198" height="368" rx="23" fill="url(#dots)" stroke="#252525"/>
 <ellipse cx="600" cy="200" rx="440" ry="230" fill="url(#glow)"/>
 <g class="motion" transform="translate(491 22) scale(3.4)" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="8.00,23.50 10.50,20.75 13.00,18.00 13.00,32.00 13.00,46.00" stroke="#ffc799" stroke-width="4.6">
 <animate attributeName="points" dur="6.5s" repeatCount="indefinite" values="8.00,23.50 10.50,20.75 13.00,18.00 13.00,32.00 13.00,46.00;8.00,23.50 10.50,20.75 13.00,18.00 13.00,32.00 13.00,46.00;13.10,32.00 13.10,32.00 13.10,32.00 13.10,32.00 13.10,32.01;13.10,32.00 13.10,32.00 13.10,32.00 13.10,32.00 13.10,32.01;8.00,23.50 10.50,20.75 13.00,18.00 13.00,32.00 13.00,46.00;8.00,23.50 10.50,20.75 13.00,18.00 13.00,32.00 13.00,46.00" keyTimes="0;0.23077;0.38462;0.61538;0.76923;1" calcMode="spline" keySplines="0 0 1 1;0.65 0 0.35 1;0 0 1 1;0.65 0 0.35 1;0 0 1 1"/>
@@ -25,6 +25,4 @@
 <text x="600" y="320" fill="#ededed" opacity="0"><tspan fill="#ffc799">L</tspan><tspan fill="#99ffe4">ee</tspan><tspan fill="#ffc799">t</tspan>ing <tspan fill="#ffc799">@</tspan> 120Hz<animate attributeName="opacity" dur="6.5s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.28462;0.33077;0.66923;0.71538;1"/></text>
 </g>
 <g class="static"><text x="600" y="270" text-anchor="middle" fill="#99ffe4" font-family="system-ui,sans-serif" font-size="72" font-weight="700">1337</text><text x="600" y="320" text-anchor="middle" fill="#ededed" font-family="system-ui,sans-serif" font-size="48" font-weight="700">1337ing <tspan fill="#ffc799">@</tspan> 120Hz</text></g>
-<text x="600" y="375" text-anchor="middle" fill="#b6b6b6" font-family="system-ui,sans-serif" font-size="20">Practice. Debug. Think. Repeat.</text>
-<text x="600" y="410" text-anchor="middle" fill="#787878" font-family="system-ui,sans-serif" font-size="15">IDIOMATIC RUST  ·  GPUI  ·  YOUR LOCAL AI AGENTS</text>
 </svg>

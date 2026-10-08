@@ -69,12 +69,12 @@ h2, h3, .dbg-title, .cph-title { font-family: "Nunito", "Liberation Sans", sans-
 .copy kbd.is-pressed, .copy:active kbd { transform: translateY(2px); border-bottom-width: 1px; background: #303530; }
 .copy-label { display: none; }
 .is-copied .copy-label { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding-inline: 8px; color: var(--mint); }
-.is-copied .copy kbd { display: none; }
+.is-copied .copy kbd, .is-copied .copy-icon { display: none; }
 .copy-label svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 20; animation: tick .45s var(--ease) both; }
 @keyframes tick { from { stroke-dashoffset: 20; } to { stroke-dashoffset: 0; } }
 .spark { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; border-radius: 2px; pointer-events: none; }
 
-.scroll-cue { position: absolute; left: 50%; bottom: max(28px, env(safe-area-inset-bottom)); display: grid; justify-items: center; gap: 8px; translate: -50% 0; color: #777; font-size: 11px; letter-spacing: .22em; text-transform: uppercase; transition: opacity .5s; }
+.scroll-cue { position: absolute; left: 50%; bottom: max(28px, env(safe-area-inset-bottom)); display: grid; justify-items: center; gap: 8px; translate: -50% 0; color: #777; font-size: 11px; letter-spacing: .22em; text-transform: none; transition: opacity .5s; }
 .scroll-cue svg { width: 18px; height: 26px; fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
 .scroll-cue path { stroke: var(--mint); animation: cue 1.6s var(--ease) infinite; }
 .scroll-cue path:nth-child(2) { animation-delay: .16s; }
@@ -292,6 +292,7 @@ h2, h3, .dbg-title, .cph-title { font-family: "Nunito", "Liberation Sans", sans-
   .install > .platforms { display: flex; width: max-content; margin-inline: auto; }
   .command-row code { text-align: center; }
   .command-row .copy { justify-content: center; }
+  .copy:hover { background: #99ffe417; border-color: #99ffe455; }
   .hero { padding: 90px 20px 100px; }
   .hero .mark { width: clamp(140px, 36vw, 180px); top: 12px; }
   .hero h1 { font-size: clamp(34px, 9.4vw, 56px); margin-top: 32px; }
