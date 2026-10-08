@@ -12,16 +12,9 @@ const shared = {
 };
 const appAssets = {
   name: 'app-assets',
-  transformIndexHtml: {
-    order: 'post',
-    // Vite rebases HTML asset attributes before replacing %BASE_URL% in dev.
-    handler(html, context) {
-      return context.server ? html.replaceAll('/leet/leet/', '/leet/') : html;
-    },
-  },
   configureServer(server) {
     server.middlewares.use((request, response, next) => {
-      const source = shared[request.url?.replace(/^\/leet\//, '').split('?')[0]];
+      const source = shared[request.url?.replace(/^\//, '').split('?')[0]];
       if (!source) return next();
       response.setHeader('Content-Type', source.endsWith('.svg') ? 'image/svg+xml' : 'text/plain; charset=utf-8');
       response.end(readFileSync(new URL(source, assets)));
@@ -34,11 +27,11 @@ const appAssets = {
   },
 };
 
-// Inline-style url()s for fonts and brand marks resolve at runtime under /leet/ by design.
+// Inline-style url()s for fonts and brand marks resolve from the site root.
 const logger = createLogger();
 const warn = logger.warn;
-const runtimeAssets = [...Object.keys(shared).map(name => `/leet/${name}`),
-  '/leet/fonts/liberation-sans-regular.woff2', '/leet/fonts/liberation-sans-bold.woff2', '/leet/fonts/nunito-bold.woff2'];
+const runtimeAssets = [...Object.keys(shared).map(name => `/${name}`),
+  '/fonts/liberation-sans-regular.woff2', '/fonts/liberation-sans-bold.woff2', '/fonts/nunito-bold.woff2'];
 logger.warn = (message, options) => {
   const expected = runtimeAssets.some(path => message.startsWith(`${path} referenced in ${path} didn't resolve at build time`));
   if (!expected) warn(message, options);
@@ -46,7 +39,7 @@ logger.warn = (message, options) => {
 logger.warnOnce = logger.warn;
 
 export default defineConfig({
-  base: '/leet/',
+  base: '/',
   server: { port: 1337, strictPort: true },
   customLogger: logger,
   plugins: [appAssets],

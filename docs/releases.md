@@ -1,11 +1,11 @@
 # Installing leet
 
-Visit [the landing page](https://noelithub77.github.io/leet/). It detects Windows or the combined Linux/macOS option. Ctrl+C (or Cmd+C) copies the Unix install command when no text or form control is selected; ordinary text copying keeps its normal behavior.
+Visit [the landing page](https://leet.allpyq.in/). It detects Windows or the combined Linux/macOS option. Ctrl+C (or Cmd+C) copies the Unix install command when no text or form control is selected; ordinary text copying keeps its normal behavior.
 
 On Linux or macOS, paste this single command into your terminal:
 
 ```sh
-curl -fsSL https://noelithub77.github.io/leet/install.sh | sh
+curl -fsSL https://leet.allpyq.in/install.sh | sh
 ```
 
 The installer selects the native architecture, downloads one stable release, verifies its archive against that release's `SHA256SUMS`, installs a versioned build, creates `leet` and `1337` launch commands, and opens the app. Run the same command again to upgrade. It preserves settings, cache, accounts, and solutions. Checksums detect corrupted downloads; they are distributed by the same GitHub release and are not independent publisher signatures.
@@ -65,7 +65,7 @@ Changes to Rust sources, manifests, native configuration, tests, the operator, o
 
 For a manual cache warm-up, select **main** in **Release → Run workflow** and leave **tag** empty. To test release packaging without replacing published assets, enter an existing tag and disable **publish**. GitHub scopes caches to the workflow's branch: caches saved on main are available to future tags; caches saved on one tag cannot be read by another tag. Only main runs save Rust caches to avoid filling storage with redundant tag caches. The first run is cold. New compiler versions or native build changes can require a fresh cache.
 
-The Vite landing page lives in `site/`. Static HTML and inline hero CSS paint the install command first; platform tabs and copying use browser APIs. GSAP, Lenis, and OGL load lazily for motion, with React/Sonner used only for feedback. Titles use Nunito and the page follows Vesper’s peach and mint palette. Videos load near the viewport; reduced motion and Save-Data retain posters. The GitHub Pages workflow publishes changes pushed to main; Pages must use **GitHub Actions** as its source.
+The Vite landing page lives in `site/` and is deployed to Cloudflare Pages at `https://leet.allpyq.in`. Static HTML and inline hero CSS paint the install command first; platform tabs and copying use browser APIs. GSAP, Lenis, and OGL load lazily for motion, with React/Sonner used only for feedback. Titles use Nunito and the page follows Vesper’s peach and mint palette. Videos load near the viewport; reduced motion and Save-Data retain posters. Cloudflare Pages builds the `site/` directory and publishes its `dist/` output from `main`; its build watch paths include the site and its shared logo.
 
 ```sh
 cd site
@@ -73,10 +73,10 @@ pnpm install --frozen-lockfile
 pnpm ops --help
 pnpm ops check --json
 pnpm dev
-# http://localhost:1337/leet/
+# http://localhost:1337/
 ```
 
-The Pages workflow caches pnpm's package store using `site/pnpm-lock.yaml`; installation still uses the frozen lockfile, and checks/builds run on every deployment. Release uploads skip redundant ZIP compression and expire after three days; the published GitHub Release assets are retained independently.
+Cloudflare Pages installs from the frozen `site/pnpm-lock.yaml` lockfile and runs `pnpm run build`; `pnpm ops check --json` is the local site check. Release uploads skip redundant ZIP compression and expire after three days; the published GitHub Release assets are retained independently.
 
 The landing page keeps requirements in this document and release notes. Its only repository link is the header's GitHub icon, adapted from Primer Octicons with its MIT license in `site/src/icons/LICENSE`.
 
