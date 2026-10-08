@@ -36,6 +36,7 @@
 
 - Show function icons for calls, returns, and stack frames in Debug mode.
 - Show “Just a template” instead of executing untouched templates in every language.
+- Keep the source, case tabs, and debugger controls visible before recording steps.
 - Keep array range labels fully visible above the cells.
 - Debug mode shows named user functions and variables without generated runtime frames.
 
@@ -58,7 +59,7 @@
 - The update icon stays visible without a network connection.
 - Language changes keep each language's saved solution.
 - Keep AI options in their popup and remove duplicate Settings controls and basic navigation hints.
-- Move Contests toward the right edge with a wider gap from Recent and an Open in web button on every contest row.
+- Move Contests toward the right edge with a wider gap from Recent and an accent-colored browser icon on every contest row.
 - Remove the upcoming-contest explanatory text.
 
 </details>

@@ -127,7 +127,7 @@ impl Debugger {
         self.highlighter = SyntaxHighlighter::new(snapshot.language.id());
         self.highlighter.update(None, &ropey::Rope::from_str(&source), None);
         self.unsupported = if snapshot.slug.starts_with("cf:") { Some("Native tracing supports LeetCode function problems. Use AI Dry run for stdin problems.".into()) } else { debugger::requirement(snapshot.language, &snapshot.python).err() };
-        self.traces = if snapshot.has_attempt() { snapshot.cases.iter().map(|_| Recording::Waiting).collect() } else { vec![] };
+        self.traces = snapshot.cases.iter().map(|_| Recording::Waiting).collect();
         self.selected = selected.min(snapshot.cases.len().saturating_sub(1));
         self.playback = Playback::new(0);
         self.snapshot = Some(snapshot.clone());
@@ -232,9 +232,11 @@ impl Focusable for Debugger {
 impl Render for Debugger {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme().clone();
+        let template = self.snapshot.as_ref().is_some_and(|snapshot| !snapshot.has_attempt());
         let chips = h_flex().gap_1p5().children(self.traces.iter().enumerate().map(|(index, recording)| {
             let active = index == self.selected;
             let (icon, color) = match (recording, self.verdict(index)) {
+                _ if template => (Some(IconName::CircleDot), theme.muted_foreground),
                 (Recording::Running | Recording::Waiting, _) => (None, theme.muted_foreground),
                 (Recording::Failed(_), _) => (Some(IconName::TriangleAlert), theme.danger),
                 (_, Some(true)) => (Some(IconName::CircleCheck), theme.success),
@@ -271,8 +273,16 @@ impl Render for Debugger {
             .child(Button::new("debug-rerecord").ghost().xsmall().icon(IconName::RefreshCw).tooltip("Record again").accessibility_label("Record again")
                 .on_click(cx.listener(|this, _, _, cx| { if let Some(snapshot) = this.snapshot.take() { let selected = this.selected; this.load(snapshot, selected, cx); } })));
 
-        let body: AnyElement = if self.snapshot.as_ref().is_some_and(|snapshot| !snapshot.has_attempt()) {
-            empty(IconName::Code, "Just a template", "", &theme)
+        let state: AnyElement = if template {
+            v_flex().flex_1().min_w_0().h_full().p_4().gap_4()
+                .child(h_flex().gap_2().items_center().text_sm()
+                    .child(Icon::new(IconName::Code).size_4().text_color(theme.muted_foreground))
+                    .child("Just a template"))
+                .children([("Call stack", "No calls yet"), ("Variables", "No variables yet"), ("Data structures", "No data yet")].into_iter().map(|(title, text)| {
+                    v_flex().gap_2()
+                        .child(div().text_xs().font_weight(FontWeight::MEDIUM).text_color(theme.muted_foreground).child(title))
+                        .child(div().text_xs().text_color(theme.muted_foreground.opacity(0.7)).child(text))
+                })).into_any_element()
         } else if let Some(reason) = &self.unsupported {
             empty(IconName::Footprints, reason, "Use Dry run in Assist for an AI trace of this language.", &theme)
         } else {
@@ -281,12 +291,12 @@ impl Render for Debugger {
                 Some(Recording::Waiting | Recording::Running) => v_flex().size_full().items_center().justify_center().gap_2()
                     .child(Spinner::new()).child(div().text_sm().text_color(theme.muted_foreground).child("Recording every step…")).into_any_element(),
                 Some(Recording::Failed(error)) => empty(IconName::TriangleAlert, "Could not record this case", error, &theme),
-                Some(Recording::Ready(_)) => h_flex().size_full().min_h_0()
-                    .child(self.code(step, trace, window, cx))
-                    .child(self.state(step, previous, trace, window, cx))
-                    .into_any_element(),
+                Some(Recording::Ready(_)) => self.state(step, previous, trace, window, cx),
             }
         };
+        let body = h_flex().size_full().min_h_0()
+            .child(self.code(step, trace, window, cx))
+            .child(div().flex().flex_1().min_w_0().h_full().child(state));
         let markers: Vec<player::Marker> = trace.map(|t| {
             let every = (t.steps.len() / 160).max(1);
             t.steps.iter().enumerate().filter(|(i, s)| s.kind == StepKind::Exception || (s.kind != StepKind::Line && i % every == 0))
@@ -359,7 +369,7 @@ impl Debugger {
                             .child(div().w(px(4.)).h(px(LINE_H - 6.)).rounded_full().mr_2()
                                 .bg(if ran { theme.warning.opacity(0.25 + 0.75 * (count as f32).ln_1p() / hottest.ln_1p()) } else { theme.muted.opacity(0.4) }))
                             .child(div().flex_1().min_w_0().whitespace_nowrap().font_family(theme.mono_font_family.clone()).text_size(px(12.5))
-                                .text_color(theme.foreground).opacity(if ran || n == current { 1. } else { 0.65 })
+                                .text_color(theme.foreground).opacity(if trace.is_none() || ran || n == current { 1. } else { 0.65 })
                                 .child(StyledText::new(line.text.clone()).with_highlights(line_highlights(&self.highlighter, &line.range, &theme.highlight_theme))))
                             .when(ran, |el| el.child(div().text_size(px(10.)).text_color(theme.muted_foreground.opacity(0.7)).child(format!("×{count}"))))
                     }))))

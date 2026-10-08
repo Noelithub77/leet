@@ -105,7 +105,9 @@ impl Workspace {
                         .child(div().truncate().child(contest.name.clone()))
                         .child(h_flex().justify_between().gap_2()
                             .child(div().text_xs().text_color(if contest.past() { theme.muted_foreground } else { theme.primary }).child(contest.timing(now)))
-                            .child(Button::new(("home-contest-web", id)).ghost().small().icon(IconName::ExternalLink).label("Open in web")
+                            .child(Button::new(("home-contest-web", id)).ghost().small()
+                                .icon(gpui_kit::component::Icon::new(IconName::ExternalLink).text_color(theme.primary))
+                                .tooltip("Open in web")
                                 .accessibility_label(format!("Open {} in browser", contest.name))
                                 .on_click(move |_, _, cx| {
                                     cx.stop_propagation();
