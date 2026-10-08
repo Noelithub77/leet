@@ -193,10 +193,10 @@ impl Setting {
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
-pub enum SettingsTab { #[default] General, Editor, Appearance, Platform, Ai, Keybindings }
+pub enum SettingsTab { #[default] Platform, General, Editor, Appearance, Ai, Keybindings }
 
 impl SettingsTab {
-    const ALL: [Self; 6] = [Self::General, Self::Editor, Self::Appearance, Self::Platform, Self::Ai, Self::Keybindings];
+    const ALL: [Self; 6] = [Self::Platform, Self::General, Self::Editor, Self::Appearance, Self::Ai, Self::Keybindings];
     fn label(self) -> &'static str {
         match self { Self::General => "General", Self::Editor => "Editor", Self::Appearance => "Appearance", Self::Platform => "Platform", Self::Ai => "AI", Self::Keybindings => "Keybindings" }
     }
@@ -254,7 +254,7 @@ pub struct SettingsState {
 
 impl SettingsState {
     pub fn new() -> Self {
-        Self { platform_open: [false; 3], tabs_focused: false, scroll: ScrollHandle::new(), tab: SettingsTab::General, selected: 0, editing: None }
+        Self { platform_open: [true; 3], tabs_focused: false, scroll: ScrollHandle::new(), tab: SettingsTab::default(), selected: 0, editing: None }
     }
 
     fn move_selection(&mut self, delta: isize, len: usize) {
@@ -645,6 +645,19 @@ impl Workspace {
 #[cfg(test)]
 mod tests {
     use super::{Setting, SettingsTab};
+
+    #[test]
+    fn default_settings_open_the_first_platform_tab_with_all_account_rows_visible() {
+        use practice::language::Source;
+        let state = super::SettingsState::new();
+        assert!(state.tab == SettingsTab::Platform && state.tab == SettingsTab::ALL[0]);
+        assert!(SettingsTab::default() == state.tab);
+        assert!(super::platform_rows(state.platform_open, false) == vec![
+            Setting::PlatformGroup(Source::LeetCode), Setting::LeetCode,
+            Setting::PlatformGroup(Source::NeetCode), Setting::NeetCode,
+            Setting::PlatformGroup(Source::Codeforces), Setting::Codeforces,
+        ]);
+    }
 
     #[test]
     fn searchable_settings_route_to_one_tab_and_keybindings_use_their_own_tab() {

@@ -44,7 +44,8 @@
 - Show account names or emails without internal IDs or authentication metadata.
 - Show debugger step and case shortcuts in their tooltips.
 - Prevent onboarding requirements checks from crashing when opened from Settings.
-- Provider icons in the closed dropdown and a hover submenu for the active NeetCode list.
+- Spaced provider icons in the closed dropdown and a hover submenu for the active NeetCode list.
+- Open Settings on the first Platform tab with every platform expanded by default.
 - Show function icons for calls, returns, and stack frames in Debug mode.
 - Show “Just a template” instead of executing untouched templates in every language.
 - Keep the source, case tabs, and debugger controls visible before recording steps.
