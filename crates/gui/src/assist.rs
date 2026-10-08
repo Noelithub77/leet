@@ -58,8 +58,7 @@ impl Snapshot {
     }
 
     pub fn has_attempt(&self) -> bool {
-        let code = self.code.trim();
-        !code.is_empty() && code != self.starter.trim()
+        practice::workspace::has_attempt(&self.code, &self.starter)
     }
 }
 
@@ -143,11 +142,13 @@ pub struct Run {
     solve: Option<SolveState>,
     snapshot: Option<Snapshot>,
     target: Option<Target>,
+    generation: u64,
 }
 
 impl Run {
     pub fn action(&self) -> Action { self.action }
     fn time(&self) -> Duration { self.elapsed.unwrap_or_else(|| self.started.elapsed()) }
+    fn accepts_events(&self, generation: u64) -> bool { !self.cancel.is_cancelled() && self.generation == generation }
 }
 
 enum Msg {
@@ -312,6 +313,11 @@ impl Assist {
         let (Some(snapshot), Some(Target::Agent(agent, selection))) = (run.snapshot.clone(), run.target.clone()) else { return };
         run.phase = Phase::Starting;
         run.cancel = Cancel::default();
+        run.generation += 1;
+        let generation = run.generation;
+        if let Some(elapsed) = run.elapsed.take() { run.started = Instant::now() - elapsed; }
+        run.thinking.clear();
+        run.tokens = 0;
         let cancel = run.cancel.clone();
         let action = run.action;
         let fallback = self.catalog(agent.kind).cloned();
@@ -343,15 +349,15 @@ impl Assist {
         self.ensure_ticker(cx);
         cx.spawn_in(window, async move |this, cx| {
             while let Some(msg) = rx.next().await {
-                if this.update_in(cx, |this, window, cx| this.receive(id, msg, window, cx)).is_err() { break; }
+                if this.update_in(cx, |this, window, cx| this.receive(id, generation, msg, window, cx)).is_err() { break; }
             }
         }).detach();
         cx.notify();
     }
 
-    fn receive(&mut self, id: u64, msg: Msg, window: &mut Window, cx: &mut Context<Self>) {
+    fn receive(&mut self, id: u64, generation: u64, msg: Msg, window: &mut Window, cx: &mut Context<Self>) {
         let Some(run) = self.runs.iter_mut().find(|run| run.id == id) else { return };
-        if run.cancel.is_cancelled() { return; }
+        if !run.accepts_events(generation) { return; }
         match msg {
             Msg::Event(agents::Event::Started { session }) => {
                 if let (Some(solve), Some(session)) = (run.solve.as_mut(), session) { solve.session = Some(session); }
@@ -485,6 +491,38 @@ impl Assist {
         cx.notify();
     }
 
+    fn recover(&mut self, id: u64, continue_run: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let workspace = self.workspace.clone();
+        window.defer(cx, move |window, cx| {
+            let _ = workspace.update(cx, |ws, cx| {
+                if ws.session.as_ref().is_some_and(|session| session.running || matches!(session.judge, Some(crate::workspace::Judge::Running { .. }))) {
+                    ws.flash("Wait for the current run to finish", cx);
+                    return;
+                }
+                ws.save_now(cx);
+                let Some(snapshot) = ws.assist_snapshot(cx) else { return };
+                ws.assist.update(cx, |assist, cx| {
+                    let Some(run) = assist.runs.iter_mut().find(|run| run.id == id && matches!(run.phase, Phase::Stopped | Phase::Failed(_))) else { return };
+                    if run.slug != snapshot.slug || run.snapshot.as_ref().is_some_and(|old| old.language != snapshot.language) { return; }
+                    if run.action.needs_attempt() && !snapshot.has_attempt() { return; }
+                    if continue_run && run.action == Action::Solve {
+                        let session = run.solve.as_ref().and_then(|solve| solve.session.clone());
+                        let feedback = format!("Continue the interrupted solve from the current solution. Inspect the file before editing; preserve completed work. Previous status: {}.", run.phase.label());
+                        run.snapshot = Some(snapshot);
+                        if let Some(solve) = &mut run.solve {
+                            if solve.attempt >= SOLVE_ATTEMPTS { solve.attempt = 1; solve.log.clear(); }
+                            solve.log.push((Tone::Default, "Continuing".into()));
+                        }
+                        assist.launch(id, session, Some(feedback), window, cx);
+                    } else {
+                        let (action, target) = (run.action, run.target.clone());
+                        if let Some(target) = target { assist.start(action, snapshot, target, window, cx); }
+                    }
+                });
+            });
+        });
+    }
+
     pub fn stop_solves(&mut self, cx: &mut Context<Self>) {
         let ids: Vec<_> = self.runs.iter().filter(|run| run.action == Action::Solve && (run.phase.active() || run.phase == Phase::Confirm)).map(|run| run.id).collect();
         for id in ids { self.stop(id, cx); }
@@ -534,6 +572,26 @@ impl Assist {
     }
 }
 
+#[cfg(test)]
+mod recovery_tests {
+    use super::Run;
+    use practice::assist::Action;
+    use practice::agents::Cancel;
+
+    #[test]
+    fn resumed_runs_ignore_events_from_the_stopped_process() {
+        let mut run = Run::new(1, "two-sum".into(), Action::Solve, None, String::new(), None, None);
+        run.generation = 1;
+        assert!(run.accepts_events(1));
+        run.cancel.cancel();
+        assert!(!run.accepts_events(1));
+        run.cancel = Cancel::default();
+        run.generation = 2;
+        assert!(!run.accepts_events(1));
+        assert!(run.accepts_events(2));
+    }
+}
+
 fn default_selection(catalog: &Catalog) -> Option<Selection> {
     let model = catalog.default_model.as_ref().and_then(|id| catalog.models.iter().find(|m| &m.id == id)).or(catalog.models.first())?;
     let effort = model.default_effort.clone().or_else(|| model.efforts.first().map(|e| e.id.clone()));
@@ -558,7 +616,7 @@ impl Run {
     fn new(id: u64, slug: String, action: Action, agent: Option<AgentKind>, model: String, snapshot: Option<Snapshot>, target: Option<Target>) -> Self {
         Self { id, slug, action, agent, model, started: Instant::now(), elapsed: None, phase: Phase::Starting, thinking: String::new(), tokens: 0,
             answer: None, cancel: Cancel::default(), hints_shown: 1, playback: Playback::new(0), last_frame: Instant::now(), reveal: false,
-            added: vec![], solve: None, snapshot, target }
+            added: vec![], solve: None, snapshot, target, generation: 0 }
     }
 
     fn set_answer(&mut self, answer: Option<Answer>) {
@@ -627,7 +685,7 @@ impl Render for Assist {
         if current != self.slug { self.set_problem(current.as_deref(), cx); }
         let (has_problem, has_attempt) = workspace.as_ref().map_or((false, false), |ws| {
             let ws = ws.read(cx);
-            (ws.session.as_ref().is_some_and(|s| s.question.is_some()), ws.session.as_ref().is_some_and(|s| s.question.as_ref().and_then(|q| q.starter(s.language)).is_some_and(|starter| ws.editor.read(cx).value().trim() != starter.trim() && !ws.editor.read(cx).value().trim().is_empty())))
+            (ws.session.as_ref().is_some_and(|s| s.question.is_some()), ws.has_attempt(cx))
         });
         let web = workspace.as_ref().map(|ws| matches!(self.target(&ws.read(cx).config), Target::Web(_))).unwrap_or(true);
         let running: Vec<Action> = self.runs.iter().filter(|run| Some(&run.slug) == self.slug.as_ref() && run.phase.active()).map(|run| run.action).collect();
@@ -706,6 +764,13 @@ impl Assist {
             .border_color(if active { color.opacity(0.45) } else { theme.border })
             .child(header)
             .children(status)
+            .when(matches!(run.phase, Phase::Stopped | Phase::Failed(_)) && run.target.is_some(), |el| el.child(h_flex().gap_2()
+                .when(run.action == Action::Solve, |el| el.child(Button::new(("assist-continue", id)).primary().small().icon(IconName::Play).label("Continue")
+                    .tooltip("Continue using the current solution and agent session when available")
+                    .on_click(cx.listener(move |this, _, window, cx| this.recover(id, true, window, cx)))))
+                .child(Button::new(("assist-retry", id)).ghost().small().icon(IconName::RefreshCw).label("Retry")
+                    .tooltip("Start a new run using the current code")
+                    .on_click(cx.listener(move |this, _, window, cx| this.recover(id, false, window, cx))))))
             .children(solve)
             .children(body)
             .with_animation(("assist-card-in", id), Animation::new(Duration::from_millis(260)).with_easing(gpui_kit::base::animation::ease_out_cubic),

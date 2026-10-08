@@ -858,7 +858,31 @@ impl Workspace {
 
     // ---- runs --------------------------------------------------------------------------
 
+    pub fn has_attempt(&self, cx: &App) -> bool {
+        self.session.as_ref().is_some_and(|session| {
+            session.question.as_ref().is_some_and(|question| {
+                ws::has_attempt(&self.editor.read(cx).value(), question.starter(session.language).unwrap_or_default())
+            })
+        })
+    }
+
+    fn require_attempt(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        if self.has_attempt(cx) { return true; }
+        let Some(session) = self.session.as_mut() else { return false; };
+        if !session.running && !matches!(session.judge, Some(Judge::Running { .. })) {
+            session.compile_error = None;
+            session.results = vec![None; session.cases.len()];
+            session.judge = None;
+        }
+        let slug = session.slug.clone();
+        self.assist.update(cx, |assist, cx| assist.fail_solve(&slug, "Just a template".into(), cx));
+        self.toast(Notification::info("Just a template"), window, cx);
+        cx.notify();
+        false
+    }
+
     pub fn run_tests(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.require_attempt(window, cx) { return; }
         if !crate::case_editor::save(self, window, cx) { return; }
         self.save_now(cx);
         if self.session.as_ref().is_some_and(|session| session.language != Language::Python && !session.slug.starts_with("cf:")) {
@@ -934,6 +958,7 @@ impl Workspace {
     }
 
     pub fn judge(&mut self, submission: bool, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.require_attempt(window, cx) { return; }
         if !crate::case_editor::save(self, window, cx) { return; }
         self.save_now(cx);
         if let Some(session) = self.session.as_ref().filter(|session| session.slug.starts_with("cf:")) {

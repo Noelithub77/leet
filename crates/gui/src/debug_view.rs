@@ -46,9 +46,16 @@ pub struct Snapshot {
     pub language: Language,
     pub python: String,
     pub code: String,
+    pub starter: String,
     pub meta: serde_json::Value,
     pub cases: Vec<Case>,
     pub compare: Compare,
+}
+
+impl Snapshot {
+    fn has_attempt(&self) -> bool {
+        practice::workspace::has_attempt(&self.code, &self.starter)
+    }
 }
 
 enum Recording {
@@ -111,7 +118,7 @@ impl Debugger {
 
     /// Records every case unless the same code and cases were already recorded.
     pub fn load(&mut self, snapshot: Snapshot, selected: usize, cx: &mut Context<Self>) {
-        let same = self.snapshot.as_ref().is_some_and(|old| old.slug == snapshot.slug && old.code == snapshot.code && old.language == snapshot.language
+        let same = self.snapshot.as_ref().is_some_and(|old| old.slug == snapshot.slug && old.code == snapshot.code && old.starter == snapshot.starter && old.language == snapshot.language
             && old.cases.iter().map(|c| (&c.input, &c.expected)).eq(snapshot.cases.iter().map(|c| (&c.input, &c.expected))));
         if same && !self.traces.iter().any(|t| matches!(t, Recording::Failed(_))) { self.select(selected.min(self.traces.len().saturating_sub(1)), cx); return; }
         self.generation += 1;
@@ -120,11 +127,11 @@ impl Debugger {
         self.highlighter = SyntaxHighlighter::new(snapshot.language.id());
         self.highlighter.update(None, &ropey::Rope::from_str(&source), None);
         self.unsupported = if snapshot.slug.starts_with("cf:") { Some("Native tracing supports LeetCode function problems. Use AI Dry run for stdin problems.".into()) } else { debugger::requirement(snapshot.language, &snapshot.python).err() };
-        self.traces = snapshot.cases.iter().map(|_| Recording::Waiting).collect();
+        self.traces = if snapshot.has_attempt() { snapshot.cases.iter().map(|_| Recording::Waiting).collect() } else { vec![] };
         self.selected = selected.min(snapshot.cases.len().saturating_sub(1));
         self.playback = Playback::new(0);
         self.snapshot = Some(snapshot.clone());
-        if self.unsupported.is_some() { cx.notify(); return; }
+        if !snapshot.has_attempt() || self.unsupported.is_some() { cx.notify(); return; }
         let generation = self.generation;
         // Record the selected case first so it is ready soonest.
         let mut order: Vec<usize> = (0..snapshot.cases.len()).collect();
@@ -264,7 +271,9 @@ impl Render for Debugger {
             .child(Button::new("debug-rerecord").ghost().xsmall().icon(IconName::RefreshCw).tooltip("Record again").accessibility_label("Record again")
                 .on_click(cx.listener(|this, _, _, cx| { if let Some(snapshot) = this.snapshot.take() { let selected = this.selected; this.load(snapshot, selected, cx); } })));
 
-        let body: AnyElement = if let Some(reason) = &self.unsupported {
+        let body: AnyElement = if self.snapshot.as_ref().is_some_and(|snapshot| !snapshot.has_attempt()) {
+            empty(IconName::Code, "Just a template", "", &theme)
+        } else if let Some(reason) = &self.unsupported {
             empty(IconName::Footprints, reason, "Use Dry run in Assist for an AI trace of this language.", &theme)
         } else {
             match self.traces.get(self.selected) {
@@ -413,7 +422,7 @@ fn empty(icon: IconName, title: &str, detail: &str, theme: &gpui_kit::component:
     v_flex().size_full().items_center().justify_center().gap_2().p_6()
         .child(Icon::new(icon).size_8().text_color(theme.muted_foreground.opacity(0.6)))
         .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(title.to_owned()))
-        .child(div().max_w(px(420.)).text_center().text_xs().text_color(theme.muted_foreground).child(detail.to_owned()))
+        .when(!detail.is_empty(), |el| el.child(div().max_w(px(420.)).text_center().text_xs().text_color(theme.muted_foreground).child(detail.to_owned())))
         .into_any_element()
 }
 
@@ -439,7 +448,7 @@ impl Workspace {
         let question = session.question.as_ref()?;
         Some(Snapshot {
             slug: session.slug.clone(), language: session.language, python: self.config.python.clone(),
-            code: self.editor.read(cx).value().to_string(), meta: question.meta.clone(), cases: session.cases.clone(),
+            code: self.editor.read(cx).value().to_string(), starter: question.starter(session.language).unwrap_or_default().to_owned(), meta: question.meta.clone(), cases: session.cases.clone(),
             compare: Compare::for_statement(&question.content),
         })
     }

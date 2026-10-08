@@ -1,6 +1,7 @@
 <details open>
 <summary>Feat</summary>
 
+- Continue stopped solves or retry interrupted AI actions from their result cards.
 - Assist panel with hints, I'm stuck, find bugs, edge cases, complexity, optimize, visualize, dry run, pattern, explain, and solve.
 - Run Codex, Claude Code, OpenCode, Antigravity, Gemini CLI, or Cursor Agent locally with live models, reasoning levels, and Fast tier.
 - Install OpenCode or Antigravity from the AI menu to use free models.
@@ -34,6 +35,7 @@
 <summary>Fix</summary>
 
 - Show function icons for calls, returns, and stack frames in Debug mode.
+- Show “Just a template” instead of executing untouched templates in every language.
 - Keep array range labels fully visible above the cells.
 - Debug mode shows named user functions and variables without generated runtime frames.
 

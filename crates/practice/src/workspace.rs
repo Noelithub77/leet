@@ -4,6 +4,12 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
+/// Whether the buffer contains an attempt beyond the supplied language template.
+pub fn has_attempt(code: &str, starter: &str) -> bool {
+    let code = code.trim();
+    !code.is_empty() && code != starter.trim()
+}
+
 /// Workspace-relative path of a problem's Solution.
 pub fn solution_rel(frontend_id: u32, slug: &str, language: crate::language::Language) -> PathBuf {
     if let Ok((contest, index)) = crate::codeforces::problem_id(slug) {
@@ -26,6 +32,21 @@ pub fn ensure_solution(workspace: &Path, rel: &Path, starter: &str) -> Result<Pa
 mod tests {
     use super::*;
     use crate::language::Language;
+    #[test]
+    fn templates_are_not_attempts_in_every_language() {
+        for language in Language::ALL {
+            let starter = language.stdin_template();
+            assert!(!has_attempt(starter, starter), "{}", language.label());
+            assert!(!has_attempt(&format!("\n{starter}\n"), starter));
+            assert!(!has_attempt(" \n\t", starter));
+            // Even malformed edits must reach the runner's normal diagnostics.
+            assert!(has_attempt(&format!("{starter}broken code"), starter));
+        }
+        let starter = "class Solution:\n    def twoSum(self, nums, target):";
+        assert!(!has_attempt(starter, starter));
+        assert!(has_attempt(&format!("{starter}\n    return []"), starter));
+    }
+
     #[test]
     fn language_solutions_have_separate_paths_and_keep_edits() {
         let dir = tempfile::tempdir().unwrap();

@@ -511,8 +511,7 @@ fn push_problem(out: &mut String, ctx: &Context) {
     if ctx.url.contains("codeforces.com") {
         out.push_str("The program reads stdin and writes stdout.\n");
     }
-    let code = ctx.code.trim();
-    if !code.is_empty() && code != ctx.starter.trim() {
+    if crate::workspace::has_attempt(ctx.code, ctx.starter) {
         let mut numbered = numbered(ctx.code);
         truncate(&mut numbered, CODE_LIMIT);
         out.push_str(&format!("\n## My attempt (numbered lines)\n```{}\n{numbered}\n```\n", ctx.language.id()));
