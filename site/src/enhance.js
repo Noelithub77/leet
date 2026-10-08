@@ -62,9 +62,9 @@ const marks = $$('[data-mark]').map(svg => {
     lines[index].setAttribute('points', pointsAttribute(stroke.points));
     lines[index].setAttribute('stroke-width', stroke.width.toFixed(2));
   });
-  const morph = { duration: reduced ? 0 : 0.95, ease: 'expo.inOut', stagger: 0.07, onUpdate: draw };
+  const morph = { duration: reduced ? 0 : 0.75, ease: 'power2.inOut', stagger: 0.045, onUpdate: draw };
   draw();
-  const loop = gsap.timeline({ paused: true, repeat: -1, yoyo: true, repeatDelay: 2.2, delay: 1.5 }).to(strokes, { p: 1 - initial, ...morph });
+  const loop = gsap.timeline({ paused: true, repeat: -1, yoyo: true, repeatDelay: 1.5, delay: 1.2 }).to(strokes, { p: 1 - initial, ...morph });
   const mark = { svg, hold: false, visible: false, ghosted: false };
   mark.to = target => { loop.pause(); return gsap.to(strokes, { p: target, ...morph, overwrite: true }); };
   mark.resume = () => { if (!mark.hold && !mark.ghosted && mark.visible && !reduced) mark.to(initial).then(() => !mark.hold && loop.restart(true)); };
@@ -104,14 +104,16 @@ const shaderReady = !reduced && !saveData && canvas ? import('./shader.js').then
 const particlesReady = !reduced && !saveData && marks[0] ? import('./particles.js').then(({ mountParticles }) => {
   const canvas = $('[data-particles]');
   const particles = mountParticles(canvas, marks[0].svg);
-  if (!particles) return null;
+  if (!particles) { root.classList.remove('hero-pending'); return null; }
   marks[0].ghost();
+  root.classList.remove('hero-pending');
+  canvas.classList.add('is-live');
   const { uMorph } = particles.uniforms;
   const loop = gsap.timeline({ repeat: -1, paused: true })
     .set(uMorph, { value: 1 })
-    .to(uMorph, { value: 0, duration: 1.6, ease: 'power2.inOut', delay: 2.2 })
-    .to(uMorph, { value: 1, duration: 1.6, ease: 'power2.inOut', delay: 2.2 })
-    .to({}, { duration: 2.2 });
+    .to(uMorph, { value: 0, duration: 1, ease: 'power2.inOut', delay: 1.5 })
+    .to(uMorph, { value: 1, duration: 1, ease: 'power2.inOut', delay: 1.5 })
+    .to({}, { duration: 1.5 });
   particles.hold = on => {
     loop.pause();
     gsap.to(uMorph, { value: 1, duration: 1.1, ease: 'power2.inOut', overwrite: true, onComplete: () => !on && loop.restart(true) });
@@ -131,7 +133,7 @@ const particlesReady = !reduced && !saveData && marks[0] ? import('./particles.j
   hero.addEventListener('pointerleave', () => { x(-800); y(-800); });
   document.fonts?.ready.then(particles.layout);
   return particles;
-}) : Promise.resolve(null);
+}).catch(() => { root.classList.remove('hero-pending'); return null; }) : Promise.resolve(null);
 
 /* SplitText gives each stable-width spelling a staggered, rotating letter transition. */
 const heroWord = $('[data-hero-word]');
@@ -140,16 +142,16 @@ if (heroWord && !reduced && !saveData) {
   const digits = heroWord.querySelector('[data-spelling="1337"]');
   const letters = SplitText.create(leet, { type: 'chars', charsClass: 'spelling-char' });
   const numbers = SplitText.create(digits, { type: 'chars', charsClass: 'spelling-char' });
-  gsap.set(digits, { opacity: 1, y: 0 });
   const from = { yPercent: 12, rotationX: -45, opacity: 0, filter: 'blur(2px)' };
   gsap.set(numbers.chars, from);
-  const out = { yPercent: -12, rotationX: 45, opacity: 0, filter: 'blur(2px)', duration: 0.18, stagger: 0.01, ease: 'power2.in' };
-  const into = { yPercent: 0, rotationX: 0, opacity: 1, filter: 'blur(0px)', duration: 0.3, stagger: 0.015, ease: 'power3.out', immediateRender: false };
+  gsap.set(digits, { opacity: 1, y: 0 });
+  const out = { yPercent: -12, rotationX: 45, opacity: 0, filter: 'blur(2px)', duration: 0.14, stagger: 0.008, ease: 'power2.in' };
+  const into = { yPercent: 0, rotationX: 0, opacity: 1, filter: 'blur(0px)', duration: 0.24, stagger: 0.01, ease: 'power3.out', immediateRender: false };
   const spelling = gsap.timeline({ repeat: -1, paused: true })
-    .to(letters.chars, { ...out, delay: 4 })
-    .fromTo(numbers.chars, from, into, '<+0.08')
-    .to(numbers.chars, { ...out, delay: 3.5 })
-    .fromTo(letters.chars, from, into, '<+0.08');
+    .to(letters.chars, { ...out, delay: 2.8 })
+    .fromTo(numbers.chars, from, into, '<+0.06')
+    .to(numbers.chars, { ...out, delay: 2.4 })
+    .fromTo(letters.chars, from, into, '<+0.06');
   whileVisible(hero, visible => visible ? spelling.play() : spelling.pause());
 }
 

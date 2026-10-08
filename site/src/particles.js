@@ -91,7 +91,7 @@ void main() {
   float swirl = sin(m * 3.14159);
   vec2 p = (mix(aFrom, aTo, m) - 32.0) / 64.0 * uSize + uCenter;
   float angle = aSeed * 6.2831 + uTime * (0.5 + aSeed);
-  p += vec2(cos(angle), sin(angle)) * (0.35 + swirl * 8.0 * aSeed);
+  p += vec2(cos(angle), sin(angle)) * (0.35 + swirl * 6.0 * aSeed);
   vec2 away = p - uPointer;
   float near = exp(-dot(away, away) / 1100.0);
   p += normalize(away + 0.0001) * 20.0 * near;

@@ -6,13 +6,19 @@
     <meta name="theme-color" content="#101010" />
     <meta name="color-scheme" content="dark" />
     <meta name="description" content="leet for the eleet. A native GPUI coding-practice IDE in idiomatic Rust with a deterministic visual debugger, local AI agents, and Competitive Companion imports — leeting at 120Hz." />
-    <meta property="og:title" content="leet — leeting at 120Hz" />
+    <meta property="og:title" content="leet — leeting @ 120Hz" />
     <meta property="og:description" content="Native coding practice in idiomatic Rust, powered by GPUI. Visual debugger, local AI agents, contests. 1337 @ 120Hz." />
     <meta property="og:image" content="https://noelithub77.github.io/leet/media/debugger.webp" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="%BASE_URL%leet.svg" type="image/svg+xml" />
-    <title>leet — leeting at 120Hz</title>
-    <script>document.documentElement.classList.add('js')</script>
+    <title>leet — leeting @ 120Hz</title>
+    <script>
+      document.documentElement.classList.add('js');
+      if (!matchMedia('(prefers-reduced-motion: reduce)').matches && !navigator.connection?.saveData) {
+        document.documentElement.classList.add('hero-pending');
+        setTimeout(() => document.documentElement.classList.remove('hero-pending'), 3000);
+      }
+    </script>
     <link rel="preload" href="%BASE_URL%fonts/liberation-sans-regular.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="%BASE_URL%fonts/liberation-sans-bold.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="%BASE_URL%fonts/nunito-bold.woff2" as="font" type="font/woff2" crossorigin />
@@ -26,14 +32,17 @@
       .brand{display:inline-flex;align-items:center;gap:10px;font-weight:700;font-size:19px;letter-spacing:-.03em}
       .hero{position:relative;min-height:100svh;display:grid;place-items:center;padding:110px 20px 130px;text-align:center;isolation:isolate;overflow:hidden}
       .hero-canvas{position:absolute;inset:0;z-index:-2;width:100%;height:100%;opacity:0;transition:opacity 1.2s ease}
-      .hero-canvas.is-live{opacity:1}.hero-particles{position:absolute;inset:0;z-index:0;width:100%;height:100%;pointer-events:none}.hero-inner{position:relative;z-index:1}
+      .hero-canvas.is-live{opacity:1}.hero-particles{position:absolute;inset:0;z-index:0;width:100%;height:100%;pointer-events:none;opacity:0;transition:opacity .45s ease}.hero-particles.is-live{opacity:1}.hero-inner{position:relative;z-index:1}
       .hero-backdrop{position:absolute;inset:0;z-index:-3;background:radial-gradient(60% 50% at 30% 30%,#99ffe41a,transparent 70%),radial-gradient(50% 45% at 75% 75%,#ffc79914,transparent 70%)}
       .hero-inner{width:min(100%,860px);display:grid;justify-items:center}
       .mark{width:clamp(96px,13vw,150px);height:auto;margin-top:34px;overflow:visible}
       .hero .mark{width:clamp(160px,28vw,320px);margin-top:0}
+      .hero-pending .hero .mark{opacity:0}
       .mark polyline{fill:none;stroke-linecap:round;stroke-linejoin:round}
       h1{margin:26px 0 0;font-family:"Nunito","Liberation Sans",sans-serif;font-size:clamp(46px,9vw,112px);line-height:1.08;font-weight:700;letter-spacing:-.045em}
-      .hz{color:var(--mint)}
+      .hz{color:var(--fg);display:inline-block;white-space:nowrap}
+      .at-sign{color:var(--peach)}
+      .word-peach{color:var(--peach)}.word-mint{color:var(--mint)}
       .lede{max-width:580px;margin:24px auto 0;color:#bdbdbd;font-size:clamp(16px,1.9vw,19px);line-height:1.6}
       .install{width:min(100%,780px);margin-top:38px;padding:8px;border:1px solid var(--line);border-radius:var(--radius);background:var(--card);box-shadow:var(--shadow);text-align:left}
       .install-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 4px 10px 10px}
@@ -80,7 +89,7 @@
             <polyline points="31.5,18 40.5,18 34.5,29.5 41,37 32.5,46" stroke="#99ffe4" stroke-width="4.6" />
             <polyline points="45.5,18 50.5,18 55.5,18 51.75,32 48,46" stroke="#ffc799" stroke-width="4.6" />
           </svg>
-          <h1 data-split aria-label="Leeting at 120Hz"><span class="hero-word" data-hero-word aria-hidden="true"><span data-spelling="leet">Leeting</span><span data-spelling="1337">1337ing</span></span> at <span class="hz">120Hz</span></h1>
+          <h1 data-split aria-label="Leeting @ 120Hz"><span class="hero-word" data-hero-word aria-hidden="true"><span data-spelling="leet"><span class="word-peach">L</span><span class="word-mint">ee</span><span class="word-peach">t</span>ing</span><span data-spelling="1337"><span class="word-peach">1</span><span class="word-mint">33</span><span class="word-peach">7</span>ing</span></span> <span class="at-sign">@</span> <span class="hz">120Hz</span></h1>
           <p class="lede">A GPUI coding-practice IDE in idiomatic Rust. Deterministic debugging, your local AI agents, and contest imports at your screen’s full refresh rate.</p>
           <div class="install" data-install>
             <div class="install-head">
@@ -119,8 +128,8 @@
       <section class="hz-section" id="hz">
         <div class="marquee" aria-hidden="true">
           <div class="marquee-track">
-            <span>1337 @ 120Hz</span><b>✦</b><span>leeting at 120Hz</span><b>✦</b><span>1337 @ 120Hz</span><b>✦</b><span>leeting at 120Hz</span><b>✦</b>
-            <span>1337 @ 120Hz</span><b>✦</b><span>leeting at 120Hz</span><b>✦</b><span>1337 @ 120Hz</span><b>✦</b><span>leeting at 120Hz</span><b>✦</b>
+            <span>1337 @ 120Hz</span><b>✦</b><span>leeting @ 120Hz</span><b>✦</b><span>1337 @ 120Hz</span><b>✦</b><span>leeting @ 120Hz</span><b>✦</b>
+            <span>1337 @ 120Hz</span><b>✦</b><span>leeting @ 120Hz</span><b>✦</b><span>1337 @ 120Hz</span><b>✦</b><span>leeting @ 120Hz</span><b>✦</b>
           </div>
         </div>
         <div class="wrap split">
