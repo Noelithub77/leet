@@ -28,6 +28,7 @@ mod history;
 mod omnibar;
 mod settings;
 mod statement;
+mod rich_text;
 mod theme;
 mod tour;
 mod update;

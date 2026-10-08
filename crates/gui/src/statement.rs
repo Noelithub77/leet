@@ -3,7 +3,7 @@ use std::sync::Arc;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
-use gpui_kit::component::text::{TextView, TextViewStyle};
+use gpui_kit::component::text::TextViewStyle;
 use gpui_kit::component::{ActiveTheme as _, Selectable as _, Sizable as _, WindowExt as _, Icon, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
@@ -131,7 +131,7 @@ impl Statement {
         self.language = language; self.reference = None; self.article = None; self.reference_loading = false; self.load_reference(window, cx);
     }
     fn markdown(&self, id: String, content: String, color: Hsla) -> impl IntoElement {
-        TextView::markdown(SharedString::from(id), content).selectable(true)
+        crate::rich_text::markdown(SharedString::from(id), content)
             .style(TextViewStyle::default().paragraph_gap(rems(0.65)).inline_code(HighlightStyle { color: Some(color), ..Default::default() }))
     }
     fn render_blocks(&self, section: usize, cx: &Context<Self>) -> impl IntoElement {
@@ -219,7 +219,7 @@ impl Statement {
                 .child(h_flex().gap_1().text_xs().text_color(theme.muted_foreground).child("NeetCode · MIT")
                     .child(Button::new("reference-license").ghost().xsmall().icon(IconName::Info).accessibility_label("Reference license").tooltip("Reference license")
                         .on_click(|_, window, cx| window.open_dialog(cx, |dialog, _, _| dialog.title("NeetCode reference license").w(px(600.)).child(
-                            div().id("reference-license-text").max_h(px(440.)).overflow_y_scroll().child(TextView::markdown("neetcode-license", practice::solutions::LICENSE).selectable(true))))))))
+                            div().id("reference-license-text").max_h(px(440.)).overflow_y_scroll().child(crate::rich_text::markdown("neetcode-license", practice::solutions::LICENSE).selectable(true))))))))
     }
 }
 impl Render for Statement {

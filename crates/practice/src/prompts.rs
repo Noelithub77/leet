@@ -53,13 +53,15 @@ static TAG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"<[^>]+>").unwrap());
 
 /// LeetCode statement HTML as Markdown, for display and prompts. Exponents become `^n`.
 pub fn statement_markdown(html: &str) -> String {
-    let html = SUP.replace_all(html, "^$1");
+    let (html, formulas) = crate::rich_text::protect_html_math(html);
+    let html = SUP.replace_all(&html, "^$1");
     // Example blocks mix bold labels into preformatted text; keep them as plain code blocks.
     let html = PRE.replace_all(&html, |c: &regex::Captures| {
         let text = TAG.replace_all(&c[1], "");
         format!("<pre><code>{}</code></pre>", text.trim_matches('\n'))
     });
-    let markdown = htmd::convert(&html).unwrap_or_else(|_| html.to_string());
+    let mut markdown = htmd::convert(&html).unwrap_or_else(|_| html.to_string());
+    for (key, formula) in formulas { markdown = markdown.replace(&key, &formula); }
     markdown.replace('\u{a0}', " ").trim().to_owned()
 }
 

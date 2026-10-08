@@ -1,0 +1,12 @@
+# Shared native rich content
+
+Scope: render problem statements and chat responses consistently, including inline/display LaTeX, provider math delimiters, Markdown tables, images, links, lists, code, and prose in every structured answer type. Preserve native visualization widgets, selection, copying, and streamed content.
+
+[CHOSEN] Approved dependency: `ratex-gpui = { version = "0.4.1", default-features = false }`. Its `gpui-pre ^0.3` matches GPUI Kit 0.7.1. Use GPUI Base 0.7.1 MarkdownPlugin hooks for inline and block math; retain its established rich-text rendering rather than replacing the whole document renderer.
+
+1. Preserve raw LaTeX through statement HTML conversion; normalize Codeforces `$$$`, ordinary dollar math, and bracket/parenthesis math without modifying code or literal escaped text.
+2. Share a native TextView helper and cached math plugin across statements, hints, reference content, chat streams, saved replies, and structured answer prose. Preserve font/color/scale and inline baseline; retain readable source on unsupported syntax.
+3. Regression fixtures: Precision Alignment and Copper Squander expressions; fractions, roots, indices, operators, matrices, aligned equations, delimiters; mixed tables/images/code; incomplete streamed math; source selection/copy.
+4. Run focused tests and `./ops check --json`, commit task changes, deploy locally, and inspect native statement/chat rendering and keyboard selection. Preserve concurrent chat/source-menu work.
+
+Research: GPUI Kit 0.7.1 local source provides MarkdownPlugin inline and block hooks; Context7 examples are older and incorrectly state inline plugins are unavailable. Ratex GPUI current published render-only API produces themed native RenderImage values with embedded fonts. Implemented shared plugins and provider conversion protection. Native inspection of Precision Alignment and an isolated saved-chat fixture verified inline math, display fractions, table formulas, matrices, literal highlighted Python code, incomplete-source fallback, and selecting/copying underlying TeX with Ctrl+C. Regression tests cover real provider expressions, HTML tables/images/code preservation, streaming delimiters, cache reuse, and size/DPI scaling. Final `./ops check --json` passed: 38 GUI tests, 147 practice tests, and 5 installer regressions; 14 network/live tests remain intentionally ignored. Release build, focused commit, and local deployment are in progress.

@@ -24,6 +24,7 @@ pub mod stdin_runner;
 pub mod lsp;
 
 pub mod description;
+pub mod rich_text;
 pub mod solutions;
 pub mod codeforces_snapshot;
 pub mod companion;

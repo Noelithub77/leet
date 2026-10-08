@@ -5,6 +5,7 @@
 
 - Replay Python and C++ Codeforces and CodeChef programs in Debug, including CPH samples.
 
+- Native LaTeX math in statements, chat replies, and structured AI answers.
 - Click NeetCode to return to the saved list; hover to choose another list.
 
 - Reopen closed problem tabs with Ctrl+Shift+T, preserving their editor state.
@@ -69,6 +70,7 @@
 <details>
 <summary>Fix</summary>
 
+- Preserve provider formulas through statement conversion and keep math out of literal code.
 - Retry blocked Codeforces statements with installed curl before the snapshot fallback.
 - Automatically acquire three free Companion ports, retry occupied ports, and avoid VS Code CPH’s default port.
 - Remove CPH settings and suppress duplicate browser deliveries.

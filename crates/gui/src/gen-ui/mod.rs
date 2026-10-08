@@ -32,7 +32,7 @@ fn caption(label: &str, kind: &str, theme: &Theme) -> Div {
 pub fn frame(scope: &str, frame: &Frame, window: &mut Window, cx: &mut App) -> AnyElement {
     let theme = cx.theme().clone();
     v_flex().gap_3().w_full()
-        .when(!frame.caption.is_empty(), |el| el.child(div().text_sm().text_color(theme.foreground).child(frame.caption.clone())))
+        .when(!frame.caption.is_empty(), |el| el.child(div().text_sm().text_color(theme.foreground).child(crate::rich_text::markdown(gpui_kit::SharedString::from(format!("{scope}-caption")), &frame.caption))))
         .children(frame.structures.iter().map(|s| structure(scope, s, window, cx)))
         .into_any_element()
 }
