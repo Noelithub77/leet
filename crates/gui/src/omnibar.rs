@@ -206,6 +206,7 @@ impl Workspace {
             Focus::Editor | Focus::Omnibar => self.focus_editor(window, cx),
             area => self.focus_nav(area, window, cx),
         }
+        self.resume_tour(window, cx);
         cx.notify();
     }
 

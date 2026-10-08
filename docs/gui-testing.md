@@ -26,8 +26,8 @@ Native mode also checks long statement cards at regular and compact sizes, in li
 The guided-tour fixture uses isolated SQLite storage and a bundled public
 question. It checks startup defaults, automatic display, search actions, Skip
 and Done persistence, replay, Escape after shortcut reload, all eight steps,
-Explorer, description and AI toggle actions, visible shortcuts during practice,
-Left/Right tour navigation, full search on Ctrl+P and Ctrl+Shift+P, and layout restoration.
+Explorer, description and AI toggle actions, automatic advancement from actions and shortcuts,
+editor input isolation, Left/Right tour navigation, full search on Ctrl+P and Ctrl+Shift+P, and layout restoration.
 It checks minimum window size, a light theme, and 140% zoom.
 Tour PNGs are saved alongside the other captures; no
 account loading, agent detection, language servers, or network jobs run.

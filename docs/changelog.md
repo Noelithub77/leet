@@ -42,7 +42,8 @@
 - Navigate Settings tabs with Tab, Shift+Tab, and arrow keys.
 - Reset app settings and reopen onboarding while keeping solutions, accounts, progress, and cache.
 - A centered, animated guided tour appears once for every user, with step icons, clickable actions, and native shortcut keycaps.
-- The tour moves aside when you try a step with its action or keyboard shortcut.
+- Advance the guided tour automatically when you use its action or shortcut.
+- Keep tour shortcuts ahead of editor input and highlight the focused tour card.
 - Learn the Explorer, problem description, and AI sidebar toggles in the guided tour.
 - Start with Explorer open and NeetCode 150 selected on new installs.
 - Collapse Assist result cards while keeping run status and recovery controls visible.

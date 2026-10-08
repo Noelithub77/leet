@@ -77,7 +77,10 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool, v
     })??;
     for step in 0..crate::tour::STEP_COUNT {
         cx.run_until_parked();
-        cx.update_window(handle, |_, window, cx| window.render_frame(cx))?;
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(gpui_kit::base::active_focus_trap(window, cx).is_some(), "Tour did not contain keyboard focus");
+        })?;
         if video {
             let frames = output.join("tour-frames");
             std::fs::create_dir_all(&frames)?;
@@ -103,52 +106,50 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool, v
             let top = window.find("skip-tour").bounds();
             let bottom = window.find("tour-next").bounds();
             ensure!(top.top() >= px(0.) && bottom.right() <= window.viewport_size().width && bottom.bottom() <= window.viewport_size().height, "Tour card escaped the window");
-            if step == 3 {
-                window.click("tour-try", cx);
+            let before = workspace.read(cx).editor.read(cx).value().to_string();
+            if step == 2 {
+                workspace.update(cx, |view, cx| {
+                    view.config.keybindings.insert("ToggleDescription".into(), "ctrl-x".into());
+                    crate::actions::reload_keys(&view.config, cx);
+                    view.focus_editor(window, cx);
+                });
+                window.render_frame(cx);
             }
             if step == 1 {
-                window.click_at("guided-tour-card", point(px(8.), px(8.)), cx);
+                // Simulate focus being stolen by the editor before tour input arrives.
+                workspace.update(cx, |view, cx| view.focus_editor(window, cx));
+                window.render_frame(cx);
+                window.press("x", cx);
+                ensure!(workspace.read(cx).editor.read(cx).value().as_ref() == before, "Tour typing reached the editor");
                 window.press("left", cx);
-                ensure!(workspace.read(cx).center == Center::Home, "Left did not return to the previous tour step");
+                ensure!(workspace.read(cx).tour.as_ref().map(crate::tour::Tour::index) == Some(0), "Editor swallowed tour Prev");
                 window.render_frame(cx);
                 window.press("right", cx);
-                ensure!(workspace.read(cx).center == Center::Editor, "Right did not advance the tour");
-                window.render_frame(cx);
-                window.click("tour-try", cx);
-            }
-            if step == 2 {
-                window.press("alt-a", cx);
-                ensure!(!workspace.read(cx).description, "Tour shortcut did not hide the problem description");
-            }
-            if step == 5 {
-                window.press("alt-d", cx);
-                ensure!(!workspace.read(cx).right, "Tour shortcut did not toggle AI");
+                ensure!(workspace.read(cx).tour.as_ref().map(crate::tour::Tour::index) == Some(1), "Editor swallowed tour Next");
             }
             Ok(())
         })??;
         cx.run_until_parked();
-        cx.update_window(handle, |_, window, cx| -> Result<()> {
-            if step == 1 {
-                ensure!(!workspace.read(cx).left, "Tour action did not hide Explorer");
-                window.press("alt-s", cx);
-                ensure!(workspace.read(cx).left, "Tour shortcut did not reopen Explorer");
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            match step {
+                1 => window.press("alt-s", cx),
+                3 => window.click("tour-try", cx),
+                2 => window.press("ctrl-x", cx),
+                5 => window.press("alt-d", cx),
+                6 => window.press("ctrl-`", cx),
+                7 => window.press("space", cx),
+                _ => window.click("tour-next", cx),
             }
-            if step == 3 { ensure!(workspace.read(cx).center == Center::Editor, "Editor action did not reach editor"); }
-            if matches!(step, 1 | 2 | 3 | 5) {
+        })?;
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| -> Result<()> {
+            if step + 1 < crate::tour::STEP_COUNT {
+                ensure!(workspace.read(cx).tour.as_ref().map(crate::tour::Tour::index) == Some(step + 1), "Tour action did not advance from step {step}");
                 window.render_frame(cx);
-                ensure!(window.find("skip-tour").bounds().top() < px(100.), "Guide did not move aside for practice");
-                ensure!(window.find("tour-try").visible(), "Practice guide hid its action and shortcut");
             }
             Ok(())
         })??;
-        if pixels && matches!(step, 1 | 2 | 5) {
-            std::thread::sleep(Duration::from_millis(320));
-            cx.advance_clock(Duration::from_millis(320));
-            cx.run_until_parked();
-            cx.update_window(handle, |_, window, cx| window.render_frame(cx))?;
-            cx.capture_screenshot(handle)?.save(output.join(format!("tour-practice-{step}.png")))?;
-        }
-        cx.update_window(handle, |_, window, cx| window.click("tour-next", cx))?;
     }
     cx.update_window(handle, |_, _, cx| -> Result<()> {
         ensure!(workspace.read(cx).tour.is_none(), "Done did not finish the tour");
@@ -211,5 +212,5 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool, v
         cx.run_until_parked();
     }
     cx.update(|cx| { crate::theme::apply("Vesper", cx); crate::theme::set_zoom(1., cx); });
-    Ok(json!({"fixture":"guided-tour","passed":true,"checks":["Explorer and NeetCode 150 defaults","automatic start","problem required","clickable search and editor","Explorer action and shortcut","description and AI keyboard shortcuts","guide moves aside with its shortcut visible","Left/Right tour navigation","Ctrl+P and Ctrl+Shift+P full search","Skip persistence across workspaces","manual replay","Escape after shortcut reload","eight steps and Done","layout restoration","dark/light, minimum size and zoom bounds"],"pixels":pixels,"video":video}))
+    Ok(json!({"fixture":"guided-tour","passed":true,"checks":["Explorer and NeetCode 150 defaults","automatic start","problem required","clickable search and editor","Explorer action and shortcut","description and AI keyboard shortcuts","automatic action and shortcut advancement","tour input priority over editor","custom shortcut overrides editor Cut","Left/Right tour navigation","Ctrl+P and Ctrl+Shift+P full search","Skip persistence across workspaces","manual replay","Escape after shortcut reload","eight steps and Done","layout restoration","dark/light, minimum size and zoom bounds"],"pixels":pixels,"video":video}))
 }

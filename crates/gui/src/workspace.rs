@@ -611,6 +611,7 @@ impl Workspace {
         window.defer(cx, move |window, cx| {
             let _ = workspace.update(cx, |this, cx| {
                 if this.center != Center::Editor || this.focus_area != Focus::Editor { return; }
+                if this.tour.is_some() && !this.omni.open { this.resume_tour(window, cx); return; }
                 if this.debug_mode { this.debugger.update(cx, |debugger, cx| debugger.focus(window, cx)); }
                 else { let handle = this.editor.read(cx).focus_handle(cx); handle.focus(window, cx); }
             });
@@ -835,6 +836,7 @@ impl Workspace {
         if self.focus_area == Focus::Editor {
             self.focus_editor(window, cx);
         }
+        self.resume_tour(window, cx);
     }
 
     pub(crate) fn apply_imported_question(&mut self, q: Question, window: &mut Window, cx: &mut Context<Self>) -> anyhow::Result<()> {

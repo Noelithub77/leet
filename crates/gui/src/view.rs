@@ -206,7 +206,7 @@ impl Render for Workspace {
         .child(self.render_status(window, cx))
         .children(omnibar)
         .children(crate::update::panel(self, window, cx))
-        .children(crate::tour::panel(self, cx))
+        .children(crate::tour::panel(self, window, cx))
     }
 }
 
