@@ -8,9 +8,11 @@
 curl -fsSL https://noelithub77.github.io/leet/install.sh | sh
 ```
 
-<a href="https://github.com/Noelithub77/leet/releases/latest/download/leet-windows-x86_64.exe"><img alt="Download Windows x64 executable" src="docs/assets/download-windows.svg" width="260" height="48"></a>
-
-[All downloads](https://github.com/Noelithub77/leet/releases/latest) · [Requirements & updates](docs/releases.md) · [Interactive website](https://noelithub77.github.io/leet/)
+<p align="center">
+  <a href="https://github.com/Noelithub77/leet/releases/latest/download/leet-windows-x86_64.exe"><img alt="Download Windows x64 executable" src="docs/assets/download-windows.svg" width="260" height="48"></a>
+  &nbsp;&nbsp;
+  <a href="https://noelithub77.github.io/leet/"><img alt="Visit the leet website" src="docs/assets/visit-website.svg" width="260" height="48"></a>
+</p>
 
 <p align="center">
   <a href="https://noelithub77.github.io/leet/"><img src="docs/assets/hero.svg" alt="Leeting @ 120Hz — animated 1337 to leet logo, in peach and mint on Vesper black" width="1000"></a>
