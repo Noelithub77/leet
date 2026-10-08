@@ -9,3 +9,11 @@
 - [x] Run final checks: 30 GUI tests, 121 practice tests, doc tests, and five installer regressions.
 
 Release the focused checkpoint with `./ops local:deploy --json`; keep concurrent provider work outside the source snapshot.
+
+## Follow-up UI
+
+[CHOSEN] One compact AI row with General, Analysis, and Chats; centered empty action and analysis views; `__` analysis placeholders with a Run analysis button. Edge cases use the AI sparkle. Results have an independent rounded frame and native vertical resizing with saved height. Constraints stays in the statement footer; opening it closes other sections.
+
+Threaded chat storage, global and per-question threads, forks, editing, undo, deletion, and action request cards are owned by the separate Threaded AI conversations and history chat.
+
+Verified follow-up in isolated native Wayland: centered General and analysis placeholders, in-place analysis result, vertical results drag and toggle restoration, and pinned Constraints after expanding Examples. Focused check passed 31 GUI tests, 121 practice tests, doc tests, and five installer regressions.

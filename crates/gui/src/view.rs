@@ -5,8 +5,8 @@ use std::time::Duration;
 use gpui_kit::base::{Disableable as _, Spring, Transition, spring, transition};
 use gpui_kit::component::kbd::Kbd;
 use gpui_kit::component::spinner::Spinner;
-use gpui_kit::component::resizable::{h_resizable, resizable_panel, ResizableState};
-use gpui_kit::component::{ActiveTheme as _, Sizable as _, Icon, h_flex, v_flex};
+use gpui_kit::component::resizable::{h_resizable, v_resizable, resizable_panel, ResizableState};
+use gpui_kit::component::{ActiveTheme as _, Sizable as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use gpui_kit::assets::IconName;
@@ -67,7 +67,12 @@ impl Render for Workspace {
         let show_left = !self.zen && ((self.center == Center::Editor && self.left) || (self.center == Center::Home && self.home.sidebar));
         let show_description = panels && self.description;
         let show_ai = panels && self.right;
-        let bottom_h = spring("bottom-h", if panels && self.bottom { BOTTOM_H * z } else { 0. }, panel_spring(), window, cx);
+        let bottom_max = ((window.viewport_size().height.as_f32() - 80.) * 0.75).max(120.);
+        let bottom_height = self.db.get("bottom-height").ok().flatten().and_then(|height| height.parse::<f32>().ok())
+            .filter(|height| height.is_finite() && *height >= 120. && *height <= 2000.)
+            .unwrap_or(BOTTOM_H * z).clamp(120., bottom_max);
+        let bottom_reveal = spring("bottom-reveal", if panels && self.bottom { 1. } else { 0. }, panel_spring(), window, cx).clamp(0., 1.);
+        let bottom_h = bottom_height * bottom_reveal;
         let tabs = self.render_tabs(window, cx);
         let center = match self.center {
             Center::Onboarding => div().flex_1().h_full().children(self.onboarding.clone()).into_any_element(),
@@ -114,6 +119,34 @@ impl Render for Workspace {
                 });
             });
         }
+        let center_state = window.use_keyed_state("workspace-center", cx, |_, _| ResizableState::default());
+        let last_bottom_reveal = window.use_keyed_state("last-bottom-reveal", cx, |_, _| -1_f32);
+        if *last_bottom_reveal.read(cx) != bottom_reveal {
+            last_bottom_reveal.update(cx, |last, _| *last = bottom_reveal);
+            let state = center_state.clone();
+            window.defer(cx, move |window, cx| {
+                state.update(cx, |state, cx| state.resize_panel(1, px(bottom_h), window, cx));
+            });
+        }
+        let bottom_range = if bottom_reveal >= 0.999 { px(120.)..px(bottom_max) } else { px(bottom_h)..px(bottom_h) };
+        let db = self.db.clone();
+        let center_panels = v_resizable("workspace-center").with_state(&center_state)
+            .with_handle_appearance(std::rc::Rc::new(|handle, _, cx| {
+                let active = handle.state() != gpui_kit::base::ResizeHandleState::Idle;
+                Some(div().size_full().flex().items_center().justify_center()
+                    .when(active, |handle| handle.child(div().flex_none().w(px(40.)).h(px(2.)).rounded_full()
+                        .bg(cx.theme().warning.opacity(0.25))))
+                    .into_any_element())
+            }))
+            .child(resizable_panel().size_range(px(120.)..Pixels::MAX)
+                .child(v_flex().size_full().min_h_0().rounded(px(18.)).border_1().border_color(theme.warning.opacity(0.10)).overflow_hidden().child(center)))
+            .child(resizable_panel().size(px(bottom_h)).size_range(bottom_range).flex_none()
+                .child(self.render_bottom(bottom_reveal, cx)))
+            .on_resize(move |state, _, cx| {
+                if bottom_reveal >= 0.999 && let Some(height) = state.read(cx).sizes().get(1) {
+                    let _ = db.set("bottom-height", &height.as_f32().to_string());
+                }
+            });
         let mut body = h_resizable("workspace-panels").with_state(&state)
             .with_handle_appearance(std::rc::Rc::new(|handle, _, cx| {
                 let active = handle.state() != gpui_kit::base::ResizeHandleState::Idle;
@@ -127,8 +160,7 @@ impl Render for Workspace {
             .child(resizable_panel().size(px(widths[1].min(initial_max))).size_range(range(1, 160., 1000.)).flex_none()
                 .child(div().size_full().overflow_hidden().p_1().opacity(reveals[1]).child(self.render_description(cx))))
             .child(resizable_panel().size_range(px(180.)..Pixels::MAX).child(
-                v_flex().flex_1().min_w_0().h_full().p_1().child(v_flex().size_full().min_h_0().rounded(px(18.)).border_1().border_color(theme.warning.opacity(0.10)).overflow_hidden()
-                    .child(center).child(self.render_bottom(bottom_h, cx)))))
+                v_flex().flex_1().min_w_0().h_full().p_1().child(center_panels)))
             .child(resizable_panel().size(px(widths[2].min(initial_max))).size_range(range(2, 220., 1000.)).flex_none()
                 .child(div().size_full().overflow_hidden().p_1().opacity(reveals[2]).child(self.render_right(cx))));
         let db = self.db.clone();
@@ -326,31 +358,15 @@ impl Workspace {
     fn render_right(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme().clone();
         v_flex().size_full().min_w_0().rounded(px(18.)).border_1().border_color(theme.warning.opacity(0.10)).overflow_hidden().bg(theme.sidebar)
-            .child(h_flex().p_2().gap_2().items_center()
-                .child(Icon::new(IconName::Sparkles).small().text_color(theme.primary))
-                .child(div().flex_1().text_sm().child("AI"))
-                .child(Button::new("chat-model").ghost().small().icon(IconName::Settings2).tooltip_with_action("Agent and model", &crate::actions::ConfigureAi, Some(crate::actions::WORKSPACE)).accessibility_label("Agent and model")
-                    .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::actions::ConfigureAi), cx)))
-                .child(Button::new("chat-hide").ghost().small().icon(IconName::X).tooltip_with_action("Hide AI", &crate::actions::ToggleRight, Some(crate::actions::WORKSPACE)).accessibility_label("Hide AI")
-                    .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::actions::ToggleRight), cx))))
             .child(div().flex_1().min_h_0().child(self.assist.clone().cached(StyleRefinement::default().size_full())))
     }
 
-    fn render_bottom(&self, height: f32, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_bottom(&self, reveal: f32, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme().clone();
-        div()
-            .w_full()
-            .h(px(height.max(0.)))
-            .flex_shrink_0()
-            .overflow_hidden()
-            .border_t_1()
-            .border_color(theme.border.opacity((height / (BOTTOM_H * self.config.zoom)).clamp(0., 1.)))
-            .child(
-                div()
-                    .h(px(BOTTOM_H * self.config.zoom))
-                    .opacity((height / (BOTTOM_H * self.config.zoom)).clamp(0., 1.))
-                    .child(self.render_results(cx)),
-            )
+        v_flex().size_full().min_h_0().overflow_hidden().pt(px(8. * reveal))
+            .child(div().flex_1().min_h_0().w_full().rounded(px(18.)).border_1()
+                .border_color(theme.warning.opacity(0.10)).bg(theme.sidebar).overflow_hidden().opacity(reveal)
+                .child(self.render_results(cx)))
     }
 
     fn render_results(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -446,7 +462,7 @@ impl Workspace {
                 h_flex()
                     .justify_between()
                     .child(h_flex().min_w_0().flex_1().gap_2().child(chips)
-                        .child(Button::new("generate-edge-cases").ghost().xsmall().icon(IconName::FlaskConical).label("Edge cases").accessibility_label("Generate edge cases")
+                        .child(Button::new("generate-edge-cases").ghost().xsmall().icon(IconName::Sparkles).label("Edge cases").accessibility_label("Generate edge cases with AI")
                             .tooltip_with_action("Generate extra test cases", &crate::actions::AssistTests, Some(crate::actions::WORKSPACE))
                             .on_click(cx.listener(|this, _, window, cx| crate::dialogs::open_edge_cases(this, window, cx))))
                         .child(Button::new("add-test-case").ghost().xsmall().icon(IconName::Plus)

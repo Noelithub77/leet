@@ -6,7 +6,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::Disableable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::Textarea;
-use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, h_flex, v_flex};
+use gpui_kit::component::{ActiveTheme as _, Theme, Icon, Sizable as _, h_flex, v_flex};
 
 use super::{Assist, Action, Phase, SendChat, Target, icon, accent};
 
@@ -60,14 +60,26 @@ impl Render for Assist {
         let cards: Vec<AnyElement> = self.runs.iter().rev().filter(|run| Some(&run.slug) == slug.as_ref()).map(|run| self.card(run, window, cx)).collect();
         let busy = self.runs.iter().any(|run| Some(&run.slug) == slug.as_ref() && (run.phase.active() || run.phase == Phase::Confirm));
         let empty = cards.is_empty();
+        let review = self.runs.iter().rev().find(|run| Some(&run.slug) == slug.as_ref() && run.action == Action::Review)
+            .map(|run| self.card(run, window, cx));
         v_flex().key_context("AgentChat").size_full().min_h_0()
             .on_action(cx.listener(|this, _: &SendChat, window, cx| this.send(window, cx)))
-            .child(h_flex().id("ai-tabs").min_w_0().overflow_x_scroll().px_3().gap_1().pb_2()
-                .children([(0, "General", IconName::Sparkles), (1, "My solution", IconName::Code), (2, "Conversation", IconName::MessageCircle)].into_iter().map(|(tab, label, icon)| {
-                    crate::theme::selected_choice(Button::new(SharedString::from(format!("ai-tab-{tab}"))).ghost().small(), self.ai_tab == tab, cx)
-                        .icon(icon).label(label).tooltip(label).on_click(cx.listener(move |this, _, _, cx| { this.ai_tab = tab; cx.notify(); }))
-                })))
-            .when(self.ai_tab == 0, |el| el.child(h_flex().id("ai-action-grid").flex_wrap().justify_center().px_2().py_2().gap_2()
+            .child(h_flex().p_2().gap_1().min_w_0()
+                .child(Icon::new(IconName::Sparkles).small().text_color(theme.primary))
+                .child(h_flex().id("ai-tabs").flex_1().min_w_0().overflow_x_scroll().gap_0p5()
+                    .children([(0, "General"), (1, "Analysis"), (2, "Chats")].into_iter().map(|(tab, label)| {
+                        crate::theme::selected_choice(Button::new(SharedString::from(format!("ai-tab-{tab}"))).ghost().xsmall(), self.ai_tab == tab, cx)
+                            .label(label).on_click(cx.listener(move |this, _, _, cx| { this.ai_tab = tab; cx.notify(); }))
+                    })))
+                .child(Button::new("chat-model").ghost().xsmall().icon(IconName::Settings2)
+                    .tooltip_with_action("Agent and model", &crate::actions::ConfigureAi, Some(crate::actions::WORKSPACE)).accessibility_label("Agent and model")
+                    .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::actions::ConfigureAi), cx)))
+                .child(Button::new("chat-hide").ghost().xsmall().icon(IconName::X)
+                    .tooltip_with_action("Hide AI", &crate::actions::ToggleRight, Some(crate::actions::WORKSPACE)).accessibility_label("Hide AI")
+                    .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::actions::ToggleRight), cx))))
+            .when(self.ai_tab == 0, |el| el.child(v_flex().id("ai-general").flex_1().min_h_0().overflow_y_scroll()
+                .when(empty, |area| area.justify_center())
+                .child(h_flex().id("ai-action-grid").flex_none().flex_wrap().justify_center().px_2().py_4().gap_2()
                 .children([Action::Hints, Action::Stuck, Action::Explain, Action::Visualize, Action::Pattern, Action::Solve].into_iter().map(|action| {
                     let color = accent(action, &theme);
                     let disabled = !has_problem || (action.needs_attempt() && !has_attempt) || (web && action == Action::Solve);
@@ -78,19 +90,22 @@ impl Render for Assist {
                         .child(div().text_xs().child(action.label()))
                         .tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(action.summary()).build(window, cx))
                         .on_click(cx.listener(move |this, _, window, cx| { if !disabled { this.run_action(action, window, cx); } }))
-                }))))
-            .when(self.ai_tab == 1, |el| el.child(v_flex().px_3().py_3().gap_2()
-                .child(Button::new("analyse-my-solution").primary().icon(IconName::Code).label("Analyse my solution")
+                })))))
+            .when(self.ai_tab == 1, |el| el.child(v_flex().id("ai-review").flex_1().min_h_0().overflow_y_scroll().px_3().py_3().gap_3()
+                .when(review.is_none(), |area| area.justify_center())
+                .child(v_flex().w_full().max_w(px(440.)).flex_none().gap_3().mx_auto()
+                .when(review.is_none(), |area| area.child(review_placeholder(&theme)))
+                .child(Button::new("analyse-my-solution").primary().icon(IconName::Sparkles).label("Run analysis")
                     .tooltip("Check correctness, bugs, complexity, improvements, and a visual dry run")
-                    .disabled(!has_problem || !has_attempt)
-                    .on_click(cx.listener(|this, _, window, cx| this.run_action(Action::Review, window, cx))))))
+                    .disabled(!has_problem || !has_attempt || busy)
+                    .on_click(cx.listener(|this, _, window, cx| this.run_action(Action::Review, window, cx)))))
+                .children(review)))
             .when(self.ai_tab == 2, |el| el.child(v_flex().id("assist-cards").flex_1().min_h_0().overflow_y_scroll().track_scroll(&self.scroll).px_3().py_3().gap_3()
                 .when(empty, |el| el.child(v_flex().flex_1().justify_center().items_center().gap_3().py_8()
                     .child(Icon::new(IconName::MessageCircle).size_6().text_color(theme.primary))
                     .child(div().text_sm().child(if !has_problem { "Open a problem to chat" } else { "Ask about this problem" }))
 ))
                 .children(cards)))
-            .when(self.ai_tab != 2, |el| el.child(div().flex_1().min_h_0()))
             .child(v_flex().p_3().gap_2().border_t_1().border_color(theme.border)
                 .child(Textarea::new(&self.composer).disabled(!has_problem).aria_label("Message or action instructions"))
                 .child(h_flex().gap_2().items_center().child(Icon::new(IconName::MessageCircle).small().text_color(theme.muted_foreground))
@@ -107,3 +122,19 @@ impl Render for Assist {
     }
 }
 
+fn review_placeholder(theme: &Theme) -> impl IntoElement {
+    let field = |label: &'static str, detail: &'static str| {
+        v_flex().flex_1().min_w_0().p_3().gap_2().rounded_xl().bg(theme.secondary.opacity(0.45))
+            .child(div().text_xs().text_color(theme.muted_foreground).child(label))
+            .child(div().text_lg().font_family(theme.mono_font_family.clone()).text_color(theme.muted_foreground).child("__"))
+            .child(div().text_xs().text_color(theme.muted_foreground).child(detail))
+    };
+    v_flex().gap_3()
+        .child(h_flex().gap_2().child(field("Time complexity", "Dominant operations"))
+            .child(field("Space complexity", "Auxiliary memory")))
+        .children(["Correctness", "Improvements", "Dry run"].into_iter().map(|label| {
+            h_flex().gap_3().px_3().py_2().rounded_lg().bg(theme.secondary.opacity(0.25))
+                .child(div().flex_1().text_xs().text_color(theme.muted_foreground).child(label))
+                .child(div().font_family(theme.mono_font_family.clone()).text_color(theme.muted_foreground).child("__"))
+        }))
+}

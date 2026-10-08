@@ -4,6 +4,10 @@
 - Per-problem AI chat with custom action instructions, follow-up questions, and locally saved conversations.
 - Native resizable Explorer on Alt+S, Description on Alt+A, and AI on Alt+D.
 - General, My solution, and Conversation AI tabs with a combined solution review and visual dry run.
+- Compact AI navigation with centered empty views and time and space analysis placeholders.
+- Show AI-generated edge cases with a sparkle icon.
+- Resize the rounded results panel vertically and remember its height.
+- Keep Constraints visible below statement content and close other sections when opening it.
 - Generate extra test cases from the case toolbar with custom counts, types, and instructions.
 - Explorer and Description toggles beside Home, AI and results toggles at the top right, and Code icons on problem tabs.
 - Softly rounded panes with very dim orange outlines in Vesper.

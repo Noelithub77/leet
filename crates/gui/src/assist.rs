@@ -1123,7 +1123,7 @@ impl Workspace {
             self.right = true; self.save_layout();
         }
         self.flash(format!("AI: {}", action.label()), cx);
-        self.assist.update(cx, |assist, cx| { assist.ai_tab = 2; assist.start(action, snapshot, target, window, cx); });
+        self.assist.update(cx, |assist, cx| { assist.ai_tab = if action == Action::Review { 1 } else { 2 }; assist.start(action, snapshot, target, window, cx); });
         cx.notify();
     }
 

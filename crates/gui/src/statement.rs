@@ -41,6 +41,7 @@ fn tag_icon(topic: &str) -> IconName {
 pub struct Statement {
     pub(crate) focus: Option<FocusHandle>,
     pub(crate) scroll: ScrollHandle,
+    pub(crate) constraints_scroll: ScrollHandle,
     pub slug: SharedString,
     pub title: SharedString,
     pub blocks: Vec<Block>,
@@ -64,7 +65,28 @@ impl Statement {
     pub fn focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.focus.get_or_insert_with(|| cx.focus_handle()).clone().focus(window, cx);
     }
-    fn scroll_by(&self, delta: f32, cx: &mut Context<Self>) { let mut offset = self.scroll.offset(); offset.y += px(delta); self.scroll.set_offset(offset); cx.notify(); }
+    fn scroll_by(&self, delta: f32, cx: &mut Context<Self>) {
+        let scroll = if !self.reference_open && cx.global::<Sections>().0[2] { &self.constraints_scroll } else { &self.scroll };
+        let mut offset = scroll.offset(); offset.y += px(delta); scroll.set_offset(offset); cx.notify();
+    }
+
+    fn section_button(&self, section: usize, label: &'static str, cx: &mut Context<Self>) -> Button {
+        let open = cx.global::<Sections>().0[section];
+        Button::new(("statement-section", section)).ghost().small().label(label)
+            .icon(if open { IconName::ChevronDown } else { IconName::ChevronRight }).selected(open)
+            .on_click(cx.listener(move |this, _, window, cx| {
+                let sections = toggle_section(cx.global::<Sections>().0, section);
+                let Some(db) = &this.db else { return; };
+                if let Err(error) = db.save_statement_sections(sections) {
+                    window.push_notification(gpui_kit::component::notification::Notification::error(format!("Section preferences not saved: {error}")), cx);
+                    return;
+                }
+                this.scroll.set_offset(point(px(0.), px(0.)));
+                this.constraints_scroll.set_offset(point(px(0.), px(0.)));
+                cx.set_global(Sections(sections));
+                cx.refresh_windows();
+            }))
+    }
     pub fn toggle_reference(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.reference_open = !self.reference_open;
         if self.reference_open && self.reference.is_none() { self.load_reference(window, cx); }
@@ -125,27 +147,23 @@ impl Statement {
     }
     fn render_sections(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let sections = cx.global::<Sections>().0;
-        v_flex().gap_3().children(["Description", "Examples", "Constraints"].into_iter().enumerate().filter_map(|(section, label)| {
+        v_flex().gap_3().children(["Description", "Examples"].into_iter().enumerate().filter_map(|(section, label)| {
             let exists = self.blocks.iter().any(|block| match block {
-                Block::Markdown(_) => section == 0, Block::Example { .. } => section == 1, Block::Constraints(_) => section == 2,
+                Block::Markdown(_) => section == 0, Block::Example { .. } => section == 1, Block::Constraints(_) => false,
             });
-            exists.then(|| v_flex().gap_3()
-                .child(Button::new(("statement-section", section)).ghost().small().label(label)
-                    .icon(if sections[section] { IconName::ChevronDown } else { IconName::ChevronRight }).selected(sections[section])
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        let mut sections = cx.global::<Sections>().0;
-                        sections[section] = !sections[section];
-                        let Some(db) = &this.db else { return; };
-                        if let Err(error) = db.save_statement_sections(sections) {
-                            window.push_notification(gpui_kit::component::notification::Notification::error(format!("Section preferences not saved: {error}")), cx);
-                            return;
-                        }
-                        cx.set_global(Sections(sections));
-                        cx.refresh_windows();
-                    })))
+            exists.then(|| v_flex().gap_3().child(self.section_button(section, label, cx))
                 .when(sections[section], |view| view.child(self.render_blocks(section, cx))))
         }))
     }
+
+    fn render_constraints(&self, max_height: f32, cx: &mut Context<Self>) -> impl IntoElement {
+        v_flex().flex_shrink_0().min_h_0().px_4().py_2().gap_2()
+            .child(self.section_button(2, "Constraints", cx))
+            .when(cx.global::<Sections>().0[2], |view| view.child(div().id("statement-constraints")
+                .max_h(px(max_height)).overflow_y_scroll().track_scroll(&self.constraints_scroll)
+                .child(self.render_blocks(2, cx))))
+    }
+
     fn render_reference(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme().clone(); let weak = cx.weak_entity(); let language = self.language;
         v_flex().gap_3().child(h_flex().gap_2()
@@ -230,6 +248,8 @@ impl Render for Statement {
                     }))
                     .into_any_element()
             }))
+            .when(!self.reference_open && self.blocks.iter().any(|block| matches!(block, Block::Constraints(_))), |view|
+                view.child(self.render_constraints(window.viewport_size().height.as_f32() * 0.4, cx)))
             .when(!self.reference_open && !self.hints.is_empty(), |view| view.child(
                 h_flex().flex_shrink_0().gap_2().px_4().py_2().border_t_1().border_color(theme.border).text_xs().text_color(theme.muted_foreground)
                     .child(key(&hint_key))
@@ -240,5 +260,26 @@ impl Render for Statement {
                     .when(self.hints_shown > 0 && self.hints_shown < self.hints.len(), |row| row.child(
                         Button::new("hide-hints").ghost().xsmall().icon(IconName::X).accessibility_label("Hide hints").tooltip("Hide hints")
                             .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::actions::HideHints), cx))))))
+    }
+}
+
+fn toggle_section(mut sections: [bool; 3], section: usize) -> [bool; 3] {
+    let opening = !sections[section];
+    if opening && section == 2 { sections = [false; 3]; }
+    else if opening { sections[2] = false; }
+    sections[section] = opening;
+    sections
+}
+
+#[cfg(test)]
+mod section_tests {
+    use super::toggle_section;
+
+    #[test]
+    fn constraints_close_other_sections_and_can_be_closed_or_replaced() {
+        assert_eq!(toggle_section([true, true, false], 2), [false, false, true]);
+        assert_eq!(toggle_section([false, false, true], 2), [false; 3]);
+        assert_eq!(toggle_section([false, false, true], 1), [false, true, false]);
+        assert_eq!(toggle_section([true, false, false], 1), [true, true, false]);
     }
 }
