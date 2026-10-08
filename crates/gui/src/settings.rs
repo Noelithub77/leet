@@ -2,18 +2,23 @@
 //! text values edit inline. Every setting is also reachable from universal search.
 
 use gpui_kit::base::{Tab, Tabs};
+use gpui_kit::component::button::Button;
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::{ActiveTheme as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use practice::agents::AgentKind;
+use practice::language::Source;
 
 use crate::assist::Target;
 use crate::workspace::{Center, Focus, Workspace};
 
+gpui_kit::actions!(settings, [NextSettingsTab, PreviousSettingsTab]);
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Setting {
+    PlatformGroup(Source),
     Onboarding,
     ResetSettings,
     Language,
@@ -79,11 +84,12 @@ impl Setting {
 
     pub fn label(self) -> &'static str {
         match self {
+            Setting::PlatformGroup(source) => source.label(),
             Setting::Onboarding => "Run onboarding again",
             Setting::ResetSettings => "Reset app settings",
             Setting::Language => "Preferred language",
             Setting::LanguageServer => "Restart language server",
-            Setting::Codeforces => "Codeforces account",
+            Setting::Codeforces => "Codeforces handle",
             Setting::CompanionEnabled => "Competitive Companion",
             Setting::CompanionPort => "Browser import port",
             Setting::LeetCode => "LeetCode account",
@@ -111,6 +117,7 @@ impl Setting {
     /// Extra words universal search matches.
     pub fn keywords(self) -> &'static str {
         match self {
+            Setting::PlatformGroup(_) => "platform provider account settings",
             Setting::Onboarding => "setup onboarding welcome language account sign in",
             Setting::ResetSettings => "reset defaults preferences fresh start onboarding",
             Setting::Language => "language python cpp c++ go c java preferred",
@@ -141,7 +148,7 @@ impl Setting {
         match self {
             Setting::Language | Setting::Theme | Setting::List | Setting::TestTimeout | Setting::AiAgent | Setting::AiReasoning | Setting::WebChat => Kind::Choice,
             Setting::CompanionEnabled | Setting::AiFast => Kind::Toggle,
-            Setting::AiModel | Setting::Install(_) => Kind::Action,
+            Setting::AiModel | Setting::Install(_) | Setting::PlatformGroup(_) => Kind::Action,
             Setting::Python | Setting::ExternalEditor | Setting::Workspace | Setting::CompanionPort | Setting::Keybinding(_) => Kind::Text,
             Setting::Onboarding | Setting::ResetSettings | Setting::LanguageServer | Setting::Codeforces | Setting::OpenFile | Setting::Font | Setting::Keybindings | Setting::LeetCode | Setting::NeetCode => Kind::Action,
         }
@@ -150,7 +157,7 @@ impl Setting {
     pub fn value(self, ws: &Workspace, cx: &App) -> String {
         let c = &ws.config;
         match self {
-            Setting::Onboarding | Setting::ResetSettings => String::new(),
+            Setting::Onboarding | Setting::ResetSettings | Setting::PlatformGroup(_) => String::new(),
             Setting::Language => c.preferred_language.label().into(),
             Setting::LanguageServer => ws.intelligence.label(ws.session.as_ref().map_or(c.preferred_language, |session| session.language)),
             Setting::Codeforces => if c.codeforces_handle.is_empty() { "Not set".into() } else { c.codeforces_handle.clone() },
@@ -186,21 +193,20 @@ impl Setting {
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
-pub enum SettingsTab { #[default] General, Editor, Appearance, Provider, Ai, Accounts, Keybindings }
+pub enum SettingsTab { #[default] General, Editor, Appearance, Platform, Ai, Keybindings }
 
 impl SettingsTab {
-    const ALL: [Self; 7] = [Self::General, Self::Editor, Self::Appearance, Self::Provider, Self::Ai, Self::Accounts, Self::Keybindings];
+    const ALL: [Self; 6] = [Self::General, Self::Editor, Self::Appearance, Self::Platform, Self::Ai, Self::Keybindings];
     fn label(self) -> &'static str {
-        match self { Self::General => "General", Self::Editor => "Editor", Self::Appearance => "Appearance", Self::Provider => "Provider", Self::Ai => "AI", Self::Accounts => "Accounts", Self::Keybindings => "Keybindings" }
+        match self { Self::General => "General", Self::Editor => "Editor", Self::Appearance => "Appearance", Self::Platform => "Platform", Self::Ai => "AI", Self::Keybindings => "Keybindings" }
     }
     fn settings(self) -> &'static [Setting] {
         match self {
             Self::General => &[Setting::List, Setting::Workspace, Setting::Onboarding, Setting::OpenFile, Setting::ResetSettings],
             Self::Editor => &[Setting::Language, Setting::Python, Setting::ExternalEditor, Setting::TestTimeout, Setting::LanguageServer],
             Self::Appearance => &[Setting::Theme, Setting::Font],
-            Self::Provider => &[Setting::Codeforces, Setting::CompanionEnabled, Setting::CompanionPort],
+            Self::Platform => &[Setting::LeetCode, Setting::NeetCode, Setting::Codeforces, Setting::CompanionEnabled, Setting::CompanionPort],
             Self::Ai => &[Setting::AiAgent, Setting::AiModel, Setting::AiReasoning, Setting::AiFast, Setting::WebChat, Setting::Install(AgentKind::OpenCode), Setting::Install(AgentKind::Antigravity)],
-            Self::Accounts => &[Setting::LeetCode, Setting::NeetCode],
             Self::Keybindings => &[],
         }
     }
@@ -209,12 +215,37 @@ impl SettingsTab {
             && (!matches!(setting, Setting::CompanionEnabled | Setting::CompanionPort) || codeforces_configured)
     }
     fn for_setting(setting: Setting) -> Self {
+        if matches!(setting, Setting::PlatformGroup(_)) { return Self::Platform; }
         if matches!(setting, Setting::Keybinding(_) | Setting::Keybindings) { return Self::Keybindings; }
         Self::ALL.into_iter().find(|tab| tab.settings().contains(&setting)).unwrap_or_default()
     }
 }
 
+fn platform_index(setting: Setting) -> Option<usize> {
+    match setting {
+        Setting::LeetCode | Setting::PlatformGroup(Source::LeetCode) => Some(0),
+        Setting::NeetCode | Setting::PlatformGroup(Source::NeetCode) => Some(1),
+        Setting::Codeforces | Setting::CompanionEnabled | Setting::CompanionPort | Setting::PlatformGroup(Source::Codeforces) => Some(2),
+        _ => None,
+    }
+}
+
+fn platform_rows(open: [bool; 3], codeforces_configured: bool) -> Vec<Setting> {
+    let mut rows = Vec::new();
+    for (index, source) in [Source::LeetCode, Source::NeetCode, Source::Codeforces].into_iter().enumerate() {
+        rows.push(Setting::PlatformGroup(source));
+        if open[index] {
+            rows.extend(SettingsTab::Platform.settings().iter().copied().filter(|setting| {
+                platform_index(*setting) == Some(index) && SettingsTab::Platform.setting_visible(*setting, codeforces_configured)
+            }));
+        }
+    }
+    rows
+}
+
 pub struct SettingsState {
+    pub platform_open: [bool; 3],
+    pub tabs_focused: bool,
     pub selected: usize,
     pub tab: SettingsTab,
     pub scroll: ScrollHandle,
@@ -223,14 +254,26 @@ pub struct SettingsState {
 
 impl SettingsState {
     pub fn new() -> Self {
-        Self { scroll: ScrollHandle::new(), tab: SettingsTab::General, selected: 0, editing: None }
+        Self { platform_open: [false; 3], tabs_focused: false, scroll: ScrollHandle::new(), tab: SettingsTab::General, selected: 0, editing: None }
+    }
+
+    fn move_selection(&mut self, delta: isize, len: usize) {
+        if self.tabs_focused {
+            if delta > 0 && len > 0 { self.tabs_focused = false; self.selected = 0; }
+        } else if len == 0 || (delta < 0 && self.selected == 0) {
+            self.tabs_focused = true;
+        } else {
+            self.selected = (self.selected as isize + delta).clamp(0, len as isize - 1) as usize;
+        }
     }
 }
 
 impl Workspace {
     pub fn open_settings(&mut self, focus: Option<Setting>, window: &mut Window, cx: &mut Context<Self>) {
         self.center = Center::Settings;
+        self.settings.tabs_focused = false;
         self.settings.tab = focus.map(SettingsTab::for_setting).unwrap_or_default();
+        if let Some(index) = focus.and_then(platform_index) { self.settings.platform_open[index] = true; }
         self.settings.selected = 0;
         if let Some(Setting::Keybinding(index)) = focus {
             self.settings.tab = SettingsTab::Keybindings;
@@ -250,15 +293,27 @@ impl Workspace {
     }
 
     pub fn settings_move(&mut self, delta: isize, cx: &mut Context<Self>) {
-        let len = self.setting_rows(cx).len() as isize;
-        self.settings.selected = (self.settings.selected as isize + delta).clamp(0, len - 1) as usize;
+        let len = self.setting_rows(cx).len();
+        self.settings.move_selection(delta, len);
         self.settings.scroll.scroll_to_item(self.settings.selected);
+        cx.notify();
+    }
+
+    pub fn settings_tab_step(&mut self, delta: isize, cx: &mut Context<Self>) {
+        let index = SettingsTab::ALL.iter().position(|tab| *tab == self.settings.tab).unwrap_or(0);
+        self.settings.tab = SettingsTab::ALL[(index as isize + delta).rem_euclid(SettingsTab::ALL.len() as isize) as usize];
+        self.settings.tabs_focused = true;
+        self.settings.selected = 0;
+        self.settings.editing = None;
+        self.settings.scroll.scroll_to_item(0);
         cx.notify();
     }
 
     fn setting_rows(&self, cx: &App) -> Vec<Setting> {
         if self.settings.tab == SettingsTab::Keybindings {
             (0..crate::actions::COMMANDS.len()).map(Setting::Keybinding).collect()
+        } else if self.settings.tab == SettingsTab::Platform {
+            platform_rows(self.settings.platform_open, !self.config.codeforces_handle.trim().is_empty())
         } else {
             self.settings.tab.settings().iter().copied().filter(|setting| {
                 self.settings.tab.setting_visible(*setting, !self.config.codeforces_handle.trim().is_empty()) && self.ai_setting_visible(*setting, cx)
@@ -335,6 +390,13 @@ impl Workspace {
 
     /// Steps a choice setting; `delta` is ±1.
     pub fn settings_cycle(&mut self, delta: isize, window: &mut Window, cx: &mut Context<Self>) {
+        if self.settings.tabs_focused { self.settings_tab_step(delta, cx); return; }
+        if self.setting_rows(cx).is_empty() { self.settings.tabs_focused = true; cx.notify(); return; }
+        if let Setting::PlatformGroup(source) = self.selected_setting(cx) {
+            self.settings.platform_open[platform_index(Setting::PlatformGroup(source)).unwrap()] = delta > 0;
+            cx.notify();
+            return;
+        }
         let setting = self.selected_setting(cx);
         if matches!(setting, Setting::AiAgent | Setting::AiReasoning | Setting::AiFast | Setting::WebChat) { self.cycle_ai(setting, delta, window, cx); return; }
         let step = |len: usize, i: usize| (i as isize + delta).rem_euclid(len as isize) as usize;
@@ -368,6 +430,11 @@ impl Workspace {
     }
 
     pub fn settings_confirm(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.settings.tabs_focused || self.setting_rows(cx).is_empty() {
+            self.settings.tabs_focused = self.setting_rows(cx).is_empty();
+            cx.notify();
+            return;
+        }
         if let Some((setting, input)) = self.settings.editing.as_ref() {
             let setting = *setting;
             let value = input.read(cx).value().trim().to_owned();
@@ -378,6 +445,11 @@ impl Workspace {
         match setting.kind() {
             Kind::Choice => self.settings_cycle(1, window, cx),
             Kind::Toggle => self.settings_cycle(1, window, cx),
+            Kind::Action if matches!(setting, Setting::PlatformGroup(_)) => {
+                let index = platform_index(setting).unwrap();
+                self.settings.platform_open[index] = !self.settings.platform_open[index];
+                cx.notify();
+            }
             Kind::Action if setting == Setting::LanguageServer => self.restart_language_server(window, cx),
             Kind::Action if setting == Setting::Onboarding => self.begin_onboarding(false, window, cx),
             Kind::Action if setting == Setting::ResetSettings => crate::dialogs::open_reset_settings(window, cx),
@@ -481,8 +553,9 @@ impl Workspace {
                         Tab::new(("settings-tab", index)).selected(self.settings.tab == tab).set_position(index + 1, SettingsTab::ALL.len())
                             .h_9().px_3().rounded_lg().child(div().line_height(relative(1.4)).py_1().child(tab.label()))
                             .styles(|styles| styles.selected(|style| style.bg(theme.list_active).text_color(theme.primary)))
+                            .when(self.settings.tabs_focused && focused && self.settings.tab == tab, |tab| tab.border_1().border_color(theme.primary))
                             .on_click(cx.listener(move |this, _, window, cx| {
-                                this.settings.tab = tab; this.settings.selected = 0; this.settings.editing = None;
+                                this.settings.tab = tab; this.settings.tabs_focused = true; this.settings.selected = 0; this.settings.editing = None;
                                 this.settings.scroll.scroll_to_item(0); this.focus_nav(Focus::Settings, window, cx); cx.notify();
                             }))
                     })))
@@ -493,6 +566,26 @@ impl Workspace {
                         let editing = self.settings.editing.as_ref().filter(|(s, _)| *s == setting);
                         let value = setting.value(self, cx);
                         let control = match (editing, setting.kind()) {
+                            (None, _) if matches!(setting, Setting::PlatformGroup(_)) => {
+                                gpui_kit::component::Icon::new(if self.settings.platform_open[platform_index(setting).unwrap()] {
+                                    gpui_kit::assets::IconName::ChevronDown
+                                } else { gpui_kit::assets::IconName::ChevronRight }).into_any_element()
+                            }
+                            (None, _) if matches!(setting, Setting::LeetCode | Setting::NeetCode | Setting::Codeforces) => {
+                                let codeforces = setting == Setting::Codeforces;
+                                let signed_in = if codeforces { !self.config.codeforces_handle.is_empty() } else { value != "Signed out" };
+                                h_flex().gap_3().items_center()
+                                    .when(signed_in, |row| row.child(div().max_w(px(260.)).truncate().child(value)))
+                                    .child(Button::new(("account-action", i)).outline()
+                                        .label(if codeforces { if signed_in { "Edit" } else { "Add handle" } } else if signed_in { "Log out" } else { "Log in" })
+                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                            cx.stop_propagation();
+                                            this.settings.tabs_focused = false;
+                                            this.settings.selected = i;
+                                            this.settings_confirm(window, cx);
+                                        })))
+                                    .into_any_element()
+                            }
                             (Some((_, input)), _) => div().w(px(320.)).child(Input::new(input)).into_any_element(),
                             (None, Kind::Choice | Kind::Toggle) => h_flex()
                                 .gap_2()
@@ -519,18 +612,21 @@ impl Workspace {
                             .gap_4()
                             .rounded_lg()
                             .justify_between()
-                            .when(selected, |el| {
+                            .when(selected && !self.settings.tabs_focused, |el| {
                                 el.bg(if focused || editing.is_some() { theme.list_active } else { theme.list_hover })
                             })
                             .child(
-                                v_flex()
+                                h_flex().items_center().gap_3()
+                                    .when_some(if let Setting::PlatformGroup(source) = setting { Some(source) } else { None }, |row, source| row.child(crate::brand::source_icon(source)))
+                                    .child(v_flex()
                                     .gap_0p5()
-                                    .child(div().font_weight(FontWeight::MEDIUM).child(setting.label()))
-                                    .when_some(setting.note(), |el, note| el.child(div().text_xs().text_color(theme.muted_foreground).child(note))),
+                                    .child(div().font_weight(FontWeight::MEDIUM).child(if matches!(setting, Setting::LeetCode | Setting::NeetCode) { "Account" } else { setting.label() }))
+                                    .when_some(setting.note(), |el, note| el.child(div().text_xs().text_color(theme.muted_foreground).child(note)))),
                             )
                             .child(control)
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 this.settings.selected = i;
+                                this.settings.tabs_focused = false;
                                 this.settings_confirm(window, cx);
                             }))
                     }))
@@ -560,16 +656,51 @@ mod tests {
         }
         assert!(SettingsTab::for_setting(Setting::Keybinding(0)) == SettingsTab::Keybindings);
         assert!(SettingsTab::for_setting(Setting::Theme) == SettingsTab::Appearance);
-        assert!(SettingsTab::for_setting(Setting::LeetCode) == SettingsTab::Accounts);
-        assert!(SettingsTab::for_setting(Setting::Codeforces) == SettingsTab::Provider);
+        assert!(SettingsTab::for_setting(Setting::LeetCode) == SettingsTab::Platform);
+        assert!(SettingsTab::for_setting(Setting::Codeforces) == SettingsTab::Platform);
     }
 
     #[test]
     fn codeforces_companion_settings_require_a_configured_account() {
-        assert!(!SettingsTab::Provider.setting_visible(Setting::CompanionEnabled, false));
-        assert!(!SettingsTab::Provider.setting_visible(Setting::CompanionPort, false));
-        assert!(SettingsTab::Provider.setting_visible(Setting::CompanionEnabled, true));
-        assert!(SettingsTab::Provider.setting_visible(Setting::CompanionPort, true));
-        assert!(SettingsTab::Provider.setting_visible(Setting::Codeforces, false));
+        assert!(!SettingsTab::Platform.setting_visible(Setting::CompanionEnabled, false));
+        assert!(!SettingsTab::Platform.setting_visible(Setting::CompanionPort, false));
+        assert!(SettingsTab::Platform.setting_visible(Setting::CompanionEnabled, true));
+        assert!(SettingsTab::Platform.setting_visible(Setting::CompanionPort, true));
+        assert!(SettingsTab::Platform.setting_visible(Setting::Codeforces, false));
+    }
+
+    #[test]
+    fn arrows_move_between_settings_and_the_tab_row_without_invalid_rows() {
+        let mut state = super::SettingsState::new();
+        state.move_selection(-1, 3);
+        assert!(state.tabs_focused);
+        state.move_selection(-1, 3);
+        assert!(state.tabs_focused);
+        state.move_selection(1, 3);
+        assert!(!state.tabs_focused);
+        assert_eq!(state.selected, 0);
+        state.move_selection(1, 3);
+        assert_eq!(state.selected, 1);
+        state.move_selection(1, 0);
+        assert!(state.tabs_focused);
+        state.move_selection(1, 0);
+        assert!(state.tabs_focused);
+    }
+
+    #[test]
+    fn collapsed_platforms_keep_headers_and_expose_only_their_own_settings() {
+        use super::{platform_index, platform_rows};
+        let closed = platform_rows([false; 3], true);
+        assert_eq!(closed.len(), 3);
+        assert!(closed.iter().all(|row| matches!(row, Setting::PlatformGroup(_))));
+        let rows = platform_rows([true, false, false], true);
+        assert!(rows.contains(&Setting::LeetCode));
+        assert!(!rows.contains(&Setting::NeetCode));
+        assert!(!rows.contains(&Setting::CompanionPort));
+        let rows = platform_rows([false, false, true], false);
+        assert!(rows.contains(&Setting::Codeforces));
+        assert!(!rows.contains(&Setting::CompanionPort));
+        assert!(platform_rows([false, false, true], true).contains(&Setting::CompanionPort));
+        assert_eq!(platform_index(Setting::CompanionPort), platform_index(Setting::Codeforces));
     }
 }

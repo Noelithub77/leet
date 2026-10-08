@@ -1,6 +1,8 @@
 <details open>
 <summary>Feat</summary>
 
+- Collapsible platform settings with provider icons, Log in / Log out buttons, and Codeforces handle.
+- Navigate Settings tabs with Tab, Shift+Tab, and arrow keys.
 - Reset app settings and reopen onboarding while keeping solutions, accounts, progress, and cache.
 - Optional keyboard tour of problems, editor, tests, Assist, and debugger, with Skip available throughout.
 - Collapse Assist result cards while keeping run status and recovery controls visible.
@@ -38,6 +40,8 @@
 <details>
 <summary>Fix</summary>
 
+- Keep global shortcuts working when returning to Debug from Roadmap or Settings.
+- Show account names or emails without internal IDs or authentication metadata.
 - Show debugger step and case shortcuts in their tooltips.
 - Prevent onboarding requirements checks from crashing when opened from Settings.
 - Provider icons in the closed dropdown and a hover submenu for the active NeetCode list.

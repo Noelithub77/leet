@@ -240,7 +240,7 @@ impl Workspace {
         let recent_slugs = db.get("recent").ok().flatten().map(|text| text.lines().map(str::to_owned).take(RECENT_LIMIT).collect()).unwrap_or_default();
         let client = Arc::new(Client::new(creds::load(Account::LeetCode).ok()));
         let accounts = [Account::LeetCode, Account::NeetCode].map(|account| creds::load(account).ok());
-        let account_names = accounts.each_ref().map(|session| session.as_ref().map_or("Signed out".into(), |s| if s.username.is_empty() { "Saved session".into() } else { format!("{} · saved session", s.username) }));
+        let account_names = accounts.each_ref().map(|session| session.as_ref().map_or("Signed out".into(), |s| s.display_name().unwrap_or("Account").to_owned()));
         let neetcode_solved = accounts[1].as_ref().and_then(|s| db.get(&format!("neetcode-progress:{}", s.user_id)).ok().flatten())
             .map(|text| text.lines().map(str::to_owned).collect()).unwrap_or_default();
         let editor = cx.new(|cx| {
@@ -592,8 +592,16 @@ impl Workspace {
 
     pub fn focus_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.focus_area = Focus::Editor;
-        let handle = self.editor.read(cx).focus_handle(cx);
-        handle.focus(window, cx);
+        // Keep a mounted focus target while the center view changes.
+        self.focus.focus(window, cx);
+        let workspace = cx.weak_entity();
+        window.defer(cx, move |window, cx| {
+            let _ = workspace.update(cx, |this, cx| {
+                if this.center != Center::Editor || this.focus_area != Focus::Editor { return; }
+                if this.debug_mode { this.debugger.update(cx, |debugger, cx| debugger.focus(window, cx)); }
+                else { let handle = this.editor.read(cx).focus_handle(cx); handle.focus(window, cx); }
+            });
+        });
         cx.notify();
     }
 

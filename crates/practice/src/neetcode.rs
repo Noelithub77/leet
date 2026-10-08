@@ -84,6 +84,14 @@ impl Client {
         let imported = parse_import(raw)?;
         let mut guard = self.session.lock().map_err(|_| anyhow!("NeetCode session lock unavailable"))?;
         let (mut session, expiry) = self.refresh(imported)?;
+        session.username = self.identity(&session)?;
+        creds::save(Account::NeetCode, session.clone()).map_err(|_| anyhow!("Could not persist NeetCode session"))?;
+        *guard = Some((session.clone(), expiry));
+        Ok(session)
+    }
+
+    /// Resolve a human identity for existing sessions that only retained an internal ID.
+    pub fn identity(&self, session: &Creds) -> Result<String> {
         let mut response = self.agent.post(&self.lookup_url)
             .send_json(json!({"idToken": session.id_token}))
             .map_err(|_| anyhow!("NeetCode identity lookup unavailable; retry"))?;
@@ -93,10 +101,7 @@ impl Client {
         let users = lookup["users"].as_array().ok_or_else(|| anyhow!("Missing NeetCode identity"))?;
         if users.len() != 1 || users[0]["localId"].as_str() != Some(&session.user_id)
             || users[0]["disabled"].as_bool() == Some(true) { bail!("NeetCode identity rejected"); }
-        session.username = users[0]["displayName"].as_str().unwrap_or(&session.user_id).into();
-        creds::save(Account::NeetCode, session.clone()).map_err(|_| anyhow!("Could not persist NeetCode session"))?;
-        *guard = Some((session.clone(), expiry));
-        Ok(session)
+        Ok(profile_name(&users[0]).to_owned())
     }
 
     fn call<T: DeserializeOwned>(&self, function: &str, args: Value) -> Result<(T, Creds)> {
@@ -156,6 +161,11 @@ impl Client {
     }
 }
 
+fn profile_name(user: &Value) -> &str {
+    ["displayName", "email"].into_iter().filter_map(|field| user[field].as_str())
+        .map(str::trim).find(|name| !name.is_empty() && Some(*name) != user["localId"].as_str()).unwrap_or("")
+}
+
 fn parse_import(raw: &str) -> Result<Creds> {
     if raw.len() > 1 << 20 { bail!("NeetCode session export is too large"); }
     let imported: Import = serde_json::from_str(raw).map_err(|_| anyhow!("Paste the JSON copied by the NeetCode browser script"))?;
@@ -166,6 +176,14 @@ fn parse_import(raw: &str) -> Result<Creds> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn profile_labels_prefer_names_then_email_and_never_ids() {
+        assert_eq!(profile_name(&json!({"localId":"uid", "displayName":" Name ", "email":"mail@example.com"})), "Name");
+        assert_eq!(profile_name(&json!({"localId":"uid", "displayName":" ", "email":"mail@example.com"})), "mail@example.com");
+        assert_eq!(profile_name(&json!({"localId":"uid", "displayName":"uid"})), "");
+        assert_eq!(profile_name(&json!({"localId":"uid"})), "");
+    }
     #[test]
     fn import_requires_identity_and_does_not_trust_browser_id_tokens() {
         assert!(parse_import(r#"{"refreshToken":"token"}"#).is_err());
@@ -237,6 +255,19 @@ mod protocol_tests {
             load_session: |_| Ok(Creds { id_token: "test-id".into(), ..Default::default() }),
             session: Mutex::new(Some((Creds { id_token: "test-id".into(), ..Default::default() }, Instant::now() + Duration::from_secs(3600)))),
             ..Default::default()
+        }
+    }
+
+    #[test]
+    fn identity_lookups_verify_the_owner_and_resolve_email() {
+        for user in ["expected", "other"] {
+            let (url, server) = response(200, json!({"users":[{"localId":user,"email":"person@example.com"}]}));
+            let client = Client { lookup_url: url, ..Default::default() };
+            let session = Creds { user_id: "expected".into(), id_token: "test-id".into(), ..Default::default() };
+            let result = client.identity(&session);
+            if user == "expected" { assert_eq!(result.unwrap(), "person@example.com"); }
+            else { assert!(result.is_err()); }
+            assert!(server.join().unwrap().contains("test-id"));
         }
     }
 

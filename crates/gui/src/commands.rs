@@ -105,6 +105,12 @@ impl Workspace {
                     this.open_settings(None, window, cx);
                 }
             }))
+            .on_action(cx.listener(|this, _: &crate::settings::NextSettingsTab, _, cx| {
+                if this.center == Center::Settings { this.settings_tab_step(1, cx); }
+            }))
+            .on_action(cx.listener(|this, _: &crate::settings::PreviousSettingsTab, _, cx| {
+                if this.center == Center::Settings { this.settings_tab_step(-1, cx); }
+            }))
             .on_action(cx.listener(|this, _: &FocusSidebar, window, cx| {
                 if this.center == Center::Home { this.home.sidebar = true; }
                 this.left = true;

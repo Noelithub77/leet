@@ -228,8 +228,7 @@ pub fn bind_keys(config: &practice::config::Config, cx: &mut App) {
         .iter()
         .flat_map(|c| c.effective_key(config).split('|').filter(|k| !k.is_empty()).map(move |k| (c, k)))
         .filter_map(|(c, key)| {
-            let context = KeyBindingContextPredicate::parse(WORKSPACE).expect("valid context");
-            KeyBinding::load(key, (c.action)(), Some(context.into()), false, None, cx.keyboard_mapper().as_ref())
+            KeyBinding::load(key, (c.action)(), None, false, None, cx.keyboard_mapper().as_ref())
                 .map_err(|error| eprintln!("leet: invalid shortcut for {}: {error}", c.label)).ok()
         })
         .collect();
@@ -253,6 +252,8 @@ pub fn bind_keys(config: &practice::config::Config, cx: &mut App) {
         // Escape while editing a setting cancels the edit instead of clearing the field.
         KeyBinding::new("escape", Back, Some("Settings > Input")),
         KeyBinding::new("enter", Confirm, Some("Settings > Input")),
+        KeyBinding::new("tab", crate::settings::NextSettingsTab, Some("Settings && !Input")),
+        KeyBinding::new("shift-tab", crate::settings::PreviousSettingsTab, Some("Settings && !Input")),
     ]);
     cx.bind_keys(bindings);
 }

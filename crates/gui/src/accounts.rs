@@ -5,7 +5,7 @@ use std::sync::Arc;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::notification::Notification;
-use gpui_kit::component::{ActiveTheme as _, WindowExt as _, h_flex, v_flex};
+use gpui_kit::component::{ActiveTheme as _, Disableable as _, WindowExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use practice::creds::{self, Account, Creds};
@@ -25,6 +25,7 @@ pub fn bind_keys(cx: &mut App) {
 }
 
 struct AccountForm {
+    focus: FocusHandle,
     account: Account,
     secret: Entity<InputState>,
     user_agent: Entity<InputState>,
@@ -40,17 +41,22 @@ pub fn open(account: Account, has_session: bool, window: &mut Window, cx: &mut C
         let secret = cx.new(|cx| InputState::new(window, cx).masked(true)
             .placeholder(match account { Account::LeetCode => "Cookie header", Account::NeetCode => "Browser session JSON" }));
         let user_agent = cx.new(|cx| InputState::new(window, cx).placeholder("User-Agent from the same request"));
-        AccountForm { account, secret, user_agent, workspace, busy: false, has_session, error: None }
+        AccountForm { focus: cx.focus_handle(), account, secret, user_agent, workspace, busy: false, has_session, error: None }
     });
     let restore = cx.weak_entity();
-    let focus = form.read(cx).secret.clone();
-    window.open_dialog(cx, move |dialog, _, _| { let restore = restore.clone(); dialog.title(format!("{} account", account.label())).w(px(580.)).on_close(move |_, window, cx| {
+    let focus = form.read(cx).focus.clone();
+    let input = form.read(cx).secret.clone();
+    window.open_dialog(cx, move |dialog, _, cx| { let restore = restore.clone(); let busy = form.read(cx).busy; dialog.title(format!("{} account", account.label())).w(px(580.))
+        .close_button(!busy).overlay_closable(!busy).keyboard(!busy).on_close(move |_, window, cx| {
         let _ = restore.update(cx, |ws, cx| {
             if let Some(setup) = ws.onboarding.as_ref().filter(|_| ws.center == crate::workspace::Center::Onboarding) { let focus = setup.read(cx).focus.clone(); focus.focus(window, cx); }
             else { ws.focus_nav(crate::workspace::Focus::Settings, window, cx); }
         });
     }).child(form.clone()) });
-    window.defer(cx, move |window, cx| focus.update(cx, |input, cx| input.focus(window, cx)));
+    window.defer(cx, move |window, cx| {
+        if has_session { focus.focus(window, cx); }
+        else { input.update(cx, |input, cx| input.focus(window, cx)); }
+    });
 }
 
 impl AccountForm {
@@ -85,7 +91,7 @@ impl AccountForm {
                                     ws.rebuild_library();
                                 }
                             }
-                            if ws.center != crate::workspace::Center::Onboarding { ws.open_settings(None, window, cx); } else { cx.notify(); }
+                            if ws.center != crate::workspace::Center::Onboarding { ws.open_settings(Some(if matches!(account, Account::LeetCode) { crate::settings::Setting::LeetCode } else { crate::settings::Setting::NeetCode }), window, cx); } else { cx.notify(); }
                         });
                         window.close_dialog(cx);
                     }
@@ -134,7 +140,7 @@ impl AccountForm {
                         this.secret.update(cx, |input, cx| input.set_value("", window, cx));
                         let _ = workspace.update(cx, |ws, cx| {
                             ws.clear_remote_history();
-                            ws.account_names[account.index()] = format!("{} · verified", session.username);
+                            ws.account_names[account.index()] = session.display_name().unwrap_or("Account").to_owned();
                             if matches!(account, Account::LeetCode) {
                                 ws.client = Arc::new(Client::new(Some(session)));
                                 ws.refresh_catalog(true, window, cx);
@@ -142,7 +148,7 @@ impl AccountForm {
                                 ws.neetcode = Arc::new(neetcode::Client::default());
                                 ws.refresh_neetcode(window, cx);
                             }
-                            if ws.center != crate::workspace::Center::Onboarding { ws.open_settings(None, window, cx); } else { cx.notify(); }
+                            if ws.center != crate::workspace::Center::Onboarding { ws.open_settings(Some(if matches!(account, Account::LeetCode) { crate::settings::Setting::LeetCode } else { crate::settings::Setting::NeetCode }), window, cx); } else { cx.notify(); }
                         });
                         window.close_dialog(cx);
                         window.push_notification(Notification::success(format!("{} signed in", account.label())), cx);
@@ -162,6 +168,17 @@ impl Render for AccountForm {
             Account::LeetCode => "Sign in in your browser. From a leetcode.com/graphql Network request, copy Cookie and User-Agent.",
             Account::NeetCode => "Sign in on neetcode.io. Copy the export script, run it in that page’s browser console, then paste its output.",
         };
+        if self.has_session {
+            return v_flex().key_context("AccountForm").track_focus(&self.focus).gap_3()
+                .child(format!("Log out of {}?", account.label()))
+                .child(div().text_sm().text_color(cx.theme().muted_foreground).child("This removes the shared local login from leet and verd. Your browser login and solutions are kept."))
+                .when_some(self.error.clone(), |form, error| form.child(div().text_sm().text_color(cx.theme().danger).child(error)))
+                .child(h_flex().justify_end().gap_2()
+                    .child(Button::new("cancel-log-out").label("Cancel").disabled(self.busy).on_click(|_, window, cx| window.close_dialog(cx)))
+                    .child(Button::new("log-out").danger().disabled(self.busy).label(if self.busy { "Logging out…" } else { "Log out" })
+                        .on_click(cx.listener(|this, _, window, cx| this.sign_out(window, cx)))))
+                .into_any_element();
+        }
         v_flex().key_context("AccountForm").gap_3()
             .on_action(cx.listener(|this, _: &SaveAccount, window, cx| this.save(window, cx)))
             .child(div().text_sm().text_color(cx.theme().muted_foreground).child(instructions))
@@ -177,11 +194,10 @@ impl Render for AccountForm {
             .child(Input::new(&self.secret))
             .when(matches!(account, Account::LeetCode), |form| form.child(Input::new(&self.user_agent)))
             .when_some(self.error.clone(), |form, error| form.child(div().text_sm().text_color(cx.theme().danger).child(error)))
-            .when(self.has_session, |form| form.child(Button::new("sign-out").label("Sign out")
-                .on_click(cx.listener(|this, _, window, cx| this.sign_out(window, cx)))))
-            .child(Button::new("save-account").primary().label(if self.busy { "Verifying…" } else { "Verify and save" })
+            .child(Button::new("save-account").primary().label(if self.busy { "Logging in…" } else { "Log in" })
                 .on_click(cx.listener(|this, _, window, cx| this.save(window, cx))))
             .child(div().text_xs().text_color(cx.theme().muted_foreground).child("Ctrl+Enter to save · Escape to cancel"))
+            .into_any_element()
     }
 }
 
@@ -195,14 +211,15 @@ impl Workspace {
                 let (progress, account) = client.progress()?;
                 let slugs: HashSet<String> = progress.values().flatten().map(|s| s.trim_matches('/').to_owned()).collect();
                 db.set(&format!("neetcode-progress:{}", account.user_id), &slugs.iter().cloned().collect::<Vec<_>>().join("\n"))?;
-                anyhow::Ok((slugs, account.username))
+                let name = account.display_name().map(str::to_owned).or_else(|| client.identity(&account).ok().filter(|name| !name.is_empty())).unwrap_or_else(|| "Account".into());
+                anyhow::Ok((slugs, name))
             }).await;
             let _ = this.update_in(cx, |this, window, cx| {
                 this.neetcode_syncing = false;
                 match result {
                     Ok((slugs, name)) => {
                         this.neetcode_solved = slugs;
-                        this.account_names[1] = format!("{name} · synced");
+                        this.account_names[1] = name;
                         this.rebuild_library();
                     }
                     Err(error) => this.toast(Notification::error(format!("NeetCode sync: {error}")), window, cx),

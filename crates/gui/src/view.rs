@@ -98,6 +98,7 @@ impl Render for Workspace {
             .on_key_down(cx.listener(|this, event, window, cx| this.home_type(event, window, cx))).child(tabs).child(
             h_flex().flex_1().min_h_0().mx_2().gap_2().track_focus(&self.nav_focus)
                 .when(self.nav_focus.is_focused(window), |view| Workspace::register_nav(view, cx))
+                .when(self.nav_focus.is_focused(window) && self.center == Center::Settings, |view| view.key_context("VgNav Settings"))
             .child(self.render_left(left_w, window, cx))
             .child(
                 v_flex()

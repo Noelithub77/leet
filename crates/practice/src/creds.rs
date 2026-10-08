@@ -63,6 +63,13 @@ pub struct Creds {
 }
 
 impl Creds {
+    /// Human-facing identity; older sessions sometimes saved an internal ID as the name.
+    pub fn display_name(&self) -> Option<&str> {
+        let name = self.username.trim();
+        if !name.is_empty() && name != self.user_id { return Some(name); }
+        self.extra.get("email").and_then(serde_json::Value::as_str).map(str::trim).filter(|email| !email.is_empty() && *email != self.user_id)
+    }
+
     fn valid(&self) -> bool {
         !self.cookie.is_empty() || !self.refresh_token.is_empty()
     }
@@ -209,6 +216,20 @@ fn write_private(path: &std::path::Path, bytes: &[u8]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn display_identity_never_falls_back_to_internal_ids() {
+        let mut session = Creds { username: "internal-id".into(), user_id: "internal-id".into(), ..Default::default() };
+        assert_eq!(session.display_name(), None);
+        session.extra.insert("email".into(), serde_json::json!(" person@example.com "));
+        assert_eq!(session.display_name(), Some("person@example.com"));
+        session.username = " person ".into();
+        assert_eq!(session.display_name(), Some("person"));
+        session.username.clear();
+        assert_eq!(session.display_name(), Some("person@example.com"));
+        session.extra.clear();
+        assert_eq!(session.display_name(), None);
+    }
 
     #[test]
     fn reads_cookie_values() {

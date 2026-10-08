@@ -195,7 +195,7 @@ impl Render for Setup {
                         let signed_in = status != "Signed out";
                         h_flex().w_full().p_3().gap_3().items_center().rounded_lg().border_1().border_color(theme.border)
                             .child(v_flex().flex_1().gap_1().child(account.label()).child(div().text_xs().text_color(theme.muted_foreground).child(status)))
-                            .child(Button::new(("setup-account", account.index())).outline().label(if signed_in { "Manage" } else { "Sign in" })
+                            .child(Button::new(("setup-account", account.index())).outline().label(if signed_in { "Log out" } else { "Log in" })
                                 .on_click(move |_, window, cx| { let _ = workspace.update(cx, |_, cx| crate::accounts::open(account, signed_in, window, cx)); }))
                     })))
                     .child(v_flex().gap_2().child(div().child("Codeforces handle")).child(Input::new(&self.handle))
