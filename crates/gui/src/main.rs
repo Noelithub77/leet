@@ -67,6 +67,7 @@ fn main() {
         omnibar::bind_keys(cx);
         accounts::bind_keys(cx);
         ai::bind_keys(cx);
+        assist::bind_keys(cx);
         debug_view::bind_keys(cx);
         tour::bind_keys(cx);
         case_editor::bind_keys(cx);

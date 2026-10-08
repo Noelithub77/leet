@@ -37,8 +37,7 @@ impl Workspace {
                     this.focus_nav(if this.home.sidebar { if this.config.source == practice::language::Source::NeetCode { Focus::Explorer } else { Focus::Sidebar } } else { Focus::Home }, window, cx);
                     return;
                 }
-                this.left = !this.left || this.history_mode;
-                this.history_mode = false;
+                this.left = !this.left;
                 this.zen = false;
                 if this.left {
                     this.focus_nav(if this.config.source == practice::language::Source::NeetCode { Focus::Explorer } else { Focus::Sidebar }, window, cx);
@@ -46,7 +45,7 @@ impl Workspace {
                     this.focus_editor(window, cx);
                 }
                 this.save_layout();
-                this.flash(if this.left { "Sidebar" } else { "Sidebar hidden" }, cx);
+                this.flash(if this.left { "Explorer" } else { "Explorer hidden" }, cx);
             }))
             .on_action(cx.listener(|this, _: &ToggleTags, _, cx| {
                 this.config.show_tags = !this.config.show_tags;
@@ -56,14 +55,22 @@ impl Workspace {
             }))
             .on_action(cx.listener(|this, _: &ToggleReference, window, cx| {
                 if this.session.is_none() { return; }
-                this.back_to_editor(window, cx); this.right = true;
+                this.back_to_editor(window, cx); this.description = true;
                 this.statement.update(cx, |statement, cx| statement.toggle_reference(window, cx));
             }))
-            .on_action(cx.listener(|this, _: &ToggleRight, _, cx| {
+            .on_action(cx.listener(|this, _: &ToggleRight, window, cx| {
                 this.right = !this.right;
                 this.zen = false;
+                if !this.right { this.focus_editor(window, cx); }
                 this.save_layout();
-                this.flash(if this.right { "Statement" } else { "Statement hidden" }, cx);
+                this.flash(if this.right { "AI chat" } else { "AI chat hidden" }, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ToggleDescription, window, cx| {
+                this.description = !this.description;
+                this.zen = false;
+                if !this.description { this.focus_editor(window, cx); }
+                this.save_layout();
+                this.flash(if this.description { "Description" } else { "Description hidden" }, cx);
             }))
             .on_action(cx.listener(|this, _: &ToggleBottom, _, cx| {
                 this.bottom = !this.bottom;
@@ -74,14 +81,14 @@ impl Workspace {
             .on_action(cx.listener(|this, _: &ToggleHistory, window, cx| {
                 this.history_mode = !this.history_mode;
                 if this.history_mode {
-                    this.right = true;
+                    this.description = true;
                     this.zen = false;
                     this.center = Center::Editor;
                     if let Some(s) = &mut this.session {
                         s.selected_commit = 0;
                     }
                     if this.session.as_ref().is_some_and(|session| !session.history_loaded) { this.load_remote_versions(window, cx); }
-                    this.focus_nav(Focus::Sidebar, window, cx);
+                    this.focus_nav(Focus::History, window, cx);
                 } else {
                     this.focus_editor(window, cx);
                 }
@@ -120,7 +127,7 @@ impl Workspace {
             }))
             .on_action(cx.listener(|this, _: &FocusStatement, window, cx| {
                 if this.session.is_none() { return; }
-                this.back_to_editor(window, cx); this.right = true;
+                this.back_to_editor(window, cx); this.description = true;
                 let statement = this.statement.clone(); window.defer(cx, move |window, cx| statement.update(cx, |statement, cx| statement.focus(window, cx)));
             }))
             .on_action(cx.listener(|this, _: &FocusEditor, window, cx| {
@@ -178,12 +185,6 @@ impl Workspace {
             .on_action(cx.listener(|this, _: &AssistExplain, window, cx| this.run_assist(Action::Explain, window, cx)))
             .on_action(cx.listener(|this, _: &AssistSolve, window, cx| this.run_assist(Action::Solve, window, cx)))
             .on_action(cx.listener(|this, _: &StopAssist, _, cx| { this.assist.update(cx, |assist, cx| assist.stop_all(cx)); this.flash("AI stopped", cx); }))
-            .on_action(cx.listener(|this, _: &ToggleAssist, window, cx| {
-                this.assist_open = !(this.right && this.assist_open && !this.history_mode);
-                this.right = true; this.history_mode = false; this.save_layout();
-                if !this.assist_open { this.focus_editor(window, cx); }
-                this.flash(if this.assist_open { "Assist" } else { "Statement" }, cx);
-            }))
             .on_action(cx.listener(|this, _: &ToggleDebug, window, cx| {
                 if this.center != Center::Editor { this.back_to_editor(window, cx); }
                 let on = !this.debug_mode;
@@ -275,7 +276,7 @@ impl Workspace {
                 Focus::Roadmap => this.roadmap_step(-1.0, 0.0, cx),
                 Focus::RoadmapTopic => this.focus_nav(Focus::Roadmap, window, cx),
                 Focus::Settings => this.settings_cycle(-1, window, cx),
-                _ if this.history_mode => {}
+                Focus::History => {}
                 _ => this.sidebar_expand(false, window, cx),
             }))
             .on_action(cx.listener(|this, _: &Right, window, cx| match this.focus_area {
@@ -285,7 +286,7 @@ impl Workspace {
                 Focus::Roadmap => this.roadmap_step(1.0, 0.0, cx),
                 Focus::RoadmapTopic => {},
                 Focus::Settings => this.settings_cycle(1, window, cx),
-                _ if this.history_mode => {}
+                Focus::History => {}
                 _ => this.sidebar_expand(true, window, cx),
             }))
             .on_action(cx.listener(|this, _: &Confirm, window, cx| match this.focus_area {
@@ -294,7 +295,7 @@ impl Workspace {
                 Focus::Roadmap => this.roadmap_open_topic(window, cx),
                 Focus::RoadmapTopic => this.roadmap_open_problem(window, cx),
                 Focus::Settings => this.settings_confirm(window, cx),
-                _ if this.history_mode => this.restore_commit(window, cx),
+                Focus::History => this.restore_commit(window, cx),
                 _ => this.sidebar_activate(window, cx),
             }))
             .on_action(cx.listener(|this, _: &Back, window, cx| {

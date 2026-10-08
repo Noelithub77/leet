@@ -2,6 +2,7 @@
 
 pub mod agents;
 pub mod assist;
+pub mod chat;
 pub mod config;
 pub mod debugger;
 pub mod language;

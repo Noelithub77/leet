@@ -190,12 +190,12 @@ impl Workspace {
 
     pub fn render_topic_grid(&self, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex().px_2().gap_1().children(TOPICS.chunks(TOPIC_COLUMNS as usize).enumerate().map(|(row, topics)| {
-            h_flex().gap_1().children(topics.iter().enumerate().map(|(column, topic)| {
+            h_flex().w_full().gap_1().children(topics.iter().enumerate().map(|(column, topic)| {
                 let index = row * TOPIC_COLUMNS as usize + column;
                 let (done, total) = self.library.progress(topic.name);
                 crate::theme::selected_choice(Button::new(("explorer-topic", index)).ghost(), self.explorer_topic == index, cx)
-                    .w(px(69. * self.config.zoom)).h(px(46. * self.config.zoom))
-                    .child(v_flex().items_center().gap_1().child(Icon::new(topic_icon(index)).size(px(16.))).child(div().text_size(px(10.)).child(short_topic(index))))
+                    .flex_1().min_w_0().h(px(46. * self.config.zoom))
+                    .child(v_flex().items_center().gap_1().child(Icon::new(topic_icon(index)).size(px(16.))).child(div().w_full().truncate().text_center().text_size(px(10.)).child(short_topic(index))))
                     .tooltip(format!("{} · {done}/{total} solved", topic.name)).accessibility_label(topic.name)
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.explorer_topic = index; this.rebuild_rows(); this.sidebar_sel = 0;

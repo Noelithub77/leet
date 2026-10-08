@@ -1,5 +1,5 @@
-//! The Assist panel: an icon grid of AI actions, live run status, and a result card per run.
-//! Runs execute on their own threads and stream events back; cards are kept per problem.
+//! Per-problem AI conversations, structured action results, and agent lifecycle.
+//! Runs execute on background threads and stream events back; conversations stay local.
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -11,7 +11,8 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::Disableable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::shimmer::ShimmerText;
-use gpui_kit::component::tooltip::Tooltip;
+use gpui_kit::component::input::{InputEvent, TextareaState};
+use gpui_kit::component::text::TextView;
 use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, Theme, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
@@ -24,6 +25,16 @@ use practice::viz::Tone;
 
 use crate::gen_ui::player::{self, Playback};
 use crate::workspace::Workspace;
+
+gpui_kit::actions!(chat, [SendChat]);
+
+pub fn bind_keys(cx: &mut App) {
+    cx.bind_keys([KeyBinding::new("ctrl-enter", SendChat, Some("AgentChat")),
+        KeyBinding::new("ctrl-enter", SendChat, Some("AgentChat > Input"))]);
+}
+
+#[path = "chat_view.rs"]
+mod chat_view;
 
 const SOLVE_ATTEMPTS: usize = 5;
 
@@ -144,6 +155,9 @@ pub struct Run {
     target: Option<Target>,
     generation: u64,
     collapsed: bool,
+    instructions: String,
+    history: String,
+    reply: String,
 }
 
 impl Run {
@@ -172,18 +186,43 @@ pub struct Assist {
     slug: Option<String>,
     ticker: Option<Task<()>>,
     scroll: ScrollHandle,
+    composer: Entity<TextareaState>,
+    composer_slug: Option<String>,
+    drafts: HashMap<String, String>,
 }
 
-/// Saved answers per problem, newest first.
+/// Saved conversation turns per problem, newest first; old answer-only entries still load.
 #[derive(serde::Serialize, serde::Deserialize)]
-struct Saved { model: String, agent: Option<AgentKind>, answer: Answer }
+struct Saved {
+    model: String,
+    agent: Option<AgentKind>,
+    answer: Option<Answer>,
+    #[serde(default)] instructions: String,
+    #[serde(default)] action: Option<Action>,
+    #[serde(default)] phase: SavedPhase,
+}
+
+#[derive(Default, serde::Serialize, serde::Deserialize)]
+enum SavedPhase { #[default] Done, Stopped, Failed(String) }
+
+impl Saved {
+    fn from_run(run: &Run) -> Self {
+        Self { model: run.model.clone(), agent: run.agent, answer: run.answer.clone(), instructions: run.instructions.clone(), action: Some(run.action),
+            phase: match &run.phase { Phase::Done => SavedPhase::Done, Phase::Failed(error) => SavedPhase::Failed(error.clone()), _ => SavedPhase::Stopped } }
+    }
+}
 
 impl Assist {
-    pub fn new(workspace: WeakEntity<Workspace>, db: Arc<Db>, cx: &mut Context<Self>) -> Self {
+    pub fn new(workspace: WeakEntity<Workspace>, db: Arc<Db>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let catalog_cache = Arc::new(agents::CatalogCache::new(db.clone()));
         let catalogs = AgentKind::ALL.into_iter().filter_map(|kind| catalog_cache.cached(kind).map(|catalog| (kind, Loadable::Ready(catalog)))).collect();
+        let composer = cx.new(|cx| TextareaState::new(window, cx).rows(3).placeholder("Ask a question or add instructions…"));
+        cx.subscribe_in(&composer, window, |this, _, event: &InputEvent, window, cx| {
+            if matches!(event, InputEvent::PressEnter { secondary: true, .. }) { this.send(window, cx); }
+            cx.notify();
+        }).detach();
         let mut this = Self { workspace, db, agents: vec![], detecting: false, catalogs, catalog_cache, requested_catalogs: HashSet::new(), installing: None,
-            runs: vec![], next_id: 0, slug: None, ticker: None, scroll: ScrollHandle::new() };
+            runs: vec![], next_id: 0, slug: None, ticker: None, scroll: ScrollHandle::new(), composer, composer_slug: None, drafts: HashMap::new() };
         this.detect(cx);
         this
     }
@@ -248,16 +287,17 @@ impl Assist {
         }).detach();
     }
 
-    /// Shows the cards of `slug`, restoring saved answers the first time.
+    /// Switches conversations, restoring saved turns and legacy answers the first time.
     pub fn set_problem(&mut self, slug: Option<&str>, cx: &mut Context<Self>) {
         if self.slug.as_deref() == slug { return; }
         self.slug = slug.map(str::to_owned);
         if let Some(slug) = slug && !self.runs.iter().any(|run| run.slug == slug) {
                 let saved: Vec<Saved> = self.db.get(&format!("assist:{slug}")).ok().flatten().and_then(|text| serde_json::from_str(&text).ok()).unwrap_or_default();
                 for saved in saved.into_iter().rev() {
-                    let id = self.next_id(); let action = action_of(&saved.answer);
+                    let id = self.next_id(); let action = saved.action.or_else(|| saved.answer.as_ref().map(action_of)).unwrap_or(Action::Ask);
                     let mut run = Run::new(id, slug.into(), action, saved.agent, saved.model, None, None);
-                    run.elapsed = Some(Duration::ZERO); run.phase = Phase::Done; run.set_answer(Some(saved.answer));
+                    run.instructions = saved.instructions;
+                    run.elapsed = Some(Duration::ZERO); run.phase = match saved.phase { SavedPhase::Done => Phase::Done, SavedPhase::Stopped => Phase::Stopped, SavedPhase::Failed(error) => Phase::Failed(error) }; run.set_answer(saved.answer);
                     self.runs.insert(0, run);
                 }
         }
@@ -265,8 +305,7 @@ impl Assist {
     }
 
     fn save(&self, slug: &str) {
-        let saved: Vec<Saved> = self.runs.iter().filter(|run| run.slug == slug && run.action != Action::Solve)
-            .filter_map(|run| Some(Saved { model: run.model.clone(), agent: run.agent, answer: run.answer.clone()? })).take(12).collect();
+        let saved: Vec<Saved> = self.runs.iter().filter(|run| run.slug == slug).map(Saved::from_run).collect();
         if let Ok(text) = serde_json::to_string(&saved) { let _ = self.db.set(&format!("assist:{slug}"), &text); }
     }
 
@@ -287,23 +326,37 @@ impl Assist {
 
     /// Starts `action`, or opens the web chat when no agent is installed.
     pub fn start(&mut self, action: Action, snapshot: Snapshot, target: Target, window: &mut Window, cx: &mut Context<Self>) {
+        self.set_problem(Some(&snapshot.slug), cx);
+        self.sync_composer(window, cx);
+        let instructions = self.composer.read(cx).value().trim().to_string();
+        if action == Action::Ask && instructions.is_empty() { return; }
+        if instructions.chars().count() > practice::chat::INSTRUCTIONS_LIMIT {
+            use gpui_kit::component::WindowExt as _;
+            window.push_notification(gpui_kit::component::notification::Notification::warning("Keep the prompt under 8,000 characters"), cx);
+            return;
+        }
+        let history = practice::chat::context(self.runs.iter().filter(|run| run.slug == snapshot.slug).filter_map(|run|
+            Some(practice::chat::Turn { action: run.action, instructions: run.instructions.clone(), answer: run.answer.clone()? })));
         if let Target::Web(provider) = target {
-            let prompt = assist::web_prompt(action, &snapshot.context(None));
+            let prompt = practice::chat::prompt(assist::web_prompt(action, &snapshot.context(None)), &history, &instructions);
             cx.write_to_clipboard(ClipboardItem::new_string(prompt.clone()));
             let _ = open::that_detached(practice::prompts::url(provider, &prompt));
             use gpui_kit::component::WindowExt as _;
             window.push_notification(gpui_kit::component::notification::Notification::info(format!("{} opened in {} · prompt copied", action.label(), provider.label())), cx);
             return;
         }
-        let previous: Vec<_> = self.runs.iter().filter(|run| run.slug == snapshot.slug && run.action == action && (run.phase.active() || run.phase == Phase::Confirm)).map(|run| run.id).collect();
+        let previous: Vec<_> = self.runs.iter().filter(|run| run.slug == snapshot.slug && (run.phase.active() || run.phase == Phase::Confirm)).map(|run| run.id).collect();
         for id in previous { self.stop(id, cx); }
         let id = self.next_id();
         let Target::Agent(agent, selection) = &target else { return };
         let model = selection.as_ref().map(|s| s.model.clone()).unwrap_or_default();
         let mut run = Run::new(id, snapshot.slug.clone(), action, Some(agent.kind), model, Some(snapshot.clone()), Some(target.clone()));
         if action == Action::Solve { run.solve = Some(SolveState { attempt: 1, session: None, log: vec![], accepted: false }); }
+        run.instructions = instructions; run.history = history;
+        self.composer.update(cx, |input, cx| input.set_value("", window, cx));
         self.runs.insert(0, run);
-        self.scroll.set_offset(point(px(0.), px(0.)));
+        self.save(&snapshot.slug);
+        self.scroll.scroll_to_bottom();
         self.launch(id, None, None, window, cx);
     }
 
@@ -321,6 +374,9 @@ impl Assist {
         run.tokens = 0;
         let cancel = run.cancel.clone();
         let action = run.action;
+        let instructions = run.instructions.clone();
+        let history = run.history.clone();
+        run.reply.clear();
         let fallback = self.catalog(agent.kind).cloned();
         let cache = self.catalog_cache.clone();
         let (tx, mut rx) = futures::channel::mpsc::unbounded::<Msg>();
@@ -335,10 +391,10 @@ impl Assist {
                     }
                 }
             };
-            let prompt = assist::prompt(action, &snapshot.context(feedback.as_deref()));
+            let prompt = practice::chat::prompt(assist::prompt(action, &snapshot.context(feedback.as_deref())), &history, &instructions);
             let request = agents::Request {
                 agent, selection, prompt,
-                schema: (action != Action::Solve).then(|| action.schema()),
+                schema: (!matches!(action, Action::Solve | Action::Ask)).then(|| action.schema()),
                 cwd: if action == Action::Solve { snapshot.workspace.clone() } else { std::env::temp_dir() },
                 access: action.access(), resume,
             };
@@ -359,13 +415,15 @@ impl Assist {
     fn receive(&mut self, id: u64, generation: u64, msg: Msg, window: &mut Window, cx: &mut Context<Self>) {
         let Some(run) = self.runs.iter_mut().find(|run| run.id == id) else { return };
         if !run.accepts_events(generation) { return; }
+        let save = matches!(&msg, Msg::Done(_));
+        let follow = self.scroll.offset().y <= -self.scroll.max_offset().y + px(24.);
         match msg {
             Msg::Event(agents::Event::Started { session }) => {
                 if let (Some(solve), Some(session)) = (run.solve.as_mut(), session) { solve.session = Some(session); }
                 run.phase = Phase::Thinking;
             }
             Msg::Event(agents::Event::Thinking(text)) => { run.thinking.push_str(&text); run.phase = Phase::Thinking; }
-            Msg::Event(agents::Event::Text(_)) => run.phase = Phase::Writing,
+            Msg::Event(agents::Event::Text(text)) => { if run.action == Action::Ask { run.reply.push_str(&text); } run.phase = Phase::Writing; },
             Msg::Event(agents::Event::Tool { title, done, .. }) => run.phase = if done { Phase::Thinking } else { Phase::Tool(title) },
             Msg::Event(agents::Event::Usage { input_tokens, output_tokens }) => run.tokens = input_tokens + output_tokens,
             Msg::Selected(selection) => {
@@ -399,12 +457,12 @@ impl Assist {
                     Ok((answer, _)) => {
                         run.phase = Phase::Done; run.elapsed = Some(run.started.elapsed());
                         run.set_answer(answer);
-                        let slug = run.slug.clone();
-                        self.save(&slug);
                     }
                 }
             }
         }
+        if save { if let Some(run) = self.runs.iter().find(|run| run.id == id) { self.save(&run.slug); } }
+        if follow { self.scroll.scroll_to_bottom(); }
         cx.notify();
     }
 
@@ -434,6 +492,7 @@ impl Assist {
             solve.log.push((Tone::Error, first_line(&report)));
             self.retry(slug, report, window, cx);
         }
+        self.save(slug);
         cx.notify();
     }
 
@@ -488,6 +547,8 @@ impl Assist {
         if let Some(run) = self.runs.iter_mut().find(|run| run.id == id) {
             run.cancel.cancel();
             run.phase = Phase::Stopped; run.elapsed = Some(run.started.elapsed());
+            let slug = run.slug.clone();
+            self.save(&slug);
         }
         cx.notify();
     }
@@ -528,8 +589,8 @@ impl Assist {
                         }
                         assist.launch(id, session, Some(feedback), window, cx);
                     } else {
-                        let (action, target) = (run.action, run.target.clone());
-                        if let Some(target) = target { assist.start(action, snapshot, target, window, cx); }
+                        run.snapshot = Some(snapshot);
+                        assist.launch(id, None, None, window, cx);
                     }
                 });
             });
@@ -592,6 +653,24 @@ mod recovery_tests {
     use practice::agents::Cancel;
 
     #[test]
+    fn legacy_answers_and_interrupted_chat_requests_restore() {
+        let legacy: super::Saved = serde_json::from_value(serde_json::json!({
+            "model": "old-model", "agent": null, "answer": {"action": "hints", "answer": {"hints": []}}
+        })).unwrap();
+        assert!(legacy.instructions.is_empty());
+        assert!(matches!(legacy.phase, super::SavedPhase::Done));
+        assert!(matches!(legacy.answer, Some(practice::assist::Answer::Hints(_))));
+        let mut run = Run::new(1, "two-sum".into(), Action::Ask, None, String::new(), None, None);
+        run.instructions = "Why check before inserting?".into();
+        let saved = super::Saved::from_run(&run);
+        let restored: super::Saved = serde_json::from_str(&serde_json::to_string(&saved).unwrap()).unwrap();
+        assert_eq!(restored.instructions, run.instructions);
+        assert_eq!(restored.action, Some(Action::Ask));
+        assert!(matches!(restored.phase, super::SavedPhase::Stopped));
+        assert!(restored.answer.is_none());
+    }
+
+    #[test]
     fn resumed_runs_ignore_events_from_the_stopped_process() {
         let mut run = Run::new(1, "two-sum".into(), Action::Solve, None, String::new(), None, None);
         run.generation = 1;
@@ -621,7 +700,7 @@ fn action_of(answer: &Answer) -> Action {
         Answer::Hints(_) => Action::Hints, Answer::Tests(_) => Action::Tests, Answer::Bugs(_) => Action::Bugs,
         Answer::Analyze(_) => Action::Analyze, Answer::Stuck(_) => Action::Stuck, Answer::Explain(_) => Action::Explain,
         Answer::Visualize(_) => Action::Visualize, Answer::Optimize(_) => Action::Optimize, Answer::Pattern(_) => Action::Pattern,
-        Answer::DryRun(_) => Action::DryRun, Answer::Solve(_) => Action::Solve,
+        Answer::DryRun(_) => Action::DryRun, Answer::Solve(_) => Action::Solve, Answer::Chat(_) => Action::Ask,
     }
 }
 
@@ -629,7 +708,7 @@ impl Run {
     fn new(id: u64, slug: String, action: Action, agent: Option<AgentKind>, model: String, snapshot: Option<Snapshot>, target: Option<Target>) -> Self {
         Self { id, slug, action, agent, model, started: Instant::now(), elapsed: None, phase: Phase::Starting, thinking: String::new(), tokens: 0,
             answer: None, cancel: Cancel::default(), hints_shown: 1, playback: Playback::new(0), last_frame: Instant::now(), reveal: false,
-            added: vec![], solve: None, snapshot, target, generation: 0, collapsed: false }
+            added: vec![], solve: None, snapshot, target, generation: 0, collapsed: false, instructions: String::new(), history: String::new(), reply: String::new() }
     }
 
     fn set_answer(&mut self, answer: Option<Answer>) {
@@ -660,6 +739,7 @@ pub fn icon(action: Action) -> IconName {
         Action::Pattern => IconName::Puzzle,
         Action::Explain => IconName::BookOpen,
         Action::Solve => IconName::WandSparkles,
+        Action::Ask => IconName::MessageCircle,
     }
 }
 
@@ -671,69 +751,13 @@ pub fn accent(action: Action, theme: &Theme) -> Hsla {
         Action::Bugs => theme.danger,
         Action::Tests | Action::Solve => theme.success,
         Action::Analyze | Action::Pattern => rgb(0xc3b1ff).into(),
-        Action::Visualize | Action::DryRun => theme.primary,
-    }
-}
-
-pub fn command(action: Action) -> Box<dyn gpui_kit::Action> {
-    use crate::actions::*;
-    match action {
-        Action::Hints => Box::new(AssistHints), Action::Stuck => Box::new(AssistStuck), Action::Bugs => Box::new(AssistBugs),
-        Action::Tests => Box::new(AssistTests), Action::Analyze => Box::new(AssistAnalyze), Action::Optimize => Box::new(AssistOptimize),
-        Action::Visualize => Box::new(AssistVisualize), Action::DryRun => Box::new(AssistDryRun), Action::Pattern => Box::new(AssistPattern),
-        Action::Explain => Box::new(AssistExplain), Action::Solve => Box::new(AssistSolve),
+        Action::Visualize | Action::DryRun | Action::Ask => theme.primary,
     }
 }
 
 fn clock(duration: Duration) -> String {
     let secs = duration.as_secs_f32();
     if secs < 60. { format!("{secs:.1}s") } else { format!("{}:{:02}", secs as u64 / 60, secs as u64 % 60) }
-}
-
-impl Render for Assist {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = cx.theme().clone();
-        let workspace = self.workspace.upgrade();
-        let current = workspace.as_ref().and_then(|ws| ws.read(cx).session.as_ref().map(|s| s.slug.clone()));
-        if current != self.slug { self.set_problem(current.as_deref(), cx); }
-        let (has_problem, has_attempt) = workspace.as_ref().map_or((false, false), |ws| {
-            let ws = ws.read(cx);
-            (ws.session.as_ref().is_some_and(|s| s.question.is_some()), ws.has_attempt(cx))
-        });
-        let web = workspace.as_ref().map(|ws| matches!(self.target(&ws.read(cx).config), Target::Web(_))).unwrap_or(true);
-        let running: Vec<Action> = self.runs.iter().filter(|run| Some(&run.slug) == self.slug.as_ref() && run.phase.active()).map(|run| run.action).collect();
-        let grid = h_flex().flex_wrap().gap_1().px_2().children(Action::ALL.into_iter().enumerate().map(|(index, action)| {
-            let color = accent(action, &theme);
-            let disabled = !has_problem || (action.needs_attempt() && !has_attempt);
-            let busy = running.contains(&action);
-            let tip = if !has_problem { "Open a problem first".to_string() } else if disabled { format!("{} · write some code first", action.summary()) } else if web && action == Action::Solve { "Solve needs a local agent".into() } else { action.summary().to_string() };
-            let command = command(action);
-            v_flex().id(("assist-action", index)).w(px(98.)).py_2().gap_1p5().items_center().rounded_lg()
-                .when(!disabled, |el| el.cursor_pointer().hover(|s| s.bg(theme.list_hover)))
-                .when(disabled || (web && action == Action::Solve), |el| el.opacity(0.4))
-                .child(div().relative().size(px(40.)).rounded_xl().flex().items_center().justify_center()
-                    .bg(color.opacity(if busy { 0.26 } else { 0.13 })).border_1().border_color(color.opacity(if busy { 0.8 } else { 0.22 }))
-                    .child(Icon::new(icon(action)).size_5().text_color(color))
-                    .when(busy, |el| el.child(div().absolute().inset(px(-3.)).rounded(px(15.)).border_1().border_color(color.opacity(0.5))
-                        .with_animation(SharedString::from(format!("tile-ring-{index}")), Animation::new(Duration::from_millis(1200)).repeat(),
-                            |el, t| el.opacity(1. - t).inset(px(-3. - 4. * t))))))
-                .child(div().text_xs().text_color(if disabled { theme.muted_foreground } else { theme.foreground }).child(action.label()))
-                .tooltip(move |window, cx| Tooltip::new(tip.clone()).action(command.as_ref(), Some(crate::actions::WORKSPACE)).build(window, cx))
-                .when(!disabled && !(web && action == Action::Solve), |el| el.on_click(cx.listener(move |this, _, window, cx| {
-                    let workspace = this.workspace.clone();
-                    window.defer(cx, move |window, cx| { let _ = workspace.update(cx, |ws, cx| ws.run_assist(action, window, cx)); });
-                })))
-        }));
-        let slug = self.slug.clone();
-        let cards: Vec<AnyElement> = self.runs.iter().filter(|run| Some(&run.slug) == slug.as_ref()).map(|run| self.card(run, window, cx)).collect();
-        v_flex().size_full().min_h_0()
-            .child(grid)
-            .child(div().mx_3().my_2().h(px(1.)).bg(theme.border))
-            .child(v_flex().id("assist-cards").flex_1().min_h_0().overflow_y_scroll().track_scroll(&self.scroll).px_3().pb_4().gap_3()
-                .when(cards.is_empty(), |el| el.child(div().pt_6().text_center().text_xs().text_color(theme.muted_foreground)
-                    .child(if !has_problem { "Open a problem to use Assist" } else if web { "Actions open your web chat" } else { "Pick an action above" })))
-                .children(cards))
-    }
 }
 
 impl Assist {
@@ -781,8 +805,14 @@ impl Assist {
         let solve = run.solve.as_ref().filter(|_| !run.collapsed || run.phase == Phase::Confirm).map(|solve| self.solve_body(run, solve, cx));
         v_flex().id(("assist-card", id)).p_3().gap_2p5().rounded_lg().bg(theme.background.opacity(0.55)).border_1()
             .border_color(if active { color.opacity(0.45) } else { theme.border })
+            .child(v_flex().gap_1().pb_2().border_b_1().border_color(theme.border)
+                .child(div().text_xs().text_color(theme.muted_foreground).child("You"))
+                .child(TextView::markdown(SharedString::from(format!("chat-request-{id}")),
+                    if run.instructions.is_empty() { run.action.label().to_string() } else if run.action == Action::Ask { run.instructions.clone() } else { format!("{}\n\n{}", run.action.label(), run.instructions) }).selectable(true)))
             .child(header)
             .children(status)
+            .when(run.action == Action::Ask && run.answer.is_none() && !run.reply.is_empty(), |el| el.child(
+                TextView::markdown(SharedString::from(format!("chat-stream-{id}")), run.reply.clone()).selectable(true)))
             .when(matches!(run.phase, Phase::Stopped | Phase::Failed(_)) && run.target.is_some(), |el| el.child(h_flex().gap_2()
                 .when(run.action == Action::Solve, |el| el.child(Button::new(("assist-continue", id)).primary().small().icon(IconName::Play).label("Continue")
                     .tooltip("Continue using the current solution and agent session when available")
@@ -841,6 +871,7 @@ impl Assist {
         let mono = |text: &str| div().p_2().rounded_md().bg(theme.muted).font_family(theme.mono_font_family.clone()).text_xs().whitespace_normal().child(text.to_owned());
         let label = |text: &'static str| div().text_xs().font_weight(FontWeight::MEDIUM).text_color(theme.muted_foreground).child(text);
         match answer {
+            Answer::Chat(text) => TextView::markdown(SharedString::from(format!("chat-answer-{id}")), text.clone()).selectable(true).into_any_element(),
             Answer::Hints(hints) => {
                 let shown = run.hints_shown.min(hints.hints.len());
                 v_flex().gap_2()
@@ -1060,7 +1091,7 @@ fn growth_chart(yours: Growth, best: Growth, theme: &Theme) -> AnyElement {
 impl Workspace {
     /// Runs an Assist action on the open problem. Dry run uses the native debugger when it can.
     pub fn run_assist(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
-        if action == Action::DryRun && self.session.as_ref().is_some_and(|s| practice::debugger::supported(s.language) && !s.slug.starts_with("cf:")) {
+        if action == Action::DryRun && !self.assist.read(cx).has_instructions(cx) && self.session.as_ref().is_some_and(|s| practice::debugger::supported(s.language) && !s.slug.starts_with("cf:")) {
             self.set_debug(true, window, cx);
             return;
         }
@@ -1075,7 +1106,7 @@ impl Workspace {
             return;
         }
         if !matches!(target, Target::Web(_)) {
-            self.right = true; self.assist_open = true; self.history_mode = false; self.save_layout();
+            self.right = true; self.save_layout();
         }
         self.flash(format!("AI: {}", action.label()), cx);
         self.assist.update(cx, |assist, cx| assist.start(action, snapshot, target, window, cx));

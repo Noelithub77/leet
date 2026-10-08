@@ -1,11 +1,12 @@
-//! Rendering. Panels spring open and closed; results reveal with a short stagger.
+//! Native resizable sidebars and editor layout; results reveal with a short stagger.
 
 use std::time::Duration;
 
 use gpui_kit::base::{Disableable as _, Spring, Transition, spring, transition};
 use gpui_kit::component::kbd::Kbd;
 use gpui_kit::component::spinner::Spinner;
-use gpui_kit::component::{ActiveTheme as _, Sizable as _, h_flex, v_flex};
+use gpui_kit::component::resizable::{h_resizable, resizable_panel};
+use gpui_kit::component::{ActiveTheme as _, Sizable as _, Icon, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use gpui_kit::assets::IconName;
@@ -15,8 +16,6 @@ use practice::runner::Verdict;
 
 use crate::workspace::{Center, Focus, Judge, Row, Workspace};
 
-const LEFT_W: f32 = 300.;
-const RIGHT_W: f32 = 440.;
 const BOTTOM_H: f32 = 230.;
 
 fn panel_spring() -> Spring {
@@ -61,8 +60,8 @@ impl Render for Workspace {
         let panels = !self.zen && self.center == Center::Editor;
         let z = self.config.zoom;
         let show_left = !self.zen && ((self.center == Center::Editor && self.left) || (self.center == Center::Home && self.home.sidebar));
-        let left_w = spring("left-w", if show_left { LEFT_W * z } else { 0. }, panel_spring(), window, cx);
-        let right_w = spring("right-w", if panels && self.right { RIGHT_W * z } else { 0. }, panel_spring(), window, cx);
+        let show_description = panels && self.description;
+        let show_ai = panels && self.right;
         let bottom_h = spring("bottom-h", if panels && self.bottom { BOTTOM_H * z } else { 0. }, panel_spring(), window, cx);
         let tabs = self.render_tabs(window, cx);
         let center = match self.center {
@@ -83,6 +82,37 @@ impl Render for Workspace {
         };
         let omnibar = self.render_omnibar(window, cx);
 
+        let mask = u8::from(show_left) | (u8::from(show_description) << 1) | (u8::from(show_ai) << 2);
+        let widths = sidebar_widths(&self.db, z);
+        let available = window.viewport_size().width.as_f32();
+        let pane_count = usize::from(show_left) + usize::from(show_description) + usize::from(show_ai);
+        let initial_max = (available - 260.) / pane_count.max(1) as f32;
+        let mut body = h_resizable(SharedString::from(format!("workspace-panels-{mask}")));
+        if show_left {
+            body = body.child(resizable_panel().size(px(widths[0].min(initial_max))).size_range(px(if pane_count == 3 { 120. } else { 160. })..px(700.)).flex_none().child(self.render_left(window, cx)));
+        }
+        if show_description {
+            body = body.child(resizable_panel().size(px(widths[1].min(initial_max))).size_range(px(if pane_count == 3 { 160. } else { 180. })..px(900.)).flex_none().child(self.render_description(cx)));
+        }
+        body = body.child(resizable_panel().size_range(px(if pane_count == 3 { 180. } else { 240. })..Pixels::MAX).child(
+            v_flex().flex_1().min_w_0().h_full().rounded_lg().overflow_hidden()
+                .child(center).child(self.render_bottom(bottom_h, cx))));
+        if show_ai {
+            body = body.child(resizable_panel().size(px(widths[2].min(initial_max))).size_range(px(if pane_count == 3 { 200. } else { 220. })..px(900.)).flex_none().child(self.render_right(cx)));
+        }
+        let db = self.db.clone();
+        body = body.on_resize(move |state, _, cx| {
+            let sizes = state.read(cx).sizes();
+            let mut widths = sidebar_widths(&db, z);
+            let mut index = 0;
+            for (slot, visible) in [(0, show_left), (1, show_description)] {
+                if visible { if let Some(size) = sizes.get(index) { widths[slot] = size.as_f32(); } index += 1; }
+            }
+            index += 1; // The flexible editor sits between the left panes and chat.
+            if show_ai && let Some(size) = sizes.get(index) { widths[2] = size.as_f32(); }
+            if let Ok(text) = serde_json::to_string(&widths) { let _ = db.set("sidebar-widths", &text); }
+        });
+
         let root = v_flex()
             .relative()
             .size_full()
@@ -99,17 +129,7 @@ impl Render for Workspace {
             h_flex().flex_1().min_h_0().mx_2().gap_2().track_focus(&self.nav_focus)
                 .when(self.nav_focus.is_focused(window), |view| Workspace::register_nav(view, cx))
                 .when(self.nav_focus.is_focused(window) && self.center == Center::Settings, |view| view.key_context("VgNav Settings"))
-            .child(self.render_left(left_w, window, cx))
-            .child(
-                v_flex()
-                    .flex_1()
-                    .min_w_0()
-                    .h_full()
-                    .rounded_lg().overflow_hidden()
-                    .child(center)
-                    .child(self.render_bottom(bottom_h, cx)),
-            )
-            .child(self.render_right(right_w, cx)),
+            .child(body),
         )
         .child(self.render_status(window, cx))
         .children(omnibar)
@@ -119,25 +139,33 @@ impl Render for Workspace {
 }
 
 impl Workspace {
-    fn render_left(&self, width: f32, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = cx.theme();
+    fn render_left(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let focused = self.focus_area == Focus::Sidebar && self.nav_focus.is_focused(window);
-        div()
-            .h_full()
-            .rounded_lg()
-            .w(px(width.max(0.)))
-            .flex_shrink_0()
-            .overflow_hidden()
-            .border_r_1()
-            .border_color(theme.border.opacity((width / (LEFT_W * self.config.zoom)).clamp(0., 1.)))
-            .bg(theme.sidebar)
-            .child(
-                v_flex()
-                    .w(px(LEFT_W * self.config.zoom))
-                    .h_full()
-                    .opacity((width / (LEFT_W * self.config.zoom)).clamp(0., 1.))
-                    .child(self.render_tree(focused, cx)),
-            )
+        div().size_full().min_w_0().rounded_lg().overflow_hidden().bg(cx.theme().sidebar)
+            .child(self.render_tree(focused, cx))
+    }
+
+    fn render_description(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme().clone();
+        let content = if self.history_mode { self.render_versions(cx).into_any_element() }
+            else { self.statement.clone().cached(StyleRefinement::default().size_full()).into_any_element() };
+        v_flex().size_full().min_w_0().rounded_lg().overflow_hidden().bg(theme.sidebar)
+            .child(h_flex().p_2().gap_1()
+                .child(crate::theme::selected_choice(Button::new("description-question").ghost().small(), !self.history_mode, cx)
+                    .icon(IconName::FileText).label("Question").on_click(cx.listener(|this, _, _, cx| { this.history_mode = false; cx.notify(); })))
+                .child(crate::theme::selected_choice(Button::new("description-history").ghost().small(), self.history_mode, cx)
+                    .icon(IconName::GitBranch).tooltip_with_action("History", &crate::actions::ToggleHistory, Some(crate::actions::WORKSPACE)).accessibility_label("History")
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.history_mode = !this.history_mode;
+                        if this.history_mode && this.session.as_ref().is_some_and(|session| !session.history_loaded) { this.load_remote_versions(window, cx); }
+                        if this.history_mode { this.focus_nav(Focus::History, window, cx); }
+                        cx.notify();
+                    })))
+                .child(div().flex_1())
+                .child(Button::new("description-hide").ghost().small().icon(IconName::X).accessibility_label("Hide description")
+                    .tooltip_with_action("Hide description", &crate::actions::ToggleDescription, Some(crate::actions::WORKSPACE))
+                    .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::actions::ToggleDescription), cx))))
+            .child(div().flex_1().min_h_0().min_w_0().child(content))
     }
 
     fn render_tree(&self, focused: bool, cx: &mut Context<Self>) -> impl IntoElement {
@@ -267,33 +295,17 @@ impl Workspace {
             .into_any_element()
     }
 
-    fn render_right(&self, width: f32, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_right(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme().clone();
-        let content = if self.history_mode {
-            self.render_versions(cx).into_any_element()
-        } else if self.assist_open {
-            self.assist.clone().into_any_element()
-        } else {
-            self.statement.clone().cached(StyleRefinement::default().size_full()).into_any_element()
-        };
-        div()
-            .h_full()
-            .rounded_lg()
-            .w(px(width.max(0.)))
-            .flex_shrink_0()
-            .overflow_hidden()
-            .border_l_1()
-            .border_color(theme.border.opacity((width / (RIGHT_W * self.config.zoom)).clamp(0., 1.)))
-            .bg(theme.sidebar)
-            .child(v_flex().w(px(RIGHT_W * self.config.zoom)).h_full().opacity((width / (RIGHT_W * self.config.zoom)).clamp(0., 1.))
-                .child(h_flex().p_2().gap_1()
-                    .child(crate::theme::selected_choice(Button::new("right-question").ghost().small(), !self.history_mode && !self.assist_open, cx).icon(IconName::FileText).tooltip("Question and solution").accessibility_label("Question and solution")
-                        .on_click(cx.listener(|this,_,_,cx|{this.history_mode=false;this.assist_open=false;cx.notify();})))
-                    .child(crate::theme::selected_choice(Button::new("right-assist").ghost().small(), !self.history_mode && self.assist_open, cx).icon(IconName::Sparkles).tooltip_with_action("Assist", &crate::actions::ToggleAssist, Some(crate::actions::WORKSPACE)).accessibility_label("Assist")
-                        .on_click(cx.listener(|this,_,_,cx|{this.history_mode=false;this.assist_open=true;cx.notify();})))
-                    .child(crate::theme::selected_choice(Button::new("right-history").ghost().small(), self.history_mode, cx).icon(IconName::GitBranch).tooltip_with_action("History", &crate::actions::ToggleHistory, Some(crate::actions::WORKSPACE)).accessibility_label("History")
-                        .on_click(cx.listener(|this,_,window,cx|{this.history_mode=true;if this.session.as_ref().is_some_and(|session|!session.history_loaded){this.load_remote_versions(window,cx);}this.focus_nav(Focus::Sidebar,window,cx);cx.notify();}))))
-                .child(div().flex_1().min_h_0().child(content)))
+        v_flex().size_full().min_w_0().rounded_lg().overflow_hidden().bg(theme.sidebar)
+            .child(h_flex().p_2().gap_2().items_center()
+                .child(Icon::new(IconName::Sparkles).small().text_color(theme.primary))
+                .child(div().flex_1().text_sm().child("AI chat"))
+                .child(Button::new("chat-model").ghost().small().icon(IconName::Settings2).tooltip_with_action("Agent and model", &crate::actions::ConfigureAi, Some(crate::actions::WORKSPACE)).accessibility_label("Agent and model")
+                    .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::actions::ConfigureAi), cx)))
+                .child(Button::new("chat-hide").ghost().small().icon(IconName::X).tooltip_with_action("Hide AI chat", &crate::actions::ToggleRight, Some(crate::actions::WORKSPACE)).accessibility_label("Hide AI chat")
+                    .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::actions::ToggleRight), cx))))
+            .child(div().flex_1().min_h_0().child(self.assist.clone()))
     }
 
     fn render_bottom(&self, height: f32, cx: &mut Context<Self>) -> impl IntoElement {
@@ -607,4 +619,10 @@ pub(crate) fn relative_time(secs: i64) -> String {
         3600..86400 => format!("{}h ago", d / 3600),
         _ => format!("{}d ago", d / 86400),
     }
+}
+
+fn sidebar_widths(db: &practice::db::Db, zoom: f32) -> [f32; 3] {
+    db.get("sidebar-widths").ok().flatten().and_then(|text| serde_json::from_str::<[f32; 3]>(&text).ok())
+        .filter(|widths| widths.iter().all(|width| width.is_finite() && *width >= 100. && *width <= 2000.))
+        .unwrap_or([260. * zoom, 360. * zoom, 400. * zoom])
 }

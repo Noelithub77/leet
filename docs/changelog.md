@@ -1,6 +1,8 @@
 <details open>
 <summary>Feat</summary>
 
+- Per-problem AI chat with custom action instructions, follow-up questions, and locally saved conversations.
+- Native resizable explorer, description, and AI sidebars on Alt+A, Alt+S, and Alt+D.
 - Collapsible platform settings with provider icons, Log in / Log out buttons, and Codeforces handle.
 - Navigate Settings tabs with Tab, Shift+Tab, and arrow keys.
 - Reset app settings and reopen onboarding while keeping solutions, accounts, progress, and cache.

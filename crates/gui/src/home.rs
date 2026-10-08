@@ -265,10 +265,11 @@ impl Workspace {
         }
         let panels = !self.zen && self.center == Center::Editor;
         let left = !self.zen && ((self.center == Center::Editor && self.left) || (self.center == Center::Home && self.home.sidebar));
-        let toggles: [(&str, IconName, &str, bool, Box<dyn Action>); 3] = [
-            ("toggle-left-panel", IconName::PanelLeft, "Toggle sidebar", left, Box::new(actions::ToggleLeft)),
+        let toggles: [(&str, IconName, &str, bool, Box<dyn Action>); 4] = [
+            ("toggle-left-panel", IconName::PanelLeft, "Toggle explorer", left, Box::new(actions::ToggleLeft)),
             ("toggle-bottom-panel", IconName::PanelBottom, "Toggle bottom panel", panels && self.bottom, Box::new(actions::ToggleBottom)),
-            ("toggle-right-panel", IconName::PanelRight, "Toggle problem panel", panels && self.right, Box::new(actions::ToggleRight)),
+            ("toggle-description-panel", IconName::FileText, "Toggle description", panels && self.description, Box::new(actions::ToggleDescription)),
+            ("toggle-right-panel", IconName::PanelRight, "Toggle AI chat", panels && self.right, Box::new(actions::ToggleRight)),
         ];
         let mut controls = h_flex().gap_1();
         for (id, icon, label, enabled, action) in toggles {

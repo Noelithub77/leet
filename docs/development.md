@@ -27,9 +27,10 @@ Every panel has one toggle, and a spring animation shows or hides it.
 
 | Area | Toggle | Contents |
 | --- | --- | --- |
-| Left | `alt+s` | Roadmap topics and problems; `ctrl+g` swaps to Solution history |
+| Explorer (far left) | `alt+a` | Roadmap topics and problems |
+| Description (left of code) | `alt+s` | Statement, reference solution, hints, and Solution history (`ctrl+g`) |
 | Center | `ctrl+1` | Python editor (tree-sitter highlighting) |
-| Right | `alt+d` | Statement, revealed hints; diffs while in history |
+| AI chat (right) | `alt+d` | Actions, custom instructions, and follow-up questions |
 | Bottom | `alt+x` | Test cases, outputs, LeetCode judge result |
 | Roadmap | `alt+r` | neetcode.io/roadmap graph with per-topic progress |
 
@@ -53,7 +54,10 @@ Modifier shortcuts follow the user's VS Code bindings. Bare arrows, `enter` and 
 | `ctrl+alt+t` | Add a custom test (`ctrl+enter` saves) |
 | `ctrl+alt+shift+t` | Edit the selected test case |
 | `ctrl+alt+1`…`9`, `0` | Assist: hints, stuck, bugs, edge cases, complexity, optimize, visualize, dry run, pattern, explain |
-| `alt+e` | Toggle the Assist panel |
+| `alt+a` | Toggle the left problem explorer |
+| `alt+s` | Toggle the separate description pane |
+| `alt+d` | Toggle the right AI chat sidebar |
+| `ctrl+enter` in chat | Send a question; Enter inserts a new line |
 | `alt+b` | Toggle Debug mode (←/→ step, shift+←/→ next call or return, space play, ↑/↓ case) |
 | `ctrl+shift+e` | Choose the AI agent, model, reasoning, and Fast tier |
 | `ctrl+alt+a` | Switch between detected agents and the web chat |
@@ -99,7 +103,7 @@ panel first, then leaves the roadmap. Stars are stored locally in SQLite.
 
 ## AI Assist
 
-The right panel's Assist tab shows an icon grid of actions; each result is a card in the same panel, kept per problem in the local cache. The status-line chip shows the agent and model, and a stopwatch while a run is active; it opens the picker for agent, model, reasoning, and Fast tier. Settings → AI holds the same choices plus installers.
+The editor has separate native resizable panes: Explorer, Description, Code, and AI chat. Drag the boundaries to resize them; widths and visibility are saved locally. The explorer can be hidden to keep the description, code, and conversation visible together. AI chat has a bottom prompt composer and an Actions menu. Type a question and press Ctrl+Enter, or type optional instructions before choosing an action such as Explain or Hints. Actions and questions form one chronological conversation per problem; completed answers and interrupted requests restore from the private local cache. Follow-ups attach the latest statement, editor code, and test results plus bounded recent conversation context. Questions are read-only; Solve retains its separate edit/test/confirm workflow. The status-line chip shows the agent and model, and a stopwatch while a run is active; it opens the picker for agent, model, reasoning, and Fast tier. Settings → AI holds the same choices plus installers.
 
 Local agents are detected on `PATH` and common user bin directories. Each uses its own native protocol with typed messages (`crates/practice/src/agents/`):
 

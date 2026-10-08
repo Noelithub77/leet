@@ -43,6 +43,7 @@ pub enum Focus {
     Home,
     Editor,
     Sidebar,
+    History,
     Explorer,
     Roadmap,
     RoadmapTopic,
@@ -192,6 +193,7 @@ pub struct Workspace {
     pub library: Library,
     pub left: bool,
     pub right: bool,
+    pub description: bool,
     pub bottom: bool,
     pub zen: bool,
     pub history_mode: bool,
@@ -219,8 +221,6 @@ pub struct Workspace {
     pub assist: Entity<crate::assist::Assist>,
     pub ai_chip: Entity<crate::ai::Chip>,
     pub debugger: Entity<crate::debug_view::Debugger>,
-    /// The right panel shows Assist instead of the statement.
-    pub assist_open: bool,
     /// The center shows the debugger instead of the editor.
     pub debug_mode: bool,
     pub tour: Option<crate::tour::Tour>,
@@ -263,7 +263,7 @@ impl Workspace {
         cx.set_global(crate::statement::TagsVisible(config.show_tags));
         cx.set_global(crate::statement::Sections(db.statement_sections().unwrap_or([true, false, false])));
         let weak = cx.weak_entity();
-        let assist = cx.new(|cx| crate::assist::Assist::new(weak.clone(), db.clone(), cx));
+        let assist = cx.new(|cx| crate::assist::Assist::new(weak.clone(), db.clone(), window, cx));
         let ai_chip = cx.new(|cx| crate::ai::Chip::new(weak.clone(), assist.clone(), cx));
         let debugger = cx.new(|cx| crate::debug_view::Debugger::new(weak, assist.clone(), cx));
         let mut this = Self {
@@ -286,8 +286,9 @@ impl Workspace {
             by_slug: HashMap::new(),
             solved: HashSet::new(),
             library: Library::default(),
-            left: true,
-            right: true,
+            left: false,
+            right: false,
+            description: true,
             bottom: true,
             zen: false,
             history_mode: false,
@@ -315,7 +316,6 @@ impl Workspace {
             assist,
             ai_chip,
             debugger,
-            assist_open: false,
             debug_mode: false,
             tour: None,
             language_picker: crate::language_picker::State::default(),
@@ -354,18 +354,22 @@ impl Workspace {
     // ---- persistence -------------------------------------------------------------------
 
     fn restore_layout(&mut self) {
-        if let Ok(Some(layout)) = self.db.get("layout") {
-            let flags: Vec<bool> = layout.chars().map(|c| c == '1').collect();
-            if let [left, right, bottom, ..] = flags[..] {
-                (self.left, self.right, self.bottom) = (left, right, bottom);
+        if let Ok(Some(layout)) = self.db.get("layout-v2") {
+            if let Some([left, description, right, bottom]) = layout_flags(&layout, false) {
+                (self.left, self.description, self.right, self.bottom) = (left, description, right, bottom);
+            }
+        } else if let Ok(Some(layout)) = self.db.get("layout") {
+            // The old right sidebar was the statement; retain its visibility on the left.
+            if let Some([left, description, right, bottom]) = layout_flags(&layout, true) {
+                (self.left, self.description, self.right, self.bottom) = (left, description, right, bottom);
             }
         }
     }
 
     pub fn save_layout(&self) {
         let bit = |b: bool| if b { '1' } else { '0' };
-        let layout: String = [self.left, self.right, self.bottom].map(bit).iter().collect();
-        let _ = self.db.set("layout", &layout);
+        let layout: String = [self.left, self.description, self.right, self.bottom].map(bit).iter().collect();
+        let _ = self.db.set("layout-v2", &layout);
     }
 
     pub fn save_config(&self, window: &mut Window, cx: &mut App) {
@@ -546,7 +550,7 @@ impl Workspace {
     }
 
     pub fn sidebar_move(&mut self, delta: isize, cx: &mut Context<Self>) {
-        if self.history_mode {
+        if self.focus_area == Focus::History {
             let len = self.versions().len();
             if let Some(s) = &mut self.session {
                 if len > 0 {
@@ -1122,7 +1126,7 @@ impl Workspace {
     }
 
     pub fn reveal_hint(&mut self, cx: &mut Context<Self>) {
-        self.right = true;
+        self.description = true;
         let Some(s) = &mut self.session else { return };
         let total = s.question.as_ref().map_or(0, |q| q.hints.len());
         if total == 0 { self.flash("No hints", cx); return; }
@@ -1261,5 +1265,27 @@ fn judge_note(r: &JudgeResult, committed: bool) -> Notification {
 impl Focusable for Workspace {
     fn focus_handle(&self, _: &App) -> FocusHandle {
         self.focus.clone()
+    }
+}
+
+fn layout_flags(text: &str, legacy: bool) -> Option<[bool; 4]> {
+    if !text.chars().all(|value| matches!(value, '0' | '1')) { return None; }
+    let flags: Vec<bool> = text.chars().map(|value| value == '1').collect();
+    match (legacy, flags.as_slice()) {
+        (true, [explorer, description, bottom]) => Some([*explorer, *description, false, *bottom]),
+        (false, [explorer, description, ai, bottom]) => Some([*explorer, *description, *ai, *bottom]),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod layout_tests {
+    #[test]
+    fn old_statement_visibility_moves_to_description_and_ai_is_independent() {
+        assert_eq!(super::layout_flags("111", true), Some([true, true, false, true]));
+        assert_eq!(super::layout_flags("0101", false), Some([false, true, false, true]));
+        assert_eq!(super::layout_flags("0011", false), Some([false, false, true, true]));
+        assert!(super::layout_flags("old", false).is_none());
+        assert!(super::layout_flags("111", false).is_none());
     }
 }

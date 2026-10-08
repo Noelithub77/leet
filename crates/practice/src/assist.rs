@@ -22,6 +22,7 @@ pub enum Action {
     Pattern,
     DryRun,
     Solve,
+    Ask,
 }
 
 impl Action {
@@ -43,6 +44,7 @@ impl Action {
             Self::Pattern => "pattern",
             Self::DryRun => "dry-run",
             Self::Solve => "solve",
+            Self::Ask => "ask",
         }
     }
 
@@ -59,6 +61,7 @@ impl Action {
             Self::Pattern => "Pattern",
             Self::DryRun => "Dry run",
             Self::Solve => "Solve",
+            Self::Ask => "Chat",
         }
     }
 
@@ -76,6 +79,7 @@ impl Action {
             Self::Pattern => "The pattern, a template, and similar problems",
             Self::DryRun => "Trace your code on a case and find the first wrong step",
             Self::Solve => "Solve, test, and submit until accepted",
+            Self::Ask => "Ask about this problem or your code",
         }
     }
 
@@ -102,6 +106,7 @@ impl Action {
             Self::Pattern => schemars::schema_for!(PatternMatch),
             Self::DryRun => schemars::schema_for!(DryRun),
             Self::Solve => schemars::schema_for!(SolveReport),
+            Self::Ask => schemars::schema_for!(String),
         };
         crate::agents::strict_schema(serde_json::to_value(schema).unwrap_or_default())
     }
@@ -118,6 +123,7 @@ impl Action {
             Self::Optimize => "Compare the complexity of my attempt with the best known for this problem. Name the bottleneck line, give one nudge toward the faster approach without code, then the idea in two or three sentences (shown only when I ask). If my attempt is already optimal, say so and suggest a constant-factor or space improvement instead.",
             Self::Pattern => "Identify the algorithmic pattern this problem belongs to, the cues in the statement that reveal it, a short generic code template of the pattern in the required language (not the solution to this problem), and 3 to 5 similar problems chosen ONLY from the candidate list below, using their exact slugs.",
             Self::DryRun => "Dry-run my attempt on the given case exactly as the code executes, not as it was intended. Produce frames for each meaningful step (at most 30) with `line` set to the executed 1-based line and structures showing the variables at that moment. Set `wrong_frame` to the first frame whose state diverges from a correct solution's state, explain why, and give a fix hint without rewriting the code.",
+            Self::Ask => "Answer my question about this problem and my current code. Use the prior conversation when relevant, but treat the current code and test results as the latest state. Reply in concise Markdown. Do not edit files, run commands, or submit anything. Do not reveal a full solution unless I ask for one.",
             Self::Solve => "Solve this problem in the solution file at the path given below, in the required language, preserving the judge interface exactly. Edit only that file. Write a clean, optimal solution. Run it on the examples if a local runtime is available. When done, reply with a short report of the approach and complexity.",
         }
     }
@@ -293,6 +299,7 @@ pub enum Answer {
     Pattern(PatternMatch),
     DryRun(DryRun),
     Solve(SolveReport),
+    Chat(String),
 }
 
 impl Answer {
@@ -309,6 +316,7 @@ impl Answer {
             Action::Pattern => Self::Pattern(serde_json::from_value(value)?),
             Action::DryRun => Self::DryRun(serde_json::from_value(value)?),
             Action::Solve => Self::Solve(serde_json::from_value(value)?),
+            Action::Ask => Self::Chat(serde_json::from_value(value)?),
         })
     }
 }
@@ -321,6 +329,7 @@ pub fn execute(action: Action, request: &crate::agents::Request, events: &mut dy
 
 fn execute_with(action: Action, request: &crate::agents::Request, run: &mut dyn FnMut(&crate::agents::Request) -> anyhow::Result<crate::agents::Outcome>) -> anyhow::Result<(Option<Answer>, crate::agents::Outcome)> {
     let outcome = run(request)?;
+    if action == Action::Ask { return Ok((Some(Answer::Chat(outcome.text.clone())), outcome)); }
     match parse(action, &outcome) {
         Ok(answer) => Ok((Some(answer), outcome)),
         Err(_) if action == Action::Solve => Ok((None, outcome)),
@@ -395,7 +404,9 @@ pub fn prompt(action: Action, ctx: &Context) -> String {
         action.label(),
         action.instructions()
     );
-    if action != Action::Solve {
+    if action == Action::Ask {
+        out.push_str("Do not use tools or read files: everything you need is below.\n");
+    } else if action != Action::Solve {
         out.push_str("Answer with one JSON object matching the provided schema. Write prose fields in clear, friendly, concise English; use Markdown inline code for identifiers. Do not use tools or read files: everything you need is below.\n");
     }
     push_problem(&mut out, ctx);
@@ -562,7 +573,7 @@ Keep 1 to 4 structures per frame, the same labels across frames, and values shor
 mod tests {
     use super::*;
 
-    fn ctx<'a>(code: &'a str, cases: Vec<CaseContext<'a>>) -> Context<'a> {
+    pub(super) fn ctx<'a>(code: &'a str, cases: Vec<CaseContext<'a>>) -> Context<'a> {
         Context {
             title: "Two Sum", difficulty: "Easy", url: "https://leetcode.com/problems/two-sum/",
             statement_html: "<p>Given <code>nums</code>, 10<sup>4</sup>.</p>", code,
@@ -649,6 +660,27 @@ mod reliability_tests {
     fn request(kind: AgentKind) -> Request {
         Request { agent: Detected { kind, path: "mock".into(), version: None }, selection: Selection { agent: kind, model: "mock".into(), effort: None, fast: false }, prompt: "original problem context".into(), schema: Some(Action::Hints.schema()), cwd: std::env::temp_dir(), access: Access::ReadOnly, resume: None }
     }
+    #[test]
+    fn questions_return_markdown_without_schema_repair_or_edit_access() {
+        let mut request = request(AgentKind::Codex);
+        request.schema = None;
+        let mut calls = 0;
+        let (answer, _) = execute_with(Action::Ask, &request, &mut |request| {
+            calls += 1;
+            assert_eq!(request.access, Access::ReadOnly);
+            assert!(request.schema.is_none());
+            Ok(Outcome { text: "Check **before** inserting.".into(), session: None, structured: None })
+        }).unwrap();
+        assert_eq!(calls, 1);
+        assert!(matches!(answer, Some(Answer::Chat(text)) if text == "Check **before** inserting."));
+        assert_eq!(Action::Ask.access(), Access::ReadOnly);
+        let context = super::tests::ctx("latest_code()", vec![]);
+        let prompt = prompt(Action::Ask, &context);
+        assert!(prompt.contains("latest_code()"));
+        assert!(prompt.contains("Do not edit files"));
+        assert!(!prompt.contains("one JSON object"));
+    }
+
     #[test]
     fn assist_repairs_plain_and_invalid_answers_once_with_fresh_claude_context() {
         for text in ["plain answer", "{broken", "{}"] {

@@ -13,6 +13,7 @@ gpui_kit::actions!(
         PreviousTab,
         ToggleLeft,
         ToggleRight,
+        ToggleDescription,
         ToggleReference,
         ToggleTags,
         ToggleBottom,
@@ -53,7 +54,6 @@ gpui_kit::actions!(
         AssistPattern,
         AssistExplain,
         AssistSolve,
-        ToggleAssist,
         ToggleDebug,
         StopAssist,
         ConfigureAi,
@@ -113,8 +113,9 @@ pub const COMMANDS: &[Command] = &[
     cmd!("Run tests", "ctrl-enter", RunTests),
     cmd!("Run on LeetCode", "ctrl-shift-enter", JudgeRun),
     cmd!("Submit to LeetCode", "ctrl-alt-enter", Submit),
-    cmd!("Toggle sidebar", "alt-s", ToggleLeft),
-    cmd!("Toggle statement", "alt-d", ToggleRight),
+    cmd!("Toggle explorer", "alt-a", ToggleLeft),
+    cmd!("Toggle AI chat", "alt-d", ToggleRight),
+    cmd!("Toggle description", "alt-s", ToggleDescription),
     cmd!("Toggle reference solution", "ctrl-alt-v", ToggleReference),
     cmd!("Show/hide problem tags", "ctrl-shift-t", ToggleTags),
     cmd!("Toggle results", "alt-x", ToggleBottom),
@@ -146,7 +147,6 @@ pub const COMMANDS: &[Command] = &[
     cmd!("AI: Explain", "ctrl-alt-0", AssistExplain),
     cmd!("AI: Solve until accepted", "", AssistSolve),
     cmd!("AI: Stop runs", "", StopAssist),
-    cmd!("Assist panel", "alt-e", ToggleAssist),
     cmd!("Debugger", "ctrl-`|alt-b", ToggleDebug),
     cmd!("AI: Choose agent and model", "ctrl-shift-e", ConfigureAi),
     cmd!("AI: Switch agent", "ctrl-alt-a", CycleAgent),
@@ -218,6 +218,7 @@ pub fn reload_keys(config: &practice::config::Config, cx: &mut App) {
     crate::omnibar::bind_keys(cx);
     crate::accounts::bind_keys(cx);
     crate::ai::bind_keys(cx);
+    crate::assist::bind_keys(cx);
     crate::debug_view::bind_keys(cx);
     crate::onboarding::bind_keys(cx);
     crate::statement::bind_keys(cx);

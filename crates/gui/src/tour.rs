@@ -25,7 +25,7 @@ enum Step { Problem, Editor, Tests, Assist, Debugger, Playback }
 const STEPS: [Step; 6] = [Step::Problem, Step::Editor, Step::Tests, Step::Assist, Step::Debugger, Step::Playback];
 
 #[derive(Clone, Copy)]
-struct Layout { left: bool, right: bool, bottom: bool, zen: bool, assist: bool, history: bool, debug: bool, center: Center, had_problem: bool }
+struct Layout { left: bool, right: bool, bottom: bool, zen: bool, description: bool, history: bool, debug: bool, center: Center, had_problem: bool }
 
 pub struct Tour { index: usize, layout: Layout, focus: FocusHandle }
 
@@ -33,7 +33,7 @@ impl Workspace {
     pub fn start_tour(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.tour.is_some() || self.onboarding.is_some() { return; }
         self.tour = Some(Tour { index: 0, focus: cx.focus_handle(), layout: Layout {
-            left: self.left, right: self.right, bottom: self.bottom, zen: self.zen, assist: self.assist_open,
+            left: self.left, right: self.right, bottom: self.bottom, zen: self.zen, description: self.description,
             history: self.history_mode, debug: self.debug_mode, center: self.center, had_problem: self.session.is_some(),
         }});
         self.tour_step(window, cx);
@@ -59,7 +59,7 @@ impl Workspace {
             self.left = false;
             self.right = step == Step::Assist;
             self.bottom = step == Step::Tests;
-            self.assist_open = step == Step::Assist;
+            self.description = step == Step::Assist;
             self.history_mode = false;
             if matches!(step, Step::Debugger | Step::Playback) { self.preview_debug(window, cx); }
             else { self.set_debug(false, window, cx); }
@@ -78,7 +78,7 @@ impl Workspace {
         let Some(tour) = self.tour.take() else { return };
         let layout = tour.layout;
         self.left = layout.left; self.right = layout.right; self.bottom = layout.bottom;
-        self.zen = layout.zen; self.assist_open = layout.assist; self.history_mode = layout.history;
+        self.zen = layout.zen; self.description = layout.description; self.history_mode = layout.history;
         self.center = if !layout.had_problem && self.session.is_some() { Center::Editor } else { layout.center };
         if layout.debug && self.session.is_some() { self.preview_debug(window, cx); }
         else { self.set_debug(false, window, cx); }
@@ -105,7 +105,7 @@ pub fn panel(workspace: &Workspace, cx: &mut Context<Workspace>) -> Option<AnyEl
         Step::Problem => ("Open a problem", "FindProblem"),
         Step::Editor => ("Write your solution", "FocusEditor"),
         Step::Tests => ("Run tests", "RunTests"),
-        Step::Assist => ("Ask Assist", "ToggleAssist"),
+        Step::Assist => ("Ask Assist", "ToggleRight"),
         Step::Debugger => ("Code ↔ Debug", "ToggleDebug"),
         Step::Playback => ("Step through", ""),
     };
