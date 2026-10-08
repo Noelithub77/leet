@@ -224,6 +224,7 @@ pub fn reload_keys(config: &practice::config::Config, cx: &mut App) {
     crate::ai::bind_keys(cx);
     crate::assist::bind_keys(cx);
     crate::debug_view::bind_keys(cx);
+    crate::tour::bind_keys(cx);
     crate::onboarding::bind_keys(cx);
     crate::statement::bind_keys(cx);
 }

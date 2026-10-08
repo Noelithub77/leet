@@ -8,6 +8,7 @@ use serde_json::json;
 use crate::debug_view::{Debugger, Snapshot};
 
 mod statement;
+mod tour;
 
 const PYTHON: &str = "import sys\n\ndef solve():\n    data = list(map(int, sys.stdin.buffer.read().split()))\n    answers = []\n    for i in range(1, len(data)):\n        n = data[i]\n        answer = n * 2\n        answers.append(answer)\n        print(answer)\n\nif __name__ == '__main__':\n    solve()\n";
 const CPP: &str = "#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t;\n    cin >> t;\n    vector<int> answers;\n    while (t--) {\n        int n;\n        cin >> n;\n        int answer = n * 2;\n        answers.push_back(answer);\n        cout << answer << '\\n' << flush;\n    }\n    return 0;\n}\n";
@@ -60,6 +61,7 @@ pub fn run() -> Result<()> {
     cx.allow_parking();
     cx.update(init);
     let mut reports = vec![statement::native(&mut cx, &output, pixels)?];
+    reports.push(tour::native(&mut cx, &output, pixels, video)?);
     for slug in ["cf:1:A", "cc:GUIFIXTURE"] {
         for language in [Language::Python, Language::Cpp] {
             let name = format!("{}-{}", if slug.starts_with("cf:") { "codeforces" } else { "codechef" }, language.id());
@@ -112,7 +114,7 @@ pub fn run() -> Result<()> {
                 check_state(&debugger, cx, 1, Some(len - 1), false)
             })??;
             if pixels { capture(&mut cx, handle, &output.join(format!("{name}-final.png")))?; }
-            if video && reports.len() == 1 { motion_video(&mut cx, handle, &debugger, &output)?; }
+            if video && reports.len() == 2 { motion_video(&mut cx, handle, &debugger, &output)?; }
             reports.push(json!({"fixture":name,"passed":true,"checks":["real recording","case clicks","step button","keyboard steps","case shortcuts","seek drag","play/pause","final verdict"],"pixels":pixels}));
             cx.update_window(handle, |_, window, _| window.remove_window())?;
             cx.run_until_parked();

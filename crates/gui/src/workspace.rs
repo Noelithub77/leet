@@ -238,9 +238,34 @@ pub struct Workspace {
 impl Workspace {
     pub fn new(config: Config, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let db = Arc::new(Db::open(&practice::config::database_path()).expect("open leet database"));
-        let recent_slugs = db.get("recent").ok().flatten().map(|text| text.lines().map(str::to_owned).take(RECENT_LIMIT).collect()).unwrap_or_default();
-        let client = Arc::new(Client::new(creds::load(Account::LeetCode).ok()));
         let accounts = [Account::LeetCode, Account::NeetCode].map(|account| creds::load(account).ok());
+        let mut this = Self::from_storage(config, db, accounts.clone(), window, cx);
+        this.assist.update(cx, |assist, cx| assist.detect(cx));
+        let workspace = this.config.workspace.clone();
+        cx.background_spawn(async move {
+            if let Err(err) = git::ensure_repo(&workspace) {
+                eprintln!("leet: git init {}: {err}", workspace.display());
+            }
+        }).detach();
+        this.show_home(window, cx);
+        let initial_focus = this.nav_focus.clone();
+        window.defer(cx, move |window, cx| initial_focus.focus(window, cx));
+        this.load_catalog(window, cx);
+        if accounts[1].is_some() { this.refresh_neetcode(window, cx); }
+        this._tasks.push(this.watch_disk(window, cx));
+        let watcher = crate::update::watch(&mut this, window, cx);
+        this._tasks.push(watcher);
+        this._tasks.push(crate::update::check(window, cx));
+        this.start_companion(window, cx);
+        if !this.config.onboarding_completed { this.begin_onboarding(false, window, cx); }
+        else { this.start_default_tour(window, cx); }
+        if this.config.source == Source::Codeforces { this.refresh_codeforces(false, window, cx); }
+        this
+    }
+
+    pub(crate) fn from_storage(config: Config, db: Arc<Db>, accounts: [Option<creds::Creds>; 2], window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let recent_slugs = db.get("recent").ok().flatten().map(|text| text.lines().map(str::to_owned).take(RECENT_LIMIT).collect()).unwrap_or_default();
+        let client = Arc::new(Client::new(accounts[0].clone()));
         let account_names = accounts.each_ref().map(|session| session.as_ref().map_or("Signed out".into(), |s| s.display_name().unwrap_or("Account").to_owned()));
         let neetcode_solved = accounts[1].as_ref().and_then(|s| db.get(&format!("neetcode-progress:{}", s.user_id)).ok().flatten())
             .map(|text| text.lines().map(str::to_owned).collect()).unwrap_or_default();
@@ -288,7 +313,7 @@ impl Workspace {
             by_slug: HashMap::new(),
             solved: HashSet::new(),
             library: Library::default(),
-            left: false,
+            left: true,
             right: false,
             description: true,
             bottom: true,
@@ -328,27 +353,9 @@ impl Workspace {
             _tasks: vec![],
             _subscriptions: vec![omni_sub],
         };
+        this.home.sidebar = true;
         this.restore_layout();
         this.rebuild_library();
-        let workspace = this.config.workspace.clone();
-        cx.background_spawn(async move {
-            if let Err(err) = git::ensure_repo(&workspace) {
-                eprintln!("leet: git init {}: {err}", workspace.display());
-            }
-        })
-        .detach();
-        this.show_home(window, cx);
-        let initial_focus = this.nav_focus.clone();
-        window.defer(cx, move |window, cx| initial_focus.focus(window, cx));
-        this.load_catalog(window, cx);
-        if accounts[1].is_some() { this.refresh_neetcode(window, cx); }
-        this._tasks.push(this.watch_disk(window, cx));
-        let watcher = crate::update::watch(&mut this, window, cx);
-        this._tasks.push(watcher);
-        this._tasks.push(crate::update::check(window, cx));
-        this.start_companion(window, cx);
-        if !this.config.onboarding_completed { this.begin_onboarding(false, window, cx); }
-        if this.config.source == Source::Codeforces { this.refresh_codeforces(false, window, cx); }
         this
     }
 
@@ -633,6 +640,7 @@ impl Workspace {
     // ---- problem session ---------------------------------------------------------------
 
     pub fn open_problem(&mut self, slug: String, window: &mut Window, cx: &mut Context<Self>) {
+        self.practice_tour_step(cx);
         if self.session.as_ref().is_some_and(|session| session.slug == slug) {
             self.back_to_editor(window, cx);
             return;

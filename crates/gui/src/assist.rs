@@ -245,7 +245,6 @@ impl Assist {
             runs: vec![], next_id: 0, slug: None, ticker: None, scroll: ScrollHandle::new(), composer, composer_thread: None, threads: vec![], selected_thread: None, loaded_threads: HashSet::new(), show_threads: true, thread_scroll: UniformListScrollHandle::new(), thread_search, thread_query: String::new(), thread_selection: 0, conversation_error: None, editing: None, ai_tab: 0, context_key: None };
         if let Err(error) = this.db.migrate_chats() { this.conversation_error = Some(error.to_string()); }
         this.refresh_threads();
-        this.detect(cx);
         this
     }
 

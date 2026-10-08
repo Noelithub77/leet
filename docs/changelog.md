@@ -40,7 +40,9 @@
 - Collapsible platform settings with provider icons, Log in / Log out buttons, and Codeforces handle.
 - Navigate Settings tabs with Tab, Shift+Tab, and arrow keys.
 - Reset app settings and reopen onboarding while keeping solutions, accounts, progress, and cache.
-- Optional keyboard tour of problems, editor, tests, Assist, and debugger, with Skip available throughout.
+- A centered, animated guided tour appears once for every user, with step icons, clickable actions, and native shortcut keycaps.
+- The tour moves aside when you try a step with its action or keyboard shortcut.
+- Start with Explorer open and NeetCode 150 selected on new installs.
 - Collapse Assist result cards while keeping run status and recovery controls visible.
 - LeetCode weekly and biweekly contests alongside Codeforces, with native problem explorers.
 - Continue stopped solves or retry interrupted AI actions from their result cards.
@@ -75,6 +77,8 @@
 
 <details>
 <summary>Fix</summary>
+
+- Keep tour navigation working after changing keyboard shortcuts, and restore the workspace layout when the tour ends.
 
 - Preserve provider formulas through statement conversion and keep math out of literal code.
 - Retry blocked Codeforces statements with installed curl before the snapshot fallback.

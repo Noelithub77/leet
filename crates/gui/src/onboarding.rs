@@ -131,6 +131,7 @@ impl Setup {
                             ws.rebuild_rows();
                             ws.omni.stale = true;
                             ws.show_home(window, cx);
+                            ws.start_default_tour(window, cx);
                             if source == Source::Codeforces { ws.refresh_codeforces(false, window, cx); }
                             anyhow::Ok(())
                         });

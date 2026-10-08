@@ -61,6 +61,7 @@ impl Workspace {
                 this.statement.update(cx, |statement, cx| statement.toggle_reference(window, cx));
             }))
             .on_action(cx.listener(|this, _: &ToggleRight, window, cx| {
+                this.practice_tour_step(cx);
                 this.right = !this.right;
                 this.zen = false;
                 if !this.right { this.focus_editor(window, cx); }
@@ -133,6 +134,7 @@ impl Workspace {
                 let statement = this.statement.clone(); window.defer(cx, move |window, cx| statement.update(cx, |statement, cx| statement.focus(window, cx)));
             }))
             .on_action(cx.listener(|this, _: &FocusEditor, window, cx| {
+                this.practice_tour_step(cx);
                 if this.center == Center::Editor { this.focus_editor(window, cx); } else { this.back_to_editor(window, cx); }
                 this.flash("Editor", cx);
             }))
@@ -147,7 +149,7 @@ impl Workspace {
                 this.select_home_list(crate::home::HomeList::Contests, window, cx);
                 this.contests.past_open = !this.contests.past_open; cx.notify();
             }))
-            .on_action(cx.listener(|this, _: &FindProblem, window, cx| this.omni_open(Scope::Problems, window, cx)))
+            .on_action(cx.listener(|this, _: &FindProblem, window, cx| { this.practice_tour_step(cx); this.omni_open(Scope::Problems, window, cx); }))
             .on_action(cx.listener(|this, _: &PickTheme, window, cx| this.omni_open(Scope::Themes, window, cx)))
             .on_action(cx.listener(|this, _: &AddCustomTest, window, cx| crate::dialogs::open_custom_test(this, window, cx)))
             .on_action(cx.listener(|this, _: &EditTestCase, window, cx| crate::case_editor::begin(this, crate::case_editor::Field::Input, window, cx)))
@@ -160,6 +162,7 @@ impl Workspace {
                 this.flash(label, cx);
             }))
             .on_action(cx.listener(|this, _: &RunTests, window, cx| {
+                this.practice_tour_step(cx);
                 this.flash("Run tests", cx);
                 this.run_tests(window, cx);
             }))
@@ -188,6 +191,7 @@ impl Workspace {
             .on_action(cx.listener(|this, _: &AssistSolve, window, cx| this.run_assist(Action::Solve, window, cx)))
             .on_action(cx.listener(|this, _: &StopAssist, _, cx| { this.assist.update(cx, |assist, cx| assist.stop_all(cx)); this.flash("AI stopped", cx); }))
             .on_action(cx.listener(|this, _: &ToggleDebug, window, cx| {
+                this.practice_tour_step(cx);
                 if this.center != Center::Editor { this.back_to_editor(window, cx); }
                 let on = !this.debug_mode;
                 this.set_debug(on, window, cx);
