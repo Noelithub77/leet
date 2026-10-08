@@ -99,7 +99,7 @@ impl Statement {
         let theme = cx.theme();
         let open = cx.global::<Sections>().active() == Some(section);
         v_flex().min_w_0().min_h_0().rounded_lg()
-            .border_1().border_color(theme.border.opacity(if open { 0.7 } else { 0.4 }))
+            .border_1().border_color(crate::theme::statement_accent(section, cx).opacity(if open { 0.36 } else { 0.26 }))
             .bg(theme.muted.opacity(if open { 0.18 } else { 0.08 }))
             .when(open, |view| view.flex_1())
             .when(!open, |view| view.flex_shrink_0())

@@ -125,3 +125,13 @@ pub fn selected_choice(button: Button, selected: bool, cx: &App) -> Button {
         .active(accent.opacity(0.16)))
         .border_1().border_color(accent)
 }
+
+/// Pastel identities for Description, Examples, and Constraints cards.
+pub fn statement_accent(section: usize, cx: &App) -> Hsla {
+    let dark = Theme::global(cx).mode.is_dark();
+    rgb(match (section, dark) {
+        (0, true) => 0x99dfce, (0, false) => 0x397e6d,
+        (1, true) => 0xa0c4ff, (1, false) => 0x536aae,
+        (_, true) => 0xd8b4fe, (_, false) => 0x9561b7,
+    }).into()
+}
