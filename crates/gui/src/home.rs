@@ -360,7 +360,7 @@ impl Workspace {
                         .child(Button::new("home-find").ghost().small().icon(IconName::Search)
                             .accessibility_label("Find problem").tooltip_with_action("Find problem", &actions::FindProblem, Some(actions::WORKSPACE))
                             .on_click(cx.listener(|this, _, window, cx| this.omni_open(crate::omnibar::Scope::Problems, window, cx))))
-                        .when(!self.home.sidebar, |row| row.child(self.render_source_menu(cx)))
+                        .when(!self.home.sidebar, |row| row.child(self.render_source_menu(crate::source_menu::SourceMenuAnchor::Home, cx)))
                         .when(!self.home.sidebar, |row| row.child(Button::new("home-roadmap").ghost().small().icon(IconName::Map)
                             .accessibility_label("Roadmap").tooltip_with_action("Roadmap", &actions::ToggleRoadmap, Some(actions::WORKSPACE))
                             .on_click(cx.listener(|this, _, window, cx| this.show_roadmap(window, cx)))))))

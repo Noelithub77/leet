@@ -87,8 +87,10 @@ ordered by start time. Expand past contests for the ten most recent rounds acros
 both providers. Rows open native problem explorers; the accent-colored link icon
 opens the contest website. Unpublished problems appear when the contest starts.
 LeetCode contest problems reuse the usual editor, local tests, and LeetCode judge.
-Provider icons identify each source; hover the active NeetCode list in the provider
-menu to select 150, 250, or All from its submenu.
+Provider icons identify each source. Clicking NeetCode in the provider menu selects
+the last-used list (NeetCode 150 by default). Hover it to reveal 150, 250, and All;
+clicking a list saves it. Right/left arrows enter or leave the list choices, and
+Enter selects the highlighted provider or list.
 
 `./ops contests:refresh --json` refreshes both public lists in the local user cache,
 retaining each provider's last successful list on failure. Use `--contest ID` for

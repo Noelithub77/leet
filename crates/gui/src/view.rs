@@ -251,7 +251,7 @@ impl Workspace {
         } else { (self.solved.len(), self.catalog.len()) };
         v_flex().size_full().gap_2()
             .child(h_flex().h_9().px_2().gap_2().items_center()
-                .child(self.render_source_menu(cx))
+                .child(self.render_source_menu(crate::source_menu::SourceMenuAnchor::Explorer, cx))
                 .child(div().flex_1().text_xs().text_color(theme.muted_foreground).child(format!("{solved}/{total}")))
                 .when_some(self.contests.selected.as_ref().filter(|id| id.source() == self.config.source).cloned(), |row, id| row
                     .child(gpui_kit::component::button::Button::new("explorer-contest-browser").ghost().xsmall()

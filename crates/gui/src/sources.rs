@@ -2,14 +2,13 @@
 use std::collections::{HashMap, HashSet};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::notification::Notification;
-use gpui_kit::component::{Side, Icon, Sizable as _, h_flex, v_flex};
+use gpui_kit::component::{Icon, h_flex, v_flex};
 use gpui_kit::*;
 use practice::db::Db;
 use practice::language::Source;
 use practice::leetcode::CatalogItem;
-use practice::roadmap::{List, TOPICS};
+use practice::roadmap::TOPICS;
 use crate::workspace::{Focus, Workspace};
 
 #[derive(Default)]
@@ -20,6 +19,7 @@ pub struct SourcesState {
     pub ratings: HashMap<String, u32>,
     pub solved: HashSet<String>,
     pub loading: bool,
+    pub menu: crate::source_menu::SourceMenuState,
 }
 impl SourcesState {
     pub fn load(db: &Db, handle: &str) -> Self {
@@ -96,6 +96,7 @@ impl Workspace {
         match self.config.source { Source::Codeforces => &self.sources.catalog, Source::CodeChef => &self.sources.codechef, _ => &self.catalog }
     }
     pub fn choose_source(&mut self, source: Source, window: &mut Window, cx: &mut Context<Self>) {
+        self.sources.menu.hide();
         self.contests.selected = None;
         self.config.source = source;
         self.save_config(window, cx);
@@ -185,8 +186,7 @@ impl Workspace {
         self.sidebar_scroll.scroll_to_item(0, ScrollStrategy::Top);
         cx.notify();
     }
-    pub fn render_source_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let weak = cx.weak_entity();
+    pub fn render_source_menu(&self, anchor: crate::source_menu::SourceMenuAnchor, cx: &mut Context<Self>) -> impl IntoElement {
         let label = if self.config.source == Source::NeetCode { self.config.roadmap_list.label().to_owned() }
             else if let Some(id) = self.contests.selected.as_ref().filter(|id| id.source() == self.config.source) {
                 match id {
@@ -194,35 +194,7 @@ impl Workspace {
                     practice::contests::ContestId::LeetCode(slug) => self.contests.list.iter().find(|c| c.id() == *id).map(|c| c.name().to_owned()).unwrap_or_else(|| slug.clone()),
                 }
             } else { self.config.source.label().to_owned() };
-        let current = self.config.source;
-        let current_list = self.config.roadmap_list;
-        Button::new("practice-source").ghost().small().label(label).icon(crate::brand::source_icon(current).mr_1())
-            .child(Icon::new(IconName::ChevronDown).xsmall())
-            .accessibility_label("Practice source").tooltip_with_action("Practice source", &crate::actions::CycleSource, Some(crate::actions::WORKSPACE))
-            .dropdown_menu(move |menu, window, cx| {
-                let lists_weak = weak.clone();
-                let mut menu = menu.check_side(Side::Right).submenu_with_icon(Some(crate::brand::source_icon(Source::NeetCode)), current_list.label(), window, cx, move |mut menu, _, _| {
-                    menu = menu.check_side(Side::Right);
-                    for list in [List::NeetCode150, List::NeetCode250, List::All] {
-                        let weak = lists_weak.clone();
-                        menu = menu.item(PopupMenuItem::new(list.label()).checked(current == Source::NeetCode && current_list == list).on_click(move |_, window, cx| {
-                            let _ = weak.update(cx, |ws, cx| {
-                                ws.config.roadmap_list = list;
-                                ws.rebuild_library();
-                                ws.choose_source(Source::NeetCode, window, cx);
-                            });
-                        }));
-                    }
-                    menu
-                });
-                for source in [Source::LeetCode, Source::Codeforces, Source::CodeChef] {
-                    let weak = weak.clone();
-                    menu = menu.item(PopupMenuItem::new(source.label()).icon(crate::brand::source_icon(source)).checked(current == source).on_click(move |_, window, cx| {
-                        let _ = weak.update(cx, |ws, cx| ws.choose_source(source, window, cx));
-                    }));
-                }
-                menu
-            })
+        crate::source_menu::render(self, anchor, label, cx)
     }
 
     pub fn render_topic_grid(&self, cx: &mut Context<Self>) -> impl IntoElement {

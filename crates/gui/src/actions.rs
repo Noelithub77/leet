@@ -254,6 +254,12 @@ pub fn bind_keys(config: &practice::config::Config, cx: &mut App) {
         KeyBinding::new("right", Right, Some(NAV)),
         KeyBinding::new("enter", Confirm, Some(NAV)),
         KeyBinding::new("escape", Back, Some(NAV)),
+        KeyBinding::new("up", Up, Some("PracticeSourceMenu")),
+        KeyBinding::new("down", Down, Some("PracticeSourceMenu")),
+        KeyBinding::new("left", Left, Some("PracticeSourceMenu")),
+        KeyBinding::new("right", Right, Some("PracticeSourceMenu")),
+        KeyBinding::new("enter", Confirm, Some("PracticeSourceMenu")),
+        KeyBinding::new("escape", Back, Some("PracticeSourceMenu")),
         // Escape while editing a setting cancels the edit instead of clearing the field.
         KeyBinding::new("escape", Back, Some("Settings > Input")),
         KeyBinding::new("enter", Confirm, Some("Settings > Input")),

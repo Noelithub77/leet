@@ -1,6 +1,8 @@
 <details open>
 <summary>Feat</summary>
 
+- Click NeetCode to return to the saved list; hover to choose another list.
+
 - Reopen closed problem tabs with Ctrl+Shift+T, preserving their editor state.
 - Close all problem tabs with Ctrl+Shift+W and toggle tags with Alt+T.
 

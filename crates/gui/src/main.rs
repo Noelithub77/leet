@@ -21,6 +21,7 @@ mod onboarding;
 mod language_server;
 mod language_picker;
 mod sources;
+mod source_menu;
 mod home;
 mod contests;
 mod history;
