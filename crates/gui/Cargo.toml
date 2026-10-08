@@ -8,6 +8,9 @@ license.workspace = true
 name = "leet"
 path = "src/main.rs"
 
+[features]
+gui-test = ["gpui-kit/test-support"]
+
 [dependencies]
 anyhow = "1"
 lsp-types = { version = "0.97", features = ["proposed"] }

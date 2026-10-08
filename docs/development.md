@@ -14,6 +14,9 @@ Builds run with `nice` and at most 4 parallel jobs (`.cargo/config.toml`). Each 
 
 ## Layout
 
+For GUI changes, use the fixture-only commands and evidence boundaries in
+[isolated GUI verification](gui-testing.md).
+
 One window with a pinned, icon-only Home tab and multiple problem tabs. Home
 opens on every launch, showing up to 12 recent problems from the local cache.
 Opening a recent problem uses the cached statement and existing Solution.

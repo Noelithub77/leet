@@ -7,6 +7,8 @@ mod companion_service;
 mod ai;
 mod assist;
 mod debug_view;
+#[cfg(feature = "gui-test")]
+mod gui_test;
 #[path = "gen-ui/mod.rs"]
 mod gen_ui;
 mod brand;
@@ -39,6 +41,11 @@ use gpui_kit::*;
 use practice::config::Config;
 
 fn main() {
+    #[cfg(feature = "gui-test")]
+    if std::env::args().nth(1).as_deref() == Some("--gui-test") {
+        if let Err(error) = gui_test::run() { eprintln!("leet GUI test: {error:#}"); std::process::exit(1); }
+        return;
+    }
     if std::env::args().nth(1).as_deref() == Some("--companion-service") {
         if let Err(error) = companion_service::run() { eprintln!("leet CPH: {error}"); std::process::exit(1); }
         return;

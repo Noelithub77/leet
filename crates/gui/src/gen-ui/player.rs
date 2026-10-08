@@ -90,7 +90,7 @@ pub fn controls(id: &str, playback: &Playback, markers: &[Marker], on: impl Fn(C
         let (down, drag) = (on.clone(), on.clone());
         let (seek_down, seek_drag) = (seek_to.clone(), seek_to);
         let markers: Vec<Marker> = markers.to_vec();
-        div().id(SharedString::from(format!("{id}-seek"))).flex_1().min_w(px(80.)).h(px(22.)).relative().cursor_pointer()
+        div().id(SharedString::from(format!("{id}-seek"))).test_support().flex_1().min_w(px(80.)).h(px(22.)).relative().cursor_pointer()
             .child(canvas({ let bounds = bounds.clone(); move |b, _, _| bounds.set(b) }, |_, _, _, _| ()).absolute().size_full())
             .child(div().absolute().left_0().right_0().top(px(9.)).h(px(4.)).rounded_full().bg(theme.muted))
             .child(div().absolute().left_0().top(px(9.)).h(px(4.)).rounded_full().bg(theme.primary.opacity(0.85)).w(relative(fraction)))

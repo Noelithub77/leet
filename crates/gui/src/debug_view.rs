@@ -88,9 +88,14 @@ fn line_highlights(highlighter: &SyntaxHighlighter, range: &Range<usize>, theme:
         .collect()
 }
 
-pub struct Debugger {
+struct Explanation {
     workspace: WeakEntity<Workspace>,
     assist: Entity<Assist>,
+    _observe: Subscription,
+}
+
+pub struct Debugger {
+    explanation: Option<Explanation>,
     focus: FocusHandle,
     snapshot: Option<Snapshot>,
     lines: Vec<SourceLine>,
@@ -105,13 +110,19 @@ pub struct Debugger {
     unsupported: Option<String>,
     preview: bool,
     code_scroll: ScrollHandle,
-    _observe: Subscription,
 }
 
 impl Debugger {
     pub fn new(workspace: WeakEntity<Workspace>, assist: Entity<Assist>, cx: &mut Context<Self>) -> Self {
         let observe = cx.observe(&assist, |_, _, cx| cx.notify());
-        Self { workspace, assist, _observe: observe, focus: cx.focus_handle(), snapshot: None, lines: vec![], highlighter: SyntaxHighlighter::new("python"), traces: vec![], selected: 0, playback: Playback::new(0),
+        Self::build(Some(Explanation { workspace, assist, _observe: observe }), cx)
+    }
+
+    #[cfg(feature = "gui-test")]
+    pub(crate) fn isolated(cx: &mut Context<Self>) -> Self { Self::build(None, cx) }
+
+    fn build(explanation: Option<Explanation>, cx: &mut Context<Self>) -> Self {
+        Self { explanation, focus: cx.focus_handle(), snapshot: None, lines: vec![], highlighter: SyntaxHighlighter::new("python"), traces: vec![], selected: 0, playback: Playback::new(0),
             last_frame: Instant::now(), ticker: None, generation: 0, unsupported: None, preview: false, code_scroll: ScrollHandle::new() }
     }
 
@@ -174,6 +185,21 @@ impl Debugger {
         }).detach();
         cx.notify();
     }
+
+    #[cfg(feature = "gui-test")]
+    pub(crate) fn fixture_status(&self) -> anyhow::Result<Option<(usize, usize, usize, bool)>> {
+        for recording in &self.traces {
+            if let Recording::Failed(error) = recording { anyhow::bail!("{error}"); }
+            if let Recording::Ready(trace) = recording {
+                if let Some(error) = &trace.error { anyhow::bail!("{error}"); }
+            }
+        }
+        if self.traces.iter().any(|trace| !matches!(trace, Recording::Ready(_))) { return Ok(None); }
+        Ok(Some((self.selected, self.playback.index, self.playback.len, self.playback.playing)))
+    }
+
+    #[cfg(feature = "gui-test")]
+    pub(crate) fn fixture_verdict(&self) -> Option<bool> { self.verdict(self.selected) }
 
     fn trace(&self) -> Option<&Trace> {
         match self.traces.get(self.selected) { Some(Recording::Ready(trace)) => Some(trace), _ => None }
@@ -260,7 +286,7 @@ impl Render for Debugger {
                 (_, Some(false)) => (Some(IconName::CircleX), theme.danger),
                 (_, None) => (Some(IconName::CircleDot), theme.info),
             };
-            h_flex().id(("debug-case", index)).h_7().px_2p5().gap_1p5().rounded_md().text_xs().cursor_pointer()
+            h_flex().id(("debug-case", index)).test_support().h_7().px_2p5().gap_1p5().rounded_md().text_xs().cursor_pointer()
                 .bg(if active { theme.secondary_active } else { theme.secondary })
                 .when(active, |el| el.border_1().border_color(color.opacity(0.6)))
                 .child(match icon { Some(icon) => Icon::new(icon).size_3p5().text_color(color).into_any_element(), None => Spinner::new().xsmall().into_any_element() })
@@ -269,7 +295,7 @@ impl Render for Debugger {
                 .on_click(cx.listener(move |this, _, _, cx| this.select(index, cx)))
         }));
         let trace = self.trace();
-        let review = self.snapshot.as_ref().and_then(|s| self.assist.read(cx).review(&s.slug, self.selected));
+        let review = self.explanation.as_ref().and_then(|explanation| self.snapshot.as_ref().and_then(|s| explanation.assist.read(cx).review(&s.slug, self.selected)));
         let wrong = match &review { Some(Ok(review)) => review.wrong_step, _ => None };
         let step = trace.and_then(|t| t.steps.get(self.playback.index));
         let previous = trace.and_then(|t| self.playback.index.checked_sub(1).and_then(|i| t.steps.get(i)));
@@ -279,11 +305,12 @@ impl Render for Debugger {
             .child(div().flex_1())
             .when_some(trace, |el, t| el.child(div().text_xs().text_color(theme.muted_foreground)
                 .child(format!("{} steps{}", t.steps.len(), if t.truncated { " · first part" } else { "" }))))
-            .when(trace.is_some() && !matches!(review, Some(Err(_))), |el| el.child(Button::new("debug-explain").ghost().xsmall().icon(IconName::Sparkles).label("Explain")
+            .when(self.explanation.is_some() && trace.is_some() && !matches!(review, Some(Err(_))), |el| el.child(Button::new("debug-explain").ghost().xsmall().icon(IconName::Sparkles).label("Explain")
                 .tooltip("Ask AI where this case first goes wrong, using the real trace")
                 .on_click(cx.listener(|this, _, window, cx| {
                     let Some(digest) = this.trace().map(|trace| practice::assist::trace_digest(trace, 400)) else { return };
-                    let (workspace, case) = (this.workspace.clone(), this.selected);
+                    let Some(explanation) = &this.explanation else { return };
+                    let (workspace, case) = (explanation.workspace.clone(), this.selected);
                     window.defer(cx, move |window, cx| { let _ = workspace.update(cx, |ws, cx| ws.review_trace(case, digest, window, cx)); });
                 }))))
             .when(matches!(review, Some(Err(_))), |el| el.child(h_flex().gap_1p5().text_xs().text_color(theme.muted_foreground)
