@@ -26,6 +26,7 @@ pub enum HomeList { #[default] Recent, Contests }
 
 #[derive(Default)]
 pub struct HomeState {
+    closed_tabs: Vec<(usize, ProblemTab)>,
     pub list: HomeList,
     pub selected: usize,
     pub sidebar: bool,
@@ -36,7 +37,7 @@ pub struct HomeState {
 
 impl Workspace {
     pub(crate) fn clear_tab_language_adapters(&self, cx: &mut App) {
-        for tab in self.tabs.iter().flatten() { crate::language_server::clear_editor_adapters(&tab.editor, cx); }
+        for tab in self.tabs.iter().flatten().chain(self.home.closed_tabs.iter().map(|(_, tab)| tab)) { crate::language_server::clear_editor_adapters(&tab.editor, cx); }
     }
     pub fn park_tab(&mut self) {
         self.debug_mode = false;
@@ -216,9 +217,9 @@ impl Workspace {
                 return;
             }
         }
-        self.session = None;
+        self.park_tab();
         if let Some(index) = self.active_tab.take() {
-            self.tabs.remove(index);
+            if let Some(tab) = self.tabs.remove(index) { self.home.closed_tabs.push((index, tab)); }
             if !self.tabs.is_empty() {
                 self.take_tab(index.min(self.tabs.len() - 1));
                 self.back_to_editor(window, cx);
@@ -226,6 +227,29 @@ impl Workspace {
             }
         }
         self.show_home(window, cx);
+    }
+
+    pub fn reopen_problem(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some((former_index, tab)) = self.home.closed_tabs.pop() else { return; };
+        let slug = tab.session.slug.clone();
+        let open_slugs: Vec<_> = self.tabs.iter().enumerate().map(|(index, tab)| {
+            if self.active_tab == Some(index) { self.session.as_ref().map(|session| session.slug.as_str()) }
+            else { tab.as_ref().map(|tab| tab.session.slug.as_str()) }
+        }).collect();
+        match reopen_target(&slug, former_index, &open_slugs) {
+            ReopenTarget::Existing(index) => self.select_tab(index, window, cx),
+            ReopenTarget::Restore(index) => {
+                self.save_now(cx);
+                self.assist.update(cx, |assist, cx| assist.stop_solves(cx));
+                self.park_tab();
+                self.active_tab = None;
+                self.tabs.insert(index, Some(tab));
+                self.select_tab(index, window, cx);
+                if self.session.as_ref().is_some_and(|session| session.question.is_none()) {
+                    self.load_problem(slug, window, cx);
+                }
+            }
+        }
     }
 
     pub fn render_tabs(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -332,6 +356,16 @@ impl Workspace {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum ReopenTarget { Existing(usize), Restore(usize) }
+
+fn reopen_target(slug: &str, former_index: usize, open_slugs: &[Option<&str>]) -> ReopenTarget {
+    match open_slugs.iter().position(|open| *open == Some(slug)) {
+        Some(index) => ReopenTarget::Existing(index),
+        None => ReopenTarget::Restore(former_index.min(open_slugs.len())),
+    }
+}
+
 fn next_problem_tab(current: Option<usize>, count: usize, delta: isize) -> Option<usize> {
     if count == 0 { return None; }
     Some(match current {
@@ -343,7 +377,18 @@ fn next_problem_tab(current: Option<usize>, count: usize, delta: isize) -> Optio
 
 #[cfg(test)]
 mod tests {
-    use super::next_problem_tab;
+    use super::{next_problem_tab, reopen_target, ReopenTarget};
+
+    #[::core::prelude::v1::test]
+    fn reopening_preserves_position_and_avoids_duplicates_across_sources() {
+        let open = [Some("two-sum"), Some("cf:1:A"), Some("cc:START01")];
+        for (index, slug) in open.iter().enumerate() {
+            assert_eq!(reopen_target(slug.unwrap(), 9, &open), ReopenTarget::Existing(index));
+        }
+        assert_eq!(reopen_target("cf:2:A", 1, &open), ReopenTarget::Restore(1));
+        assert_eq!(reopen_target("cc:FLOW001", 9, &open), ReopenTarget::Restore(3));
+        assert_eq!(reopen_target("two-sum", 2, &[]), ReopenTarget::Restore(0));
+    }
 
     #[::core::prelude::v1::test]
     fn tab_navigation_wraps_only_among_problems() {

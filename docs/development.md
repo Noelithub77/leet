@@ -45,6 +45,7 @@ Modifier shortcuts follow the user's VS Code bindings. Bare arrows, `enter` and 
 | `ctrl+h` / `ctrl+.` | Open the pinned Home view |
 | `ctrl+tab` / `ctrl+shift+tab` | Next / previous tab |
 | `ctrl+w` | Close current problem tab |
+| `ctrl+shift+t` | Reopen the last closed problem tab |
 | `ctrl+p` | Find any free LeetCode problem (fuzzy, by name or number) |
 | `ctrl+enter` | Run tests locally |
 | `ctrl+shift+enter` | Run on the LeetCode judge |
@@ -66,7 +67,7 @@ Modifier shortcuts follow the user's VS Code bindings. Bare arrows, `enter` and 
 | `ctrl+0` / `ctrl+1` | Focus sidebar / editor |
 | `ctrl+e` | Open the Solution in the external editor (changes reload automatically) |
 | `ctrl+o` | Open the problem source (NeetCode for roadmap problems, otherwise LeetCode) |
-| `ctrl+k` / `ctrl+shift+p` | Search problems, commands, settings and themes |
+| `ctrl+k` / `ctrl+shift+p` / `ctrl+t` | Search problems, commands, settings and themes |
 | `ctrl+,` | Settings, AI, accounts, and keyboard shortcuts |
 | `ctrl+=` / `ctrl+-` | Zoom in / out |
 | `ctrl+alt+m` | Toggle NeetCode completion |
@@ -74,6 +75,8 @@ Modifier shortcuts follow the user's VS Code bindings. Bare arrows, `enter` and 
 | `ctrl+q` | Quit |
 
 Shortcut settings use one field: primary first, then optional alternatives separated by `|`. The primary appears in tooltips. Clear the field to restore defaults, or enter `none` to disable a command. Existing `[keybindings]` overrides keep the same format: primary first, then alternatives separated by `|`.
+
+`ctrl+shift+t` restores closed tabs from newest to oldest during the current app session, retaining their solution, language, cursor, and undo history. Problem tags remain available through global search.
 
 ## Contests
 

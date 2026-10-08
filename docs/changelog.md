@@ -1,6 +1,10 @@
 <details open>
 <summary>Feat</summary>
 
+- Open global search with Ctrl+T as an alternative shortcut.
+
+- Reopen closed problem tabs with Ctrl+Shift+T, preserving their editor state.
+
 - Label primary and alternative shortcuts; Home uses Ctrl+H with Ctrl+. as an alternative.
 
 - Per-problem AI chat with custom action instructions, follow-up questions, and locally saved conversations.

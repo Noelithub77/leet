@@ -9,6 +9,7 @@ gpui_kit::actions!(
     [
         ShowHome,
         CloseProblem,
+        ReopenProblem,
         CycleTabs,
         PreviousTab,
         ToggleLeft,
@@ -101,9 +102,10 @@ macro_rules! cmd {
 pub const COMMANDS: &[Command] = &[
     cmd!("Show Home", "ctrl-h|ctrl-.", ShowHome),
     cmd!("Close problem tab", "ctrl-w", CloseProblem),
+    cmd!("Reopen closed problem tab", "ctrl-shift-t", ReopenProblem),
     cmd!("Next tab", "ctrl-tab", CycleTabs),
     cmd!("Previous tab", "ctrl-shift-tab", PreviousTab),
-    cmd!("Search everything", "ctrl-k|ctrl-shift-p", Search),
+    cmd!("Search everything", "ctrl-k|ctrl-shift-p|ctrl-t", Search),
     cmd!("Go to problem", "ctrl-p", FindProblem),
     cmd!("Keyboard shortcut help", "ctrl-/", ShortcutHelp),
     cmd!("Guided tour", "", GuidedTour),
@@ -117,7 +119,7 @@ pub const COMMANDS: &[Command] = &[
     cmd!("Toggle AI", "alt-d", ToggleRight),
     cmd!("Toggle description", "alt-a", ToggleDescription),
     cmd!("Toggle reference solution", "ctrl-alt-v", ToggleReference),
-    cmd!("Show/hide problem tags", "ctrl-shift-t", ToggleTags),
+    cmd!("Show/hide problem tags", "", ToggleTags),
     cmd!("Toggle results", "alt-x", ToggleBottom),
     cmd!("Solution history", "ctrl-g", ToggleHistory),
     cmd!("Roadmap", "alt-r", ToggleRoadmap),
@@ -315,6 +317,13 @@ mod tests {
     #[::core::prelude::v1::test]
     fn rejects_conflicts_and_bare_keys() {
         let config = practice::config::Config::default();
+        let search = COMMANDS.iter().position(|c| c.id == "Search").unwrap();
+        assert_eq!(COMMANDS[search].effective_key(&config), "ctrl-k|ctrl-shift-p|ctrl-t");
+        let reopen = COMMANDS.iter().position(|c| c.id == "ReopenProblem").unwrap();
+        assert_eq!(COMMANDS[reopen].key, "ctrl-shift-t");
+        assert!(validate_key(reopen, COMMANDS[reopen].key, &config).is_ok());
+        assert!(validate_key(search, COMMANDS[search].key, &config).is_ok());
+        assert!(validate_key(COMMANDS.iter().position(|c| c.id == "FindProblem").unwrap(), "ctrl-t", &config).is_err());
         assert!(validate_key(COMMANDS.iter().position(|c| c.id == "Search").unwrap(), "ctrl-p", &config).is_err());
         assert!(validate_key(COMMANDS.iter().position(|c| c.id == "Search").unwrap(), "ctrl-p ctrl-k", &config).is_err());
         assert!(validate_key(COMMANDS.iter().position(|c| c.id == "Search").unwrap(), "k", &config).is_err());

@@ -26,6 +26,7 @@ impl Workspace {
             .on_action(cx.listener(|this, _: &ShowHome, window, cx| this.show_home(window, cx)))
             .on_action(cx.listener(|this, _: &GuidedTour, window, cx| this.start_tour(window, cx)))
             .on_action(cx.listener(|this, _: &CycleTabs, window, cx| this.cycle_tab(1, window, cx)))
+            .on_action(cx.listener(|this, _: &ReopenProblem, window, cx| this.reopen_problem(window, cx)))
             .on_action(cx.listener(|this, _: &PreviousTab, window, cx| this.cycle_tab(-1, window, cx)))
             .on_action(cx.listener(|this, _: &CloseProblem, window, cx| {
                 if this.center == Center::Editor { this.close_problem(window, cx); }
