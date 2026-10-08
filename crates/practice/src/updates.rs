@@ -210,6 +210,8 @@ mod tests {
             let root = tempfile::tempdir().unwrap();
             let destination = root.path().join("leet");
             std::fs::write(&destination, b"old app").unwrap();
+            let launcher = root.path().join("launch-leet");
+            std::os::unix::fs::symlink(&destination, &launcher).unwrap();
             for file in ["config.toml", "progress.sqlite", "solution.py", "credentials"] {
                 std::fs::write(root.path().join(file), b"keep me").unwrap();
             }
@@ -228,6 +230,11 @@ mod tests {
             let result = install(update, "0.1.0", &destination, |_, _| {});
             server.join().unwrap();
             assert_eq!(result.is_ok(), succeeds, "{result:?}");
+            if succeeds {
+                let next_launch = std::process::Command::new(&launcher).arg("--version").output().unwrap();
+                assert!(next_launch.status.success());
+                assert_eq!(String::from_utf8(next_launch.stdout).unwrap().trim(), "leet 0.2.0");
+            }
             assert_eq!(std::fs::read(&destination).unwrap(), if succeeds { binary.as_slice() } else { b"old app" });
             for file in ["config.toml", "progress.sqlite", "solution.py", "credentials"] {
                 assert_eq!(std::fs::read(root.path().join(file)).unwrap(), b"keep me");

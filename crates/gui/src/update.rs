@@ -1,5 +1,4 @@
-//! Picks up new development builds: `./ops local:deploy` repoints the `leet` symlink, and the
-//! running app offers a restart instead of updating under the user.
+//! Installs releases in the background and offers a restart for installed updates or local builds.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
@@ -9,7 +8,7 @@ use gpui_kit::base::Disableable as _;
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::*;
-use gpui_kit::component::{ActiveTheme as _, Sizable as _, v_flex};
+use gpui_kit::component::{ActiveTheme as _, Sizable as _, h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::text::TextView;
 use gpui_kit::component::accordion::Accordion;
@@ -67,10 +66,13 @@ pub fn check(window: &mut Window, cx: &mut Context<Workspace>) -> Task<()> {
         let result = cx.background_spawn(async {
             practice::updates::check(env!("LEET_VERSION"), practice::updates::appimage_path().is_some())
         }).await;
-        let _ = this.update(cx, |this, cx| {
+        let _ = this.update_in(cx, |this, window, cx| {
             this.release_update.checking = false;
             match result {
-                Ok(latest) => this.release_update.latest = Some(latest),
+                Ok(latest) => {
+                    this.release_update.latest = Some(latest);
+                    install(this, window, cx);
+                },
                 Err(error) => { eprintln!("leet: update check: {error:#}"); this.release_update.error = Some("Release check unavailable".into()); }
             }
             cx.notify();
@@ -79,7 +81,7 @@ pub fn check(window: &mut Window, cx: &mut Context<Workspace>) -> Task<()> {
 }
 
 fn install(this: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace>) {
-    if this.release_update.downloading { return; }
+    if this.release_update.downloading || this.update_ready { return; }
     let Some(update) = this.release_update.latest.as_ref().and_then(|latest| latest.available.clone()) else { return; };
     let destination = practice::updates::appimage_path().map(Ok).unwrap_or_else(std::env::current_exe);
     let destination = match destination {
@@ -111,11 +113,12 @@ fn install(this: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace
                 }
             }
         };
-        let _ = this.update(cx, |this, cx| {
+        let _ = this.update_in(cx, |this, window, cx| {
             this.release_update.downloading = false;
             match result {
                 Ok(()) => {
                     this.update_ready = true;
+                    window.push_notification(Notification::info("Update installed · restart now or use it next launch").title("Update"), cx);
                 },
                 Err(error) => this.release_update.error = Some(format!("Update failed: {error}")),
             }
@@ -170,7 +173,7 @@ pub fn panel(this: &Workspace, window: &Window, cx: &mut Context<Workspace>) -> 
     let state = &this.release_update;
     let action = state.action(this.update_ready);
     let status = if state.local_build_ready { "New local build ready".into() }
-        else if this.update_ready { "Update ready".into() }
+        else if this.update_ready { "Update installed · ready for next launch".into() }
         else if state.downloading { format!("Downloading · {}%", state.progress.load(Ordering::Relaxed)) }
         else if state.checking { "Checking for updates…".into() }
         else if let Some(latest) = &state.latest {
@@ -184,9 +187,10 @@ pub fn panel(this: &Workspace, window: &Window, cx: &mut Context<Workspace>) -> 
     let notes = if parsed.is_empty() { practice::release_notes::Changelog::parse(include_str!("../../../docs/changelog.md")) } else { parsed };
     let bullets = |items: Vec<String>| items.into_iter().map(|item| format!("- {item}")).collect::<Vec<_>>().join("\n");
     let label = match action {
-        UpdateAction::Restart => "Restart",
+        UpdateAction::Restart => "Restart now",
         UpdateAction::Downloading => "Updating…",
-        UpdateAction::Update | UpdateAction::UpToDate => "Update",
+        UpdateAction::Update => "Retry update",
+        UpdateAction::UpToDate => "Up to date",
     };
     let notes_height = (window.viewport_size().height - px(190.)).max(px(40.)).min(px(300.));
     Some(v_flex().id("release-update-panel").absolute().bottom(px(36.)).right(px(12.)).w(px(380.)).max_w_full()
@@ -204,13 +208,16 @@ pub fn panel(this: &Workspace, window: &Window, cx: &mut Context<Workspace>) -> 
                 .item(|item| item.title("Fix").open(state.categories.contains(&1))
                     .child(TextView::markdown("release-fix", bullets(notes.fix)).selectable(true)))
                 .on_toggle_click(cx.listener(|this, open: &[usize], _, cx| { this.release_update.categories = open.to_vec(); cx.notify(); }))))
-        .child(Button::new("release-update-action").primary().small().label(label)
+        .child(h_flex().gap_2()
+            .when(matches!(action, UpdateAction::Restart), |el| el.child(Button::new("release-update-later").ghost().small().label("Later")
+                .on_click(cx.listener(|this, _, _, cx| { this.release_update.close(); cx.notify(); }))))
+            .child(Button::new("release-update-action").primary().small().label(label).flex_1()
             .disabled(matches!(action, UpdateAction::Downloading | UpdateAction::UpToDate))
             .on_click(cx.listener(|this, _, window, cx| match this.release_update.action(this.update_ready) {
                 UpdateAction::Update => install(this, window, cx),
                 UpdateAction::Restart => restart(this, cx),
                 UpdateAction::Downloading | UpdateAction::UpToDate => {},
-            })))
+            }))))
         .into_any_element())
 }
 
@@ -237,7 +244,9 @@ pub fn watch(workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Wo
             if now.is_none() || now == started {
                 continue;
             }
-            let _ = this.update_in(cx, |this, window, cx| {
+            let finished = this.update_in(cx, |this, window, cx| {
+                if this.release_update.downloading { return false; }
+                if this.update_ready { return true; }
                 this.update_ready = true;
                 this.release_update.local_build_ready = true;
                 window.push_notification(
@@ -245,8 +254,9 @@ pub fn watch(workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Wo
                     cx,
                 );
                 cx.notify();
+                true
             });
-            break;
+            if finished.unwrap_or(true) { break; }
         }
     })
 }

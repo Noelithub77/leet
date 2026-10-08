@@ -1,6 +1,7 @@
 <details open>
 <summary>Feat</summary>
 
+- Download and install updates in the background; restart now or use the new version on the next launch.
 - Vesper-themed README with an animated logo, real demos, and quick installation.
 - Contribution and security guidance; current source uses GNU AGPL v3.
 - New landing page with real app footage, an interactive debugger replay, and keyboard copy with feedback.

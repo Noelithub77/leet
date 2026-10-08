@@ -60,6 +60,22 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         window.click_at("update-fixture", point(px(24.), px(24.)), cx);
         window.render_frame(cx);
         ensure!(!fixture.read(cx).workspace.read(cx).release_update.is_open(), "Outside click did not close the panel");
+        let workspace = fixture.read(cx).workspace.clone();
+        workspace.update(cx, |workspace, cx| { workspace.update_ready = true; cx.notify(); });
+        fixture.update(cx, |_, cx| cx.notify());
+        window.render_frame(cx);
+        window.click("release-updates", cx);
+        window.render_frame(cx);
+        ensure!(window.find("release-update-action").label() == Some("Restart now"), "Installed update did not show the restart action");
+        window.click("release-update-later", cx);
+        window.render_frame(cx);
+        ensure!(!fixture.read(cx).workspace.read(cx).release_update.is_open(), "Later did not dismiss the panel");
+        ensure!(fixture.read(cx).workspace.read(cx).update_ready, "Later discarded the installed update");
+        window.click("release-updates", cx);
+        window.render_frame(cx);
+        ensure!(window.find("release-update-action").label() == Some("Restart now"), "Later did not preserve the restart action");
+        window.click("release-updates", cx);
+        window.render_frame(cx);
         Ok(())
     })??;
     if pixels {
@@ -70,5 +86,5 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
     }
     cx.update_window(handle, |_, window, _| window.remove_window())?;
     cx.run_until_parked();
-    Ok(serde_json::json!({"fixture":"update-changelog","passed":true,"pixels":pixels,"checks":["hover does not open","trigger toggles panel","release notes scroll","outside click dismisses"]}))
+    Ok(serde_json::json!({"fixture":"update-changelog","passed":true,"pixels":pixels,"checks":["hover does not open","trigger toggles panel","release notes scroll","outside click dismisses","Later preserves installed update and restart action"]}))
 }
