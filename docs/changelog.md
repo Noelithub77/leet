@@ -59,7 +59,7 @@
 - The update icon stays visible without a network connection.
 - Language changes keep each language's saved solution.
 - Keep AI options in their popup and remove duplicate Settings controls and basic navigation hints.
-- Move Contests toward the right edge with a wider gap from Recent and an accent-colored browser icon on every contest row.
+- Move Contests toward the right edge with a wider gap from Recent and an Open in web button on every contest row.
 - Remove the upcoming-contest explanatory text.
 
 </details>
