@@ -2,7 +2,11 @@
 <summary>Feat</summary>
 
 - Per-problem AI chat with custom action instructions, follow-up questions, and locally saved conversations.
-- Native resizable explorer, description, and AI sidebars on Alt+A, Alt+S, and Alt+D.
+- Native resizable Explorer on Alt+S, Description on Alt+A, and AI on Alt+D.
+- General, My solution, and Conversation AI tabs with a combined solution review and visual dry run.
+- Generate extra test cases from the case toolbar with custom counts, types, and instructions.
+- Explorer and Description toggles beside Home, AI and results toggles at the top right, and Code icons on problem tabs.
+- Softly rounded panes with very dim orange outlines in Vesper.
 - Collapsible platform settings with provider icons, Log in / Log out buttons, and Codeforces handle.
 - Navigate Settings tabs with Tab, Shift+Tab, and arrow keys.
 - Reset app settings and reopen onboarding while keeping solutions, accounts, progress, and cache.
@@ -31,7 +35,7 @@
 - Keep Competitive Companion under Provider settings when Codeforces is configured.
 - Organize Settings into General, Editor, Appearance, Provider, AI, Accounts, and Keybindings tabs.
 - Show current shortcuts with keycaps.
-- Animated panel toggles beside Settings with current shortcut tooltips.
+- Animated panel toggles with current shortcut tooltips.
 - Compact status-bar popups for updates, AI preferences, and language switching.
 - Collapsible Feat and Fix release notes with one Update/Restart action.
 - Native updates and Linux AppImages that preserve settings and solutions.
@@ -45,6 +49,9 @@
 
 - Bring Leet forward after CPH imports, show listener errors, and release the import port when restarting.
 - Label browser import settings and notifications as CPH.
+
+- Preserve AI pane identity while toggling other sidebars and soften panel transitions.
+- Hide stray divider lines between rounded panes while keeping native resizing.
 
 - Keep each problem’s AI instructions when launching actions with chat hidden.
 

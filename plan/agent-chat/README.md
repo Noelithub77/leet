@@ -3,7 +3,7 @@
 ## Chosen
 
 - Separate explorer and description panes to the left of the editor; AI/chat on the right.
-- Alt+A toggles the explorer; Alt+S toggles description; Alt+D toggles the right AI pane.
+- Alt+S toggles the explorer; Alt+A toggles description; Alt+D toggles the right AI pane.
 - One locally saved conversation per problem. Actions accept optional instructions; questions use current statement, code, tests, and prior answers.
 - Existing GPUI Kit resizable panels, textarea, menus, Markdown, and scroll containers. No new dependencies or custom drag implementation.
 - Keep structured action results and Solve's explicit submission confirmation. Questions remain read-only.

@@ -5,7 +5,7 @@ use std::time::Duration;
 use gpui_kit::base::{Disableable as _, Spring, Transition, spring, transition};
 use gpui_kit::component::kbd::Kbd;
 use gpui_kit::component::spinner::Spinner;
-use gpui_kit::component::resizable::{h_resizable, resizable_panel};
+use gpui_kit::component::resizable::{h_resizable, resizable_panel, ResizableState};
 use gpui_kit::component::{ActiveTheme as _, Sizable as _, Icon, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
@@ -56,6 +56,11 @@ fn fade_in(delay_steps: usize) -> Animation {
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme().clone();
+        let slug = self.session.as_ref().map(|session| session.slug.clone());
+        let has_problem = self.session.as_ref().is_some_and(|session| session.question.is_some());
+        let has_attempt = self.has_attempt(cx);
+        let web = self.config.ai_web;
+        self.assist.update(cx, |assist, cx| assist.refresh_context(slug, has_problem, has_attempt, web, window, cx));
         // Roadmap and settings take the whole window; panels slide away for them.
         let panels = !self.zen && self.center == Center::Editor;
         let z = self.config.zoom;
@@ -82,34 +87,57 @@ impl Render for Workspace {
         };
         let omnibar = self.render_omnibar(window, cx);
 
-        let mask = u8::from(show_left) | (u8::from(show_description) << 1) | (u8::from(show_ai) << 2);
-        let widths = sidebar_widths(&self.db, z);
+        // Keep the same four native slots and element paths across toggles.
         let available = window.viewport_size().width.as_f32();
+        let widths = sidebar_widths(&self.db, z, available);
         let pane_count = usize::from(show_left) + usize::from(show_description) + usize::from(show_ai);
-        let initial_max = (available - 260.) / pane_count.max(1) as f32;
-        let mut body = h_resizable(SharedString::from(format!("workspace-panels-{mask}")));
-        if show_left {
-            body = body.child(resizable_panel().size(px(widths[0].min(initial_max))).size_range(px(if pane_count == 3 { 120. } else { 160. })..px(700.)).flex_none().child(self.render_left(window, cx)));
+        let initial_max = (available - 180.).max(0.) / pane_count.max(1) as f32;
+        let reveals = [
+            spring("explorer-reveal", if show_left { 1. } else { 0. }, panel_spring(), window, cx).clamp(0., 1.),
+            spring("description-reveal", if show_description { 1. } else { 0. }, panel_spring(), window, cx).clamp(0., 1.),
+            spring("ai-reveal", if show_ai { 1. } else { 0. }, panel_spring(), window, cx).clamp(0., 1.),
+        ];
+        let range = |slot: usize, minimum: f32, maximum: f32| {
+            let reveal = reveals[slot];
+            if reveal < 0.999 { let width = widths[slot].min(initial_max) * reveal; px(width)..px(width) }
+            else { px(minimum)..px(maximum) }
+        };
+        let state = window.use_keyed_state("workspace-panels", cx, |_, _| ResizableState::default());
+        if reveals != self.pane_reveals {
+            self.pane_reveals = reveals;
+            let state = state.clone();
+            window.defer(cx, move |window, cx| {
+                state.update(cx, |state, cx| {
+                    for (slot, index) in [(0, 0), (1, 1), (2, 3)] {
+                        state.resize_panel(index, px(widths[slot].min(initial_max) * reveals[slot]), window, cx);
+                    }
+                });
+            });
         }
-        if show_description {
-            body = body.child(resizable_panel().size(px(widths[1].min(initial_max))).size_range(px(if pane_count == 3 { 160. } else { 180. })..px(900.)).flex_none().child(self.render_description(cx)));
-        }
-        body = body.child(resizable_panel().size_range(px(if pane_count == 3 { 180. } else { 240. })..Pixels::MAX).child(
-            v_flex().flex_1().min_w_0().h_full().rounded_lg().overflow_hidden()
-                .child(center).child(self.render_bottom(bottom_h, cx))));
-        if show_ai {
-            body = body.child(resizable_panel().size(px(widths[2].min(initial_max))).size_range(px(if pane_count == 3 { 200. } else { 220. })..px(900.)).flex_none().child(self.render_right(cx)));
-        }
+        let mut body = h_resizable("workspace-panels").with_state(&state)
+            .with_handle_appearance(std::rc::Rc::new(|handle, _, cx| {
+                let active = handle.state() != gpui_kit::base::ResizeHandleState::Idle;
+                Some(div().size_full().flex().items_center().justify_center()
+                    .when(active, |handle| handle.child(div().flex_none().w(px(2.)).h(px(40.)).rounded_full()
+                        .bg(cx.theme().warning.opacity(0.25))))
+                    .into_any_element())
+            }))
+            .child(resizable_panel().size(px(widths[0].min(initial_max))).size_range(range(0, 120., 700.)).flex_none()
+                .child(div().size_full().overflow_hidden().p_1().opacity(reveals[0]).child(self.render_left(window, cx))))
+            .child(resizable_panel().size(px(widths[1].min(initial_max))).size_range(range(1, 160., 1000.)).flex_none()
+                .child(div().size_full().overflow_hidden().p_1().opacity(reveals[1]).child(self.render_description(cx))))
+            .child(resizable_panel().size_range(px(180.)..Pixels::MAX).child(
+                v_flex().flex_1().min_w_0().h_full().p_1().child(v_flex().size_full().min_h_0().rounded(px(18.)).border_1().border_color(theme.warning.opacity(0.10)).overflow_hidden()
+                    .child(center).child(self.render_bottom(bottom_h, cx)))))
+            .child(resizable_panel().size(px(widths[2].min(initial_max))).size_range(range(2, 220., 1000.)).flex_none()
+                .child(div().size_full().overflow_hidden().p_1().opacity(reveals[2]).child(self.render_right(cx))));
         let db = self.db.clone();
         body = body.on_resize(move |state, _, cx| {
             let sizes = state.read(cx).sizes();
-            let mut widths = sidebar_widths(&db, z);
-            let mut index = 0;
-            for (slot, visible) in [(0, show_left), (1, show_description)] {
-                if visible { if let Some(size) = sizes.get(index) { widths[slot] = size.as_f32(); } index += 1; }
+            let mut widths = sidebar_widths(&db, z, available);
+            for (slot, index, visible) in [(0, 0, show_left), (1, 1, show_description), (2, 3, show_ai)] {
+                if visible && let Some(size) = sizes.get(index) { widths[slot] = size.as_f32(); }
             }
-            index += 1; // The flexible editor sits between the left panes and chat.
-            if show_ai && let Some(size) = sizes.get(index) { widths[2] = size.as_f32(); }
             if let Ok(text) = serde_json::to_string(&widths) { let _ = db.set("sidebar-widths", &text); }
         });
 
@@ -141,7 +169,7 @@ impl Render for Workspace {
 impl Workspace {
     fn render_left(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let focused = self.focus_area == Focus::Sidebar && self.nav_focus.is_focused(window);
-        div().size_full().min_w_0().rounded_lg().overflow_hidden().bg(cx.theme().sidebar)
+        div().size_full().min_w_0().rounded(px(18.)).border_1().border_color(cx.theme().warning.opacity(0.10)).overflow_hidden().bg(cx.theme().sidebar)
             .child(self.render_tree(focused, cx))
     }
 
@@ -149,7 +177,7 @@ impl Workspace {
         let theme = cx.theme().clone();
         let content = if self.history_mode { self.render_versions(cx).into_any_element() }
             else { self.statement.clone().cached(StyleRefinement::default().size_full()).into_any_element() };
-        v_flex().size_full().min_w_0().rounded_lg().overflow_hidden().bg(theme.sidebar)
+        v_flex().size_full().min_w_0().rounded(px(18.)).border_1().border_color(theme.warning.opacity(0.10)).overflow_hidden().bg(theme.sidebar)
             .child(h_flex().p_2().gap_1()
                 .child(crate::theme::selected_choice(Button::new("description-question").ghost().small(), !self.history_mode, cx)
                     .icon(IconName::FileText).label("Question").on_click(cx.listener(|this, _, _, cx| { this.history_mode = false; cx.notify(); })))
@@ -297,15 +325,15 @@ impl Workspace {
 
     fn render_right(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme().clone();
-        v_flex().size_full().min_w_0().rounded_lg().overflow_hidden().bg(theme.sidebar)
+        v_flex().size_full().min_w_0().rounded(px(18.)).border_1().border_color(theme.warning.opacity(0.10)).overflow_hidden().bg(theme.sidebar)
             .child(h_flex().p_2().gap_2().items_center()
                 .child(Icon::new(IconName::Sparkles).small().text_color(theme.primary))
-                .child(div().flex_1().text_sm().child("AI chat"))
+                .child(div().flex_1().text_sm().child("AI"))
                 .child(Button::new("chat-model").ghost().small().icon(IconName::Settings2).tooltip_with_action("Agent and model", &crate::actions::ConfigureAi, Some(crate::actions::WORKSPACE)).accessibility_label("Agent and model")
                     .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::actions::ConfigureAi), cx)))
-                .child(Button::new("chat-hide").ghost().small().icon(IconName::X).tooltip_with_action("Hide AI chat", &crate::actions::ToggleRight, Some(crate::actions::WORKSPACE)).accessibility_label("Hide AI chat")
+                .child(Button::new("chat-hide").ghost().small().icon(IconName::X).tooltip_with_action("Hide AI", &crate::actions::ToggleRight, Some(crate::actions::WORKSPACE)).accessibility_label("Hide AI")
                     .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::actions::ToggleRight), cx))))
-            .child(div().flex_1().min_h_0().child(self.assist.clone()))
+            .child(div().flex_1().min_h_0().child(self.assist.clone().cached(StyleRefinement::default().size_full())))
     }
 
     fn render_bottom(&self, height: f32, cx: &mut Context<Self>) -> impl IntoElement {
@@ -418,6 +446,9 @@ impl Workspace {
                 h_flex()
                     .justify_between()
                     .child(h_flex().min_w_0().flex_1().gap_2().child(chips)
+                        .child(Button::new("generate-edge-cases").ghost().xsmall().icon(IconName::FlaskConical).label("Edge cases").accessibility_label("Generate edge cases")
+                            .tooltip_with_action("Generate extra test cases", &crate::actions::AssistTests, Some(crate::actions::WORKSPACE))
+                            .on_click(cx.listener(|this, _, window, cx| crate::dialogs::open_edge_cases(this, window, cx))))
                         .child(Button::new("add-test-case").ghost().xsmall().icon(IconName::Plus)
                             .accessibility_label("Add test case").tooltip_with_action("Add test case", &crate::actions::AddCustomTest, Some(crate::actions::WORKSPACE))
                             .disabled(s.running || matches!(s.judge, Some(Judge::Running { .. })))
@@ -425,8 +456,7 @@ impl Workspace {
                         .child(Button::new("reset-test-cases").ghost().xsmall().icon(IconName::RefreshCw)
                             .accessibility_label("Restore question examples").tooltip("Restore question examples; remove edits and custom cases")
                             .disabled(s.running || matches!(s.judge, Some(Judge::Running { .. })))
-                            .on_click(cx.listener(|this, _, _, cx| this.reset_test_cases(cx)))))
-                    .child(h_flex().gap_3().text_xs().text_color(theme.muted_foreground).child(h_flex().gap_1().child(key(crate::actions::key_for("RunTests", &self.config))).child("run")).child(h_flex().gap_1().child(key(crate::actions::key_for("Submit", &self.config))).child("submit"))),
+                            .on_click(cx.listener(|this, _, _, cx| this.reset_test_cases(cx))))),
             )
             .children(judge)
             .children(detail)
@@ -621,8 +651,8 @@ pub(crate) fn relative_time(secs: i64) -> String {
     }
 }
 
-fn sidebar_widths(db: &practice::db::Db, zoom: f32) -> [f32; 3] {
+fn sidebar_widths(db: &practice::db::Db, zoom: f32, available: f32) -> [f32; 3] {
     db.get("sidebar-widths").ok().flatten().and_then(|text| serde_json::from_str::<[f32; 3]>(&text).ok())
         .filter(|widths| widths.iter().all(|width| width.is_finite() && *width >= 100. && *width <= 2000.))
-        .unwrap_or([260. * zoom, 360. * zoom, 400. * zoom])
+        .unwrap_or([260. * zoom, (available * 0.32).max(320. * zoom), (available * 0.32).max(360. * zoom)])
 }

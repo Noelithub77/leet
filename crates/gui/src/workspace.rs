@@ -179,6 +179,7 @@ pub struct Workspace {
     pub recent_slugs: Vec<String>,
     pub focus: FocusHandle,
     pub nav_focus: FocusHandle,
+    pub pane_reveals: [f32; 3],
     pub focus_area: Focus,
     pub db: Arc<Db>,
     pub client: Arc<Client>,
@@ -273,6 +274,7 @@ impl Workspace {
             recent_slugs,
             focus: cx.focus_handle(),
             nav_focus: cx.focus_handle(),
+            pane_reveals: [-1.; 3],
             focus_area: Focus::Home,
             roadmap: crate::roadmap::RoadmapState::load(&db),
             db: db.clone(),
@@ -646,6 +648,10 @@ impl Workspace {
         self.active_tab = Some(self.tabs.len());
         self.tabs.push(None);
         self.center = Center::Editor;
+        self.description = true;
+        self.history_mode = false;
+        self.zen = false;
+        self.save_layout();
         self.focus_editor(window, cx);
         let item = self.item(&slug).cloned();
         let title = item

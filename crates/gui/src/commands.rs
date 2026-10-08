@@ -63,7 +63,7 @@ impl Workspace {
                 this.zen = false;
                 if !this.right { this.focus_editor(window, cx); }
                 this.save_layout();
-                this.flash(if this.right { "AI chat" } else { "AI chat hidden" }, cx);
+                this.flash(if this.right { "AI" } else { "AI hidden" }, cx);
             }))
             .on_action(cx.listener(|this, _: &ToggleDescription, window, cx| {
                 this.description = !this.description;
@@ -176,7 +176,7 @@ impl Workspace {
             .on_action(cx.listener(|this, _: &AssistHints, window, cx| this.run_assist(Action::Hints, window, cx)))
             .on_action(cx.listener(|this, _: &AssistStuck, window, cx| this.run_assist(Action::Stuck, window, cx)))
             .on_action(cx.listener(|this, _: &AssistBugs, window, cx| this.run_assist(Action::Bugs, window, cx)))
-            .on_action(cx.listener(|this, _: &AssistTests, window, cx| this.run_assist(Action::Tests, window, cx)))
+            .on_action(cx.listener(|this, _: &AssistTests, window, cx| crate::dialogs::open_edge_cases(this, window, cx)))
             .on_action(cx.listener(|this, _: &AssistAnalyze, window, cx| this.run_assist(Action::Analyze, window, cx)))
             .on_action(cx.listener(|this, _: &AssistOptimize, window, cx| this.run_assist(Action::Optimize, window, cx)))
             .on_action(cx.listener(|this, _: &AssistVisualize, window, cx| this.run_assist(Action::Visualize, window, cx)))

@@ -23,6 +23,7 @@ pub enum Action {
     DryRun,
     Solve,
     Ask,
+    Review,
 }
 
 impl Action {
@@ -45,6 +46,7 @@ impl Action {
             Self::DryRun => "dry-run",
             Self::Solve => "solve",
             Self::Ask => "ask",
+            Self::Review => "review",
         }
     }
 
@@ -62,6 +64,7 @@ impl Action {
             Self::DryRun => "Dry run",
             Self::Solve => "Solve",
             Self::Ask => "Chat",
+            Self::Review => "Analyse my solution",
         }
     }
 
@@ -80,12 +83,13 @@ impl Action {
             Self::DryRun => "Trace your code on a case and find the first wrong step",
             Self::Solve => "Solve, test, and submit until accepted",
             Self::Ask => "Ask about this problem or your code",
+            Self::Review => "Correctness, complexity, improvements, and a visual dry run",
         }
     }
 
     /// Actions that read the user's attempt and say nothing useful without one.
     pub fn needs_attempt(self) -> bool {
-        matches!(self, Self::Bugs | Self::Analyze | Self::Stuck | Self::Optimize | Self::DryRun)
+        matches!(self, Self::Bugs | Self::Analyze | Self::Stuck | Self::Optimize | Self::DryRun | Self::Review)
     }
 
     pub fn access(self) -> Access {
@@ -107,14 +111,16 @@ impl Action {
             Self::DryRun => schemars::schema_for!(DryRun),
             Self::Solve => schemars::schema_for!(SolveReport),
             Self::Ask => schemars::schema_for!(String),
+            Self::Review => schemars::schema_for!(SolutionReview),
         };
         crate::agents::strict_schema(serde_json::to_value(schema).unwrap_or_default())
     }
 
     fn instructions(self) -> &'static str {
         match self {
+            Self::Review => "Review my current solution as written. Return correctness bugs (or explicitly say none found), time and space complexity with line costs, improvements compared with the best approach, and a dry run of my code on the focus test case. Include an animated scene showing the actual changing variables and data structures. Explain the first wrong step if present. Do not edit files or supply a replacement solution. Keep every section concise.",
             Self::Hints => "Give 4 escalating hints that let me solve it myself. Level 1 is a small observation about the problem; level 2 names the useful data structure or pattern; level 3 states the key insight; level 4 outlines the approach in plain words. Never include code. If my attempt is present, aim the first hint at what my attempt misses. Each body is at most 2 sentences.",
-            Self::Tests => "Propose 6 to 10 test cases that are most likely to break solutions to this problem: empty and minimum inputs, boundaries from the constraints, duplicates, negatives, sorted and reversed orders, single elements, and one larger stress-style case that is still small enough to read. Compute every expected output carefully by reasoning step by step; it must be exactly what the judge returns. Inputs use the exact LeetCode input format: one argument per line, JSON values.",
+            Self::Tests => "Use the requested count and case types from the additional instructions; default to 6 to 10 cases when no count is given. Propose test cases that are most likely to break solutions to this problem: empty and minimum inputs, boundaries from the constraints, duplicates, negatives, sorted and reversed orders, single elements, and one larger stress-style case that is still small enough to read. Compute every expected output carefully by reasoning step by step; it must be exactly what the judge returns. Inputs use the exact LeetCode input format: one argument per line, JSON values.",
             Self::Bugs => "Review my attempt for correctness bugs only: wrong logic, off-by-one errors, missed edge cases, wrong return values, mutation mistakes, overflow, and exceptions. Cite the 1-based line from the numbered code. Do not rewrite the solution; each fix is the smallest change in words or one short code fragment. If you find no bugs, return an empty list and say so in the summary. Use the failing tests when present.",
             Self::Analyze => "Analyze the time and space complexity of my attempt as written, not of the optimal solution. Explain the dominant term, attribute cost to the lines that create it, and compare with the best known complexity for this problem. Use n, m, k exactly as named in the constraints.",
             Self::Stuck => "Diagnose exactly where I'm stuck from my attempt and failing tests: the misconception or missing idea, the line where my reasoning goes wrong, and the single next step I should take. Do not give the solution or code. End with one Socratic question that leads me to the insight.",
@@ -284,6 +290,14 @@ pub struct DryRun {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct SolveReport { pub approach: String, pub time: String, pub space: String, pub summary: String }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct SolutionReview {
+    pub correctness: Bugs,
+    pub complexity: Analysis,
+    pub improvements: Optimization,
+    pub dry_run: DryRun,
+}
+
 /// The parsed answer of one action.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "action", content = "answer", rename_all = "kebab-case")]
@@ -300,6 +314,7 @@ pub enum Answer {
     DryRun(DryRun),
     Solve(SolveReport),
     Chat(String),
+    Review(SolutionReview),
 }
 
 impl Answer {
@@ -317,6 +332,7 @@ impl Answer {
             Action::DryRun => Self::DryRun(serde_json::from_value(value)?),
             Action::Solve => Self::Solve(serde_json::from_value(value)?),
             Action::Ask => Self::Chat(serde_json::from_value(value)?),
+            Action::Review => Self::Review(serde_json::from_value(value)?),
         })
     }
 }
@@ -410,7 +426,7 @@ pub fn prompt(action: Action, ctx: &Context) -> String {
         out.push_str("Answer with one JSON object matching the provided schema. Write prose fields in clear, friendly, concise English; use Markdown inline code for identifiers. Do not use tools or read files: everything you need is below.\n");
     }
     push_problem(&mut out, ctx);
-    if matches!(action, Action::Visualize | Action::Explain | Action::DryRun) {
+    if matches!(action, Action::Visualize | Action::Explain | Action::DryRun | Action::Review) {
         out.push_str(VISUAL_GUIDE);
     }
     if let (Action::DryRun, Some(trace)) = (action, ctx.trace) {
@@ -621,6 +637,19 @@ mod tests {
         assert!(matches!(Answer::parse(Action::Hints, hints), Ok(Answer::Hints(h)) if h.hints.len() == 1));
         let analysis = serde_json::json!({"time":"O(n²)","space":"O(1)","time_growth":"quadratic","best_time":"O(n)","best_space":"O(n)","best_growth":"linear","summary":"s","lines":[]});
         assert!(matches!(Answer::parse(Action::Analyze, analysis), Ok(Answer::Analyze(a)) if a.time_growth > a.best_growth));
+    }
+
+    #[test]
+    fn combined_review_is_read_only_and_requires_every_section() {
+        assert!(Action::Review.needs_attempt());
+        assert_eq!(Action::Review.access(), Access::ReadOnly);
+        let schema = Action::Review.schema();
+        let properties = schema["properties"].as_object().unwrap();
+        for section in ["correctness", "complexity", "improvements", "dry_run"] { assert!(properties.contains_key(section)); }
+        assert!(Answer::parse(Action::Review, serde_json::json!({"complexity": {}})).is_err());
+        let prompt = prompt(Action::Review, &ctx("x = 1", vec![]));
+        assert!(prompt.contains("visual") || prompt.contains("animated"));
+        assert!(prompt.contains("x = 1") && prompt.contains("correctness"));
     }
 
     #[test]

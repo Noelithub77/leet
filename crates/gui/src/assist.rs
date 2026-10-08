@@ -186,8 +186,10 @@ pub struct Assist {
     slug: Option<String>,
     ticker: Option<Task<()>>,
     scroll: ScrollHandle,
-    composer: Entity<TextareaState>,
+    pub(crate) composer: Entity<TextareaState>,
     composer_slug: Option<String>,
+    ai_tab: u8,
+    context_key: Option<(Option<String>, bool, bool, bool)>,
     drafts: HashMap<String, String>,
 }
 
@@ -222,7 +224,7 @@ impl Assist {
             cx.notify();
         }).detach();
         let mut this = Self { workspace, db, agents: vec![], detecting: false, catalogs, catalog_cache, requested_catalogs: HashSet::new(), installing: None,
-            runs: vec![], next_id: 0, slug: None, ticker: None, scroll: ScrollHandle::new(), composer, composer_slug: None, drafts: HashMap::new() };
+            runs: vec![], next_id: 0, slug: None, ticker: None, scroll: ScrollHandle::new(), composer, composer_slug: None, ai_tab: 0, context_key: None, drafts: HashMap::new() };
         this.detect(cx);
         this
     }
@@ -700,7 +702,7 @@ fn action_of(answer: &Answer) -> Action {
         Answer::Hints(_) => Action::Hints, Answer::Tests(_) => Action::Tests, Answer::Bugs(_) => Action::Bugs,
         Answer::Analyze(_) => Action::Analyze, Answer::Stuck(_) => Action::Stuck, Answer::Explain(_) => Action::Explain,
         Answer::Visualize(_) => Action::Visualize, Answer::Optimize(_) => Action::Optimize, Answer::Pattern(_) => Action::Pattern,
-        Answer::DryRun(_) => Action::DryRun, Answer::Solve(_) => Action::Solve, Answer::Chat(_) => Action::Ask,
+        Answer::DryRun(_) => Action::DryRun, Answer::Solve(_) => Action::Solve, Answer::Chat(_) => Action::Ask, Answer::Review(_) => Action::Review,
     }
 }
 
@@ -713,6 +715,7 @@ impl Run {
 
     fn set_answer(&mut self, answer: Option<Answer>) {
         let frames = match &answer {
+            Some(Answer::Review(review)) => review.dry_run.scene.frames.len(),
             Some(Answer::Visualize(scene)) => scene.frames.len(),
             Some(Answer::Explain(explain)) => explain.walkthrough.frames.len(),
             Some(Answer::DryRun(dry)) => dry.scene.frames.len(),
@@ -740,6 +743,7 @@ pub fn icon(action: Action) -> IconName {
         Action::Explain => IconName::BookOpen,
         Action::Solve => IconName::WandSparkles,
         Action::Ask => IconName::MessageCircle,
+        Action::Review => IconName::Code,
     }
 }
 
@@ -751,7 +755,7 @@ pub fn accent(action: Action, theme: &Theme) -> Hsla {
         Action::Bugs => theme.danger,
         Action::Tests | Action::Solve => theme.success,
         Action::Analyze | Action::Pattern => rgb(0xc3b1ff).into(),
-        Action::Visualize | Action::DryRun | Action::Ask => theme.primary,
+        Action::Visualize | Action::DryRun | Action::Ask | Action::Review => theme.primary,
     }
 }
 
@@ -871,6 +875,11 @@ impl Assist {
         let mono = |text: &str| div().p_2().rounded_md().bg(theme.muted).font_family(theme.mono_font_family.clone()).text_xs().whitespace_normal().child(text.to_owned());
         let label = |text: &'static str| div().text_xs().font_weight(FontWeight::MEDIUM).text_color(theme.muted_foreground).child(text);
         match answer {
+            Answer::Review(review) => v_flex().gap_4()
+                .child(self.body(run, &Answer::Bugs(review.correctness.clone()), window, cx))
+                .child(self.body(run, &Answer::Analyze(review.complexity.clone()), window, cx))
+                .child(self.body(run, &Answer::Optimize(review.improvements.clone()), window, cx))
+                .child(self.body(run, &Answer::DryRun(review.dry_run.clone()), window, cx)).into_any_element(),
             Answer::Chat(text) => TextView::markdown(SharedString::from(format!("chat-answer-{id}")), text.clone()).selectable(true).into_any_element(),
             Answer::Hints(hints) => {
                 let shown = run.hints_shown.min(hints.hints.len());
@@ -1114,7 +1123,7 @@ impl Workspace {
             self.right = true; self.save_layout();
         }
         self.flash(format!("AI: {}", action.label()), cx);
-        self.assist.update(cx, |assist, cx| assist.start(action, snapshot, target, window, cx));
+        self.assist.update(cx, |assist, cx| { assist.ai_tab = 2; assist.start(action, snapshot, target, window, cx); });
         cx.notify();
     }
 

@@ -253,6 +253,7 @@ impl Workspace {
             let tooltip = title.clone();
             tabs = tabs.child(make_tab(index + 1).max_w(px(240.)).accessibility_label(title.clone())
                 .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
+                .child(Icon::new(IconName::Code).small().text_color(theme.primary))
                 .child(div().min_w_0().flex_1().line_height(relative(1.4)).py_1().truncate().child(title))
                 .child(Button::new(("close-problem-tab", index)).ghost().xsmall().icon(IconName::X)
                     .accessibility_label("Close problem").tooltip("Close problem")
@@ -267,22 +268,25 @@ impl Workspace {
         let left = !self.zen && ((self.center == Center::Editor && self.left) || (self.center == Center::Home && self.home.sidebar));
         let toggles: [(&str, IconName, &str, bool, Box<dyn Action>); 4] = [
             ("toggle-left-panel", IconName::PanelLeft, "Toggle explorer", left, Box::new(actions::ToggleLeft)),
-            ("toggle-bottom-panel", IconName::PanelBottom, "Toggle bottom panel", panels && self.bottom, Box::new(actions::ToggleBottom)),
             ("toggle-description-panel", IconName::FileText, "Toggle description", panels && self.description, Box::new(actions::ToggleDescription)),
-            ("toggle-right-panel", IconName::PanelRight, "Toggle AI chat", panels && self.right, Box::new(actions::ToggleRight)),
+            ("toggle-bottom-panel", IconName::PanelBottom, "Toggle bottom panel", panels && self.bottom, Box::new(actions::ToggleBottom)),
+            ("toggle-right-panel", IconName::PanelRight, "Toggle AI", panels && self.right, Box::new(actions::ToggleRight)),
         ];
-        let mut controls = h_flex().gap_1();
-        for (id, icon, label, enabled, action) in toggles {
+        let mut left_controls = h_flex().gap_1();
+        let mut right_controls = h_flex().gap_1();
+        for (index, (id, icon, label, enabled, action)) in toggles.into_iter().enumerate() {
             let highlight = transition(id, if enabled { 1. } else { 0. }, Transition::new(Duration::from_millis(160)), window, cx);
             let style = ButtonCustomVariant::new(cx)
                 .foreground(theme.primary.mix_oklab(theme.muted_foreground, highlight))
                 .color(theme.primary.opacity(0.12 * highlight))
                 .hover(theme.primary.opacity(0.18)).active(theme.primary.opacity(0.24));
-            controls = controls.child(Button::new(id).custom(style).small().icon(icon)
+            let button = Button::new(id).custom(style).small().icon(icon)
                 .toggled(enabled).accessibility_label(label).tooltip_with_action(label, action.as_ref(), Some(actions::WORKSPACE))
-                .on_click(move |_, window, cx| window.dispatch_action(action.boxed_clone(), cx)));
+                .on_click(move |_, window, cx| window.dispatch_action(action.boxed_clone(), cx));
+            if index < 2 { left_controls = left_controls.child(button); }
+            else { right_controls = right_controls.child(button); }
         }
-        h_flex().m_2().gap_2().min_w_0().child(home).child(tabs).child(controls).child(Button::new("open-settings-icon").ghost().small().icon(IconName::Settings)
+        h_flex().m_2().gap_2().min_w_0().child(home).child(left_controls).child(tabs).child(right_controls).child(Button::new("open-settings-icon").ghost().small().icon(IconName::Settings)
             .accessibility_label("Settings").tooltip_with_action("Settings", &actions::OpenSettings, Some(actions::WORKSPACE))
             .on_click(cx.listener(|this, _, window, cx| this.open_settings(None, window, cx))))
     }

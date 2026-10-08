@@ -131,3 +131,48 @@ fn open_test_case(ws: &mut Workspace, window: &mut Window, cx: &mut Context<Work
         )
     });
 }
+
+/// Configure generated cases before asking the agent.
+pub fn open_edge_cases(ws: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace>) {
+    let Some(origin) = ws.session.as_ref().filter(|s| s.question.is_some()).map(|s| s.slug.clone()) else { return };
+    let count = cx.new(|cx| TextareaState::new(window, cx).rows(1).placeholder("Number of cases · 1–30"));
+    count.update(cx, |input, cx| input.set_value("6", window, cx));
+    let kinds = cx.new(|cx| TextareaState::new(window, cx).rows(1).placeholder("Types · boundary, duplicates, stress…"));
+    kinds.update(cx, |input, cx| input.set_value("Boundary, tricky, edge", window, cx));
+    let instructions = cx.new(|cx| TextareaState::new(window, cx).rows(3).placeholder("Extra instructions (optional)"));
+    let draft = ws.assist.update(cx, |assist, cx| {
+        assist.set_problem(Some(&origin), cx);
+        assist.sync_composer(window, cx);
+        assist.composer.read(cx).value().to_string()
+    });
+    instructions.update(cx, |input, cx| input.set_value(draft, window, cx));
+    let weak = cx.weak_entity();
+    window.open_dialog(cx, move |dialog, _, _| {
+        let (count, kinds, instructions, origin, weak) = (count.clone(), kinds.clone(), instructions.clone(), origin.clone(), weak.clone());
+        dialog.title("Generate edge cases").w(px(480.))
+            .child(v_flex().gap_3()
+                .child(v_flex().gap_1().child("How many more?").child(Textarea::new(&count)))
+                .child(v_flex().gap_1().child("Case types").child(Textarea::new(&kinds)))
+                .child(Textarea::new(&instructions)))
+            .footer(h_flex().gap_2().justify_end()
+                .child(Button::new("cancel-edge-cases").label("Cancel").on_click(|_, window, cx| window.close_dialog(cx)))
+                .child(Button::new("generate-edge-cases-confirm").primary().label("Generate")
+                    .on_click(move |_, window, cx| {
+                        let number = count.read(cx).value().trim().parse::<usize>();
+                        let Ok(number @ 1..=30) = number else {
+                            window.push_notification(Notification::warning("Choose between 1 and 30 cases."), cx); return;
+                        };
+                        let prompt = format!("Generate exactly {number} additional test cases. Case types: {}. Avoid duplicating the existing cases. {}", kinds.read(cx).value().trim(), instructions.read(cx).value().trim());
+                        let origin = origin.clone();
+                        after_close(weak.clone(), window, cx, move |ws, window, cx| {
+                            if ws.session.as_ref().is_none_or(|s| s.slug != origin) { return; }
+                            ws.assist.update(cx, |assist, cx| {
+                                assist.set_problem(Some(&origin), cx);
+                                assist.sync_composer(window, cx);
+                                assist.composer.update(cx, |input, cx| input.set_value(prompt, window, cx));
+                            });
+                            ws.run_assist(practice::assist::Action::Tests, window, cx);
+                        });
+                    })))
+    });
+}
