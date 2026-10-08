@@ -16,6 +16,7 @@
 - Show cached AI models immediately and refresh once per agent per app session.
 - Antigravity defaults to the latest available Flash model with low reasoning.
 - Syntax highlighting in Debug mode follows the editor theme.
+- Show the selected case's original input above the live debugger state.
 - Larger array cells and pointer labels with longer stems and smoother movement.
 - Clear headings for the call stack, variables, data structures, and printed output.
 - Debug mode replays every test case with a seek bar, line heat, and live data structures for Python and C++.
