@@ -8,7 +8,7 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{InputGroup, InputGroupAddon, InputGroupAddonAlignment, Textarea};
 use gpui_kit::component::{ActiveTheme as _, Theme, Icon, Sizable as _, h_flex, v_flex};
 
-use super::{Assist, Action, Phase, SendChat, Target, icon, accent};
+use super::{Assist, Action, Phase, SendChat, NewChat, Target, icon, accent};
 
 impl Assist {
     pub(crate) fn refresh_context(&mut self, slug: Option<String>, has_problem: bool, has_attempt: bool, web: bool, window: &mut Window, cx: &mut Context<Self>) {
@@ -62,6 +62,7 @@ impl Render for Assist {
             .map(|run| self.card(run, window, cx));
         v_flex().key_context("AgentChat").size_full().min_h_0()
             .on_action(cx.listener(|this, _: &SendChat, window, cx| this.send(window, cx)))
+            .on_action(cx.listener(|this, _: &NewChat, window, cx| this.new_thread(window, cx)))
             .child(h_flex().px_3().py_3().gap_2().min_w_0()
                 .child(Icon::new(IconName::Sparkles).size_4().text_color(theme.primary))
                 .child(h_flex().id("ai-tabs").flex_1().min_w_0().overflow_x_scroll().gap_1()

@@ -86,7 +86,6 @@ impl Db {
         match problem { Some(problem) => self.search_chat_threads(Some(problem), query), None => Ok(vec![]) }
     }
     pub fn search_chat_threads(&self, problem: Option<&str>, query: &str) -> Result<Vec<Thread>> {
-        if query.trim().is_empty() { return self.chat_threads(problem); }
         #[derive(QueryableByName)]
         struct SearchRow {
             #[diesel(sql_type = diesel::sql_types::BigInt)] id: i64,
@@ -99,7 +98,8 @@ impl Db {
         let escaped = query.trim().replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
         let pattern = format!("%{escaped}%");
         let rows = diesel::sql_query(r"SELECT t.* FROM chat_threads t WHERE t.problem IS ? AND
-            (t.title LIKE ? ESCAPE '\' OR EXISTS (SELECT 1 FROM chat_messages m WHERE m.thread_id = t.id AND
+            (trim(t.draft, char(9) || char(10) || char(13) || ' ') <> '' OR EXISTS (SELECT 1 FROM chat_messages present WHERE present.thread_id = t.id)) AND
+            (t.draft LIKE ? ESCAPE '\' OR t.title LIKE ? ESCAPE '\' OR EXISTS (SELECT 1 FROM chat_messages m WHERE m.thread_id = t.id AND
                 (json_extract(m.body, '$.instructions') LIKE ? ESCAPE '\'
                 OR json_extract(m.body, '$.request_prompt') LIKE ? ESCAPE '\'
                 OR json_extract(m.body, '$.problem_title') LIKE ? ESCAPE '\'
@@ -108,7 +108,7 @@ impl Db {
             .bind::<diesel::sql_types::Nullable<diesel::sql_types::Text>, _>(problem)
             .bind::<diesel::sql_types::Text, _>(&pattern).bind::<diesel::sql_types::Text, _>(&pattern)
             .bind::<diesel::sql_types::Text, _>(&pattern).bind::<diesel::sql_types::Text, _>(&pattern)
-            .bind::<diesel::sql_types::Text, _>(&pattern)
+            .bind::<diesel::sql_types::Text, _>(&pattern).bind::<diesel::sql_types::Text, _>(&pattern)
             .load::<SearchRow>(&mut *self.conn())?;
         Ok(rows.into_iter().map(|row| Thread { id: row.id, problem: row.problem, title: row.title, updated_at: row.updated_at, draft: row.draft, fork_of: row.fork_of }).collect())
     }
@@ -219,6 +219,22 @@ mod tests {
         assert_eq!(db.search_chat_threads(Some("two-sum"), "%").unwrap().len(), 1);
         assert!(db.search_chat_threads(Some("two-sum"), "_").unwrap().is_empty());
         assert!(db.search_chat_threads(Some("other"), "complement").unwrap().is_empty());
+    }
+    #[test]
+    fn blank_threads_stay_hidden_but_drafts_and_messages_remain_visible() {
+        let dir = tempfile::tempdir().unwrap(); let db = Db::open_unseeded(&dir.path().join("test.db")).unwrap();
+        let thread = db.create_chat(Some("two-sum"), "New chat").unwrap();
+        assert!(db.visible_chat_threads(Some("two-sum"), "").unwrap().is_empty());
+        assert!(db.visible_chat_threads(Some("two-sum"), "New chat").unwrap().is_empty());
+        db.save_chat_draft(thread.id, " \n\t ").unwrap();
+        assert!(db.visible_chat_threads(Some("two-sum"), "").unwrap().is_empty());
+        db.save_chat_draft(thread.id, "Compare map approaches").unwrap();
+        assert_eq!(db.visible_chat_threads(Some("two-sum"), "map").unwrap()[0].id, thread.id);
+        db.save_chat_draft(thread.id, "").unwrap();
+        assert!(db.visible_chat_threads(Some("two-sum"), "").unwrap().is_empty());
+        db.append_chat(thread.id, &turn("two-sum", "Use a map")).unwrap();
+        assert_eq!(db.visible_chat_threads(Some("two-sum"), "").unwrap()[0].id, thread.id);
+        assert_eq!(db.chat_threads(Some("two-sum")).unwrap().len(), 1);
     }
     #[test]
     fn scopes_forks_deletion_and_undo_survive_reopening() {

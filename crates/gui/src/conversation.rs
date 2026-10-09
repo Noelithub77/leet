@@ -47,9 +47,10 @@ impl Assist {
         Ok(thread.id)
     }
     pub(super) fn open_thread_list(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.show_threads = true;
+        self.persist_draft(cx); self.refresh_threads();
+        self.show_threads = !self.threads.is_empty() || !self.thread_query.trim().is_empty();
         self.thread_selection = self.threads.iter().position(|thread| Some(thread.id) == self.selected_thread).unwrap_or(0);
-        self.thread_search.focus_handle(cx).focus(window, cx);
+        if self.show_threads { self.thread_search.focus_handle(cx).focus(window, cx); } else { self.composer.focus_handle(cx).focus(window, cx); }
         cx.notify();
     }
     pub(super) fn select_thread(&mut self, id: i64, window: &mut Window, cx: &mut Context<Self>) {
@@ -63,9 +64,14 @@ impl Assist {
         }
     }
     pub(super) fn new_thread(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.slug.is_none() { return; }
+        if self.editing.is_none() && self.composer.read(cx).value().trim().is_empty()
+            && self.selected_thread.is_some_and(|id| self.db.chat_messages(id).is_ok_and(|messages| messages.is_empty())) {
+            self.ai_tab = 2; self.show_threads = false; self.composer.focus_handle(cx).focus(window, cx); cx.notify(); return;
+        }
         self.persist_draft(cx); self.selected_thread = None; self.editing = None;
         match self.ensure_thread() {
-            Ok(_) => { self.sync_composer(window, cx); self.ai_tab = 2; self.show_threads = false; }
+            Ok(_) => { self.sync_composer(window, cx); self.ai_tab = 2; self.show_threads = false; self.composer.focus_handle(cx).focus(window, cx); }
             Err(error) => self.conversation_error = Some(error.to_string()),
         }
         cx.notify();
@@ -151,27 +157,31 @@ impl Assist {
     pub(super) fn thread_header(&self, _window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
         let theme = cx.theme().clone();
-        let title = self.selected_thread.and_then(|id| self.db.chat_thread(id).ok()).map(|thread| thread.title).unwrap_or_else(|| "Threads".into());
-        let weak = cx.entity().downgrade(); let has_thread = self.selected_thread.is_some();
+        let title = if self.show_threads { "Chats".into() } else { self.selected_thread.and_then(|id| self.db.chat_thread(id).ok()).filter(|thread| thread.title != "New chat").map(|thread| thread.title).unwrap_or_else(|| "Chats".into()) };
+        let weak = cx.entity().downgrade();
+        let has_thread = self.threads.iter().any(|thread| Some(thread.id) == self.selected_thread);
+        let has_history = !self.threads.is_empty() || !self.thread_query.trim().is_empty();
         let has_problem = self.slug.is_some();
         v_flex().px_3().pb_2().gap_2().border_b_1().border_color(theme.border)
-            .child(h_flex().gap_1().min_w_0()
-                .child(Button::new("chat-thread-picker").outline().small().icon(if self.show_threads { IconName::ChevronDown } else { IconName::ChevronRight }).label(title).flex_1().min_w_0()
-                    .tooltip("Conversation threads").on_click(cx.listener(|this, _, window, cx| { if this.show_threads { this.show_threads = false; cx.notify(); } else { this.open_thread_list(window, cx); } })))
-                .child(Button::new("chat-new-thread").ghost().small().icon(IconName::Plus).tooltip("New thread").accessibility_label("New thread")
+            .child(h_flex().id("chat-thread-toolbar").test_support().w_full().gap_1().min_w_0()
+                .when(has_history, |el| el.border_1().border_color(theme.border).rounded_md().p_1()
+                    .child(Button::new("chat-thread-picker").ghost().small().icon(if self.show_threads { IconName::ChevronDown } else { IconName::ChevronRight }).label(title).flex_1().min_w_0()
+                        .tooltip("Conversation threads").on_click(cx.listener(|this, _, window, cx| { if this.show_threads { this.show_threads = false; cx.notify(); } else { this.open_thread_list(window, cx); } }))))
+                .when(!has_history, |el| el.child(div().flex_1()))
+                .child(Button::new("chat-new-thread").ghost().small().icon(IconName::Plus).tooltip("New chat · Ctrl+T / Ctrl+Shift+O / Ctrl+N").accessibility_label("New chat")
                     .disabled(!has_problem).on_click(cx.listener(|this, _, window, cx| this.new_thread(window, cx))))
-                .child(Button::new("chat-undo").ghost().small().icon(IconName::Undo2).tooltip("Undo latest branch or deletion").accessibility_label("Undo latest branch or deletion").disabled(!self.db.can_undo_chat())
-                    .on_click(cx.listener(|this, _, window, cx| this.undo_thread(window, cx))))
-                .child(Button::new("chat-thread-options").ghost().small().icon(IconName::Ellipsis).tooltip("Thread options").disabled(!has_thread)
-                    .dropdown_menu(move |menu, _, _| { let weak = weak.clone(); menu.item(PopupMenuItem::new("Delete thread").icon(IconName::Trash).on_click(move |_, window, cx| { let _ = weak.update(cx, |this, cx| this.delete_thread(window, cx)); })) })))
-            .when(self.show_threads, |el| el
-                .child(v_flex().key_context("ChatThreads")
+                .when(self.db.can_undo_chat(), |el| el.child(Button::new("chat-undo").ghost().small().icon(IconName::Undo2).tooltip("Undo latest branch or deletion").accessibility_label("Undo latest branch or deletion")
+                    .on_click(cx.listener(|this, _, window, cx| this.undo_thread(window, cx)))))
+                .when(has_thread, |el| el.child(Button::new("chat-thread-options").ghost().small().icon(IconName::Ellipsis).tooltip("Thread options")
+                    .dropdown_menu(move |menu, _, _| { let weak = weak.clone(); menu.item(PopupMenuItem::new("Delete thread").icon(IconName::Trash).on_click(move |_, window, cx| { let _ = weak.update(cx, |this, cx| this.delete_thread(window, cx)); })) }))))
+            .when(self.show_threads && has_history, |el| el
+                .child(v_flex().id("chat-thread-search").test_support().key_context("ChatThreads")
                     .on_action(cx.listener(|this, _: &NextThread, _, cx| this.navigate_threads(1, cx)))
                     .on_action(cx.listener(|this, _: &PreviousThread, _, cx| this.navigate_threads(-1, cx)))
                     .on_action(cx.listener(|this, _: &OpenThread, window, cx| { if let Some(thread) = this.threads.get(this.thread_selection) { this.select_thread(thread.id, window, cx); } }))
                     .on_action(cx.listener(|this, _: &CloseThreadList, window, cx| { this.show_threads = false; this.composer.focus_handle(cx).focus(window, cx); cx.notify(); }))
                     .child(gpui_kit::component::input::Input::new(&self.thread_search).small()))
-                .when(self.threads.is_empty(), |el| el.child(div().px_2().py_2().text_xs().text_color(theme.muted_foreground).child(if self.thread_query.trim().is_empty() { "No threads yet" } else { "No matching chats" })))
+                .when(self.threads.is_empty(), |el| el.child(div().px_2().py_2().text_xs().text_color(theme.muted_foreground).child("No matching chats")))
                 .when(!self.threads.is_empty(), |el| el.child(uniform_list("chat-thread-list", self.threads.len(), cx.processor(|this, range: std::ops::Range<usize>, _, cx| {
                     let theme = cx.theme().clone();
                     range.filter_map(|index| this.threads.get(index).map(|thread| {
@@ -180,7 +190,7 @@ impl Assist {
                             .bg(if index == this.thread_selection { theme.list_active } else { theme.background.opacity(0.) })
                             .hover(|el| el.bg(theme.list_hover))
                             .child(Icon::new(if thread.fork_of.is_some() { IconName::GitBranch } else { IconName::MessageCircle }).xsmall().text_color(theme.muted_foreground))
-                            .child(div().flex_1().min_w_0().truncate().text_sm().child(thread.title.clone()))
+                            .child(div().flex_1().min_w_0().truncate().text_sm().child(if thread.title == "New chat" { thread.draft.lines().find(|line| !line.trim().is_empty()).unwrap_or("Draft").trim().to_owned() } else { thread.title.clone() }))
                             .on_click(cx.listener(move |this, _, window, cx| this.select_thread(id, window, cx))).into_any_element()
                     })).collect()
                 })).track_scroll(&self.thread_scroll).w_full().h(px(self.threads.len().min(5) as f32 * 34.)).border_1().border_color(theme.border).rounded_md())))

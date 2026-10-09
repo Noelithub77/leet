@@ -26,10 +26,13 @@ use practice::viz::Tone;
 use crate::gen_ui::player::{self, Playback};
 use crate::workspace::Workspace;
 
-gpui_kit::actions!(chat, [SendChat, NextThread, PreviousThread, OpenThread, CloseThreadList]);
+gpui_kit::actions!(chat, [SendChat, NewChat, NextThread, PreviousThread, OpenThread, CloseThreadList]);
 
 pub fn bind_keys(cx: &mut App) {
-    cx.bind_keys([KeyBinding::new("down", NextThread, Some("ChatThreads")),
+    cx.bind_keys([KeyBinding::new("ctrl-t", NewChat, Some("AgentChat")),
+        KeyBinding::new("ctrl-shift-o", NewChat, Some("AgentChat")),
+        KeyBinding::new("ctrl-n", NewChat, Some("AgentChat")),
+        KeyBinding::new("down", NextThread, Some("ChatThreads")),
         KeyBinding::new("up", PreviousThread, Some("ChatThreads")),
         KeyBinding::new("enter", OpenThread, Some("ChatThreads")),
         KeyBinding::new("escape", CloseThreadList, Some("ChatThreads"))]);

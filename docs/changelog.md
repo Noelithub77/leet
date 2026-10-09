@@ -1,6 +1,7 @@
 <details open>
 <summary>Feat</summary>
 
+- Start a chat in the assistant pane with Ctrl+T, Ctrl+Shift+O, or Ctrl+N.
 - 205 competitive-programming snippets and file templates for Python, C++, Go, C, and Java.
 - Expand prefixes with Tab and browse snippets with Ctrl+J.
 - Linked placeholders, choices, transforms, and a cursor that glides between stops.
@@ -18,6 +19,10 @@
 <details>
 <summary>Fix</summary>
 
+- Hide empty chat placeholders from history.
+- Show the selected conversation title once.
+- Keep empty history free of placeholder controls.
+- Align the chat toolbar with the history list.
 - Give the chat picker, thread list, and selected conversation clear borders.
 
 - Show each command once in search, with its current keybindings beside it.
