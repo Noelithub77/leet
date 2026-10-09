@@ -31,7 +31,6 @@ pub struct SnippetEditor {
     pub(super) source: Entity<EditorState>,
     preview: Entity<EditorState>,
     template: bool,
-    global: bool,
     pub(super) error: Option<String>,
     status: String,
     scanning: bool,
@@ -75,7 +74,7 @@ impl SnippetEditor {
         let mut subscriptions=vec![changed];
         for input in [&name,&prefixes,&description,&search] {subscriptions.push(cx.subscribe(input,|_,_,_:&InputEvent,cx|cx.notify()));}
         let ai=super::ai::State::new(window,cx);
-        let mut this=Self{workspace,dir,user:Vec::new(),library:Vec::new(),settings,language,selected:None,original:None,name,prefixes,description,search,source,preview,template:false,global:false,error:None,status:String::new(),scanning:false,ai,_subscriptions:subscriptions};
+        let mut this=Self{workspace,dir,user:Vec::new(),library:Vec::new(),settings,language,selected:None,original:None,name,prefixes,description,search,source,preview,template:false,error:None,status:String::new(),scanning:false,ai,_subscriptions:subscriptions};
         this.refresh(window,cx);this
     }
     pub(super) fn refresh(&mut self, window:&mut Window,cx:&mut Context<Self>) {
@@ -87,7 +86,7 @@ impl SnippetEditor {
         cx.notify();
     }
     fn load(&mut self,s:Snippet,window:&mut Window,cx:&mut Context<Self>){
-        self.selected=Some(s.key());self.template=s.template;self.global=s.scope.is_none();
+        self.selected=Some(s.key());self.template=s.template;
         self.name.update(cx,|e,cx|e.set_value(s.name.clone(),window,cx));
         self.prefixes.update(cx,|e,cx|e.set_value(s.prefixes.join(", "),window,cx));
         self.description.update(cx,|e,cx|e.set_value(s.description.clone(),window,cx));
@@ -95,9 +94,9 @@ impl SnippetEditor {
         self.original=Some(s);self.update_preview(window,cx);
     }
     pub(super) fn draft(&self,cx:&App)->Snippet {
-        Snippet{name:self.name.read(cx).value().trim().into(),prefixes:self.prefixes.read(cx).value().split(',').map(str::trim).filter(|s|!s.is_empty()).map(str::to_owned).collect(),description:self.description.read(cx).value().trim().into(),body:self.source.read(cx).value().into(),scope:if self.global{None}else{Some(self.language)},template:self.template,origin:self.original.as_ref().map_or(Origin::User,|s|if s.origin==Origin::Builtin{Origin::User}else{s.origin})}
+        Snippet{name:self.name.read(cx).value().trim().into(),prefixes:self.prefixes.read(cx).value().split(',').map(str::trim).filter(|s|!s.is_empty()).map(str::to_owned).collect(),description:self.description.read(cx).value().trim().into(),body:self.source.read(cx).value().into(),scope:Some(self.language),template:self.template,origin:self.original.as_ref().map_or(Origin::User,|s|if s.origin==Origin::Builtin{Origin::User}else{s.origin})}
     }
-    fn dirty(&self,cx:&App)->bool {let s=self.draft(cx);self.original.as_ref().is_none_or(|o|s.name!=o.name||s.prefixes!=o.prefixes||s.description!=o.description||s.body!=o.body||s.scope!=o.scope||s.template!=o.template)}
+    fn dirty(&self,cx:&App)->bool {let s=self.draft(cx);self.original.as_ref().is_none_or(|o|s.name!=o.name||s.prefixes!=o.prefixes||s.description!=o.description||s.body!=o.body||o.scope.is_some()&&s.scope!=o.scope||s.template!=o.template)}
     fn update_preview(&mut self,window:&mut Window,cx:&mut Context<Self>){
         let text=body::preview(self.source.read(cx).value().as_str()).text;
         self.preview.update(cx,|e,cx|{e.set_highlighter(self.language.id(),cx);e.set_value(text,window,cx);});cx.notify();
@@ -202,7 +201,6 @@ impl Render for SnippetEditor {
                         .child(Button::new("remove-snippet").ghost().small().icon(IconName::Trash).tooltip("Remove snippet").on_click(cx.listener(|this,_,w,cx|this.remove(w,cx)))))
                     .child(Input::new(&self.description).small())
                     .child(h_flex().gap_2().child(Button::new("snippet-template").ghost().small().label(if self.template{"File template ✓"}else{"File template"}).on_click(cx.listener(|this,_,_,cx|{this.template=!this.template;cx.notify();})))
-                        .child(Button::new("snippet-global").ghost().small().label(if self.global{"All languages ✓"}else{"This language"}).on_click(cx.listener(|this,_,_,cx|{this.global=!this.global;cx.notify();})))
                         .when(self.template,|row|row.child(Button::new("snippet-default-template").ghost().small().icon(IconName::File).tooltip("Use for new stdin solutions").on_click(cx.listener(|this,_,w,cx|{if this.save(w,cx){let name=this.name.read(cx).value().to_string();this.settings.templates.insert(this.language.id().into(),name);this.persist_settings(w,cx);}})))))
                     .child(h_flex().gap_2().children([(format!("${{{next}:value}}"),"Stop"),("$0".into(),"Cursor"),(format!("${{{next}|YES,NO|}}"),"Choice")].into_iter().map(|(syntax,label)|{
                         let drag=StopChip(syntax.clone());div().id(SharedString::from(format!("drag-{label}"))).test_support().on_drag(drag,|chip,_,_,cx|cx.new(|_|chip.clone())).child(Button::new(SharedString::from(format!("insert-{label}"))).outline().small().label(label).tooltip(format!("Insert or drag {syntax} into the body")).on_click(cx.listener(move|this,_,w,cx|this.insert_chip(syntax.clone(),None,w,cx))))

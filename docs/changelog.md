@@ -31,6 +31,7 @@
 - Merge snippets into the compact IntelliSense menu below the cursor, with highlighted previews.
 - Identify completion kinds with small icons.
 - Give completion previews more room and fade their clipped edge smoothly.
+- Create snippets for the selected language without an all-languages toggle.
 - Show bundled snippet inputs, outputs, and short examples in the preview.
 - Explain snippet expansion and placeholders in the skippable onboarding step.
 - Suppress Windows console popups from background tools, updates, Companion, and local execution.
