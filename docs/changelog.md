@@ -10,6 +10,7 @@
 
 - Open statement cards together with compact text, natural sizing, and visible headers.
 - Remember expanded statement cards across questions and app restarts.
+- Start with Description and Examples expanded before any card preferences are saved.
 
 - Replay Python and C++ Codeforces and CodeChef programs in Debug, including CPH samples.
 

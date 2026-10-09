@@ -273,7 +273,7 @@ impl Db {
     }
 
     pub fn statement_sections(&self) -> Result<[bool; 3]> {
-        Ok(self.get("statement-sections:v1")?.and_then(|value| serde_json::from_str(&value).ok()).unwrap_or([true, false, false]))
+        Ok(self.get("statement-sections:v1")?.and_then(|value| serde_json::from_str(&value).ok()).unwrap_or([true, true, false]))
     }
 
     pub fn save_statement_sections(&self, sections: [bool; 3]) -> Result<()> {
@@ -383,7 +383,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("sections.db");
         let db = Db::open(&path).unwrap();
-        assert_eq!(db.statement_sections().unwrap(), [true, false, false]);
+        assert_eq!(db.statement_sections().unwrap(), [true, true, false]);
         db.save_statement_sections([false, true, true]).unwrap();
         assert!(db.question("two-sum").unwrap().is_some());
         assert!(db.question("valid-anagram").unwrap().is_some());
@@ -392,7 +392,7 @@ mod tests {
         let db = Db::open(&path).unwrap();
         assert_eq!(db.statement_sections().unwrap(), [false, true, true]);
         db.set("statement-sections:v1", "[true]").unwrap();
-        assert_eq!(db.statement_sections().unwrap(), [true, false, false]);
+        assert_eq!(db.statement_sections().unwrap(), [true, true, false]);
     }
 
     #[test]

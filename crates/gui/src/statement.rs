@@ -15,7 +15,7 @@ use section_stack::SectionStack;
 pub struct TagsVisible(pub bool);
 impl Global for TagsVisible {}
 pub struct Sections(pub [bool; 3]);
-impl Default for Sections { fn default() -> Self { Self([true, false, false]) } }
+impl Default for Sections { fn default() -> Self { Self([true, true, false]) } }
 impl Global for Sections {}
 fn tag_icon(topic: &str) -> IconName {
     match topic {

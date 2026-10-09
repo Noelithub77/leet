@@ -47,6 +47,10 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         cx.update(|cx| statement.update(cx, |view, _| view.db = Some(db.clone())));
         cx.update_window(handle, |_, window, cx| -> Result<()> {
             window.render_frame(cx); headers(window)?;
+            ensure!(cx.global::<Sections>().0 == [true, true, false], "First load did not expand Description and Examples");
+            ensure!(db.statement_sections()? == [true, true, false], "Fresh storage has incorrect card defaults");
+            window.click(("statement-section", 1usize), cx);
+            ensure!(cx.global::<Sections>().0 == [true, false, false], "Examples did not collapse independently");
             window.scroll(("statement-section", 0usize), gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-600.))), cx);
             ensure!(statement.read(cx).section_scroll[0].offset().y < px(0.), "Description did not scroll");
             headers(window)?;

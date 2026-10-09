@@ -287,7 +287,7 @@ impl Workspace {
         // Shortcuts need a focused element inside the workspace from the first frame.
         let (omni, omni_sub) = Omnibar::new(window, cx);
         cx.set_global(crate::statement::TagsVisible(config.show_tags));
-        cx.set_global(crate::statement::Sections(db.statement_sections().unwrap_or([true, false, false])));
+        cx.set_global(db.statement_sections().map(crate::statement::Sections).unwrap_or_default());
         let weak = cx.weak_entity();
         let assist = cx.new(|cx| crate::assist::Assist::new(weak.clone(), db.clone(), window, cx));
         let ai_chip = cx.new(|cx| crate::ai::Chip::new(weak.clone(), assist.clone(), cx));
