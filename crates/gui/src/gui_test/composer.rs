@@ -11,10 +11,15 @@ struct Fixture {
     assist: Entity<Assist>,
     enabled: bool,
     busy: bool,
+    threads: bool,
 }
 
 impl Render for Fixture {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.threads {
+            let header = self.assist.update(cx, |assist, cx| assist.thread_header(window, cx));
+            return v_flex().size_full().bg(cx.theme().background).child(header);
+        }
         let composer = self.assist.update(cx, |assist, cx| assist.render_composer(self.enabled, false, self.busy, cx).into_any_element());
         v_flex().size_full().bg(cx.theme().background).child(composer)
     }
@@ -35,7 +40,7 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             cx.observe(&assist, |_, _, cx| cx.notify()).detach();
             // Dropping the fixture workspace leaves the real send handler without transport side effects.
             drop(workspace);
-            Fixture { assist, enabled: true, busy: false }
+            Fixture { assist, enabled: true, busy: false, threads: false }
         })))?;
         let handle = handle.into();
         cx.run_until_parked();
@@ -100,11 +105,35 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             window.render_frame(cx);
             window.click("chat-send", cx);
             ensure!(assist.read(cx).ai_tab == 0, "Disabled composer sent a chat");
+            fixture.update(cx, |view, cx| { view.threads = true; cx.notify(); });
+            assist.update(cx, |assist, cx| {
+                assist.slug = Some("composer-fixture".into());
+                if assist.db.visible_chat_threads(assist.slug.as_deref(), "").unwrap().is_empty() {
+                    for title in ["New chat", "Previous conversation", "Maps"] {
+                        assist.db.create_chat(assist.slug.as_deref(), title).unwrap();
+                    }
+                }
+                assist.refresh_threads();
+                assist.selected_thread = Some(assist.threads[1].id);
+                assist.open_thread_list(window, cx);
+            });
+            window.render_frame(cx);
+            Ok(())
+        })??;
+        cx.run_until_parked();
+        if pixels { cx.capture_screenshot(handle)?.save(output.join(format!("threads-{name}.png")))?; }
+        cx.update_window(handle, |_, window, cx| -> Result<()> {
+            window.render_frame(cx);
+            let assist = fixture.read(cx).assist.clone();
+            let selected = assist.read(cx).threads[0].id;
+            window.press("up", cx);
+            window.press("enter", cx);
+            ensure!(assist.read(cx).selected_thread == Some(selected) && !assist.read(cx).show_threads, "Keyboard selection did not open the selected chat");
             window.remove_window();
             Ok(())
         })??;
         cx.run_until_parked();
     }
     cx.update(|cx| { crate::theme::apply("Vesper", cx); crate::theme::set_zoom(1., cx); });
-    Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["Enter sends","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","send button input","send and stop containment","compact/light/zoom"]}))
+    Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["Enter sends","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","send button input","send and stop containment","compact/light/zoom","thread borders and keyboard selection"]}))
 }

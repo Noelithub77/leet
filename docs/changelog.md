@@ -18,6 +18,8 @@
 <details>
 <summary>Fix</summary>
 
+- Give the chat picker, thread list, and selected conversation clear borders.
+
 - Suppress Windows console popups from background tools, updates, Companion, and local execution.
 - Resolve file-template variables from the new solution's filename and workspace.
 - Keep tour shortcuts ahead of editor input and retain keyboard focus when advancing.

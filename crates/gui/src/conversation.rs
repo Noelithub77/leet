@@ -154,9 +154,9 @@ impl Assist {
         let title = self.selected_thread.and_then(|id| self.db.chat_thread(id).ok()).map(|thread| thread.title).unwrap_or_else(|| "Threads".into());
         let weak = cx.entity().downgrade(); let has_thread = self.selected_thread.is_some();
         let has_problem = self.slug.is_some();
-        v_flex().px_3().pb_2().gap_2()
+        v_flex().px_3().pb_2().gap_2().border_b_1().border_color(theme.border)
             .child(h_flex().gap_1().min_w_0()
-                .child(Button::new("chat-thread-picker").ghost().small().icon(if self.show_threads { IconName::ChevronDown } else { IconName::ChevronRight }).label(title).flex_1().min_w_0()
+                .child(Button::new("chat-thread-picker").outline().small().icon(if self.show_threads { IconName::ChevronDown } else { IconName::ChevronRight }).label(title).flex_1().min_w_0()
                     .tooltip("Conversation threads").on_click(cx.listener(|this, _, window, cx| { if this.show_threads { this.show_threads = false; cx.notify(); } else { this.open_thread_list(window, cx); } })))
                 .child(Button::new("chat-new-thread").ghost().small().icon(IconName::Plus).tooltip("New thread").accessibility_label("New thread")
                     .disabled(!has_problem).on_click(cx.listener(|this, _, window, cx| this.new_thread(window, cx))))
@@ -176,14 +176,14 @@ impl Assist {
                     let theme = cx.theme().clone();
                     range.filter_map(|index| this.threads.get(index).map(|thread| {
                         let id = thread.id;
-                        h_flex().id(("chat-thread-row", id as u64)).h(px(34.)).w_full().px_2().gap_2().items_center().rounded_md().cursor_pointer()
+                        h_flex().id(("chat-thread-row", id as u64)).h(px(34.)).w_full().px_2().gap_2().items_center().rounded_md().border_1().border_color(if index == this.thread_selection { theme.border } else { theme.border.opacity(0.) }).cursor_pointer()
                             .bg(if index == this.thread_selection { theme.list_active } else { theme.background.opacity(0.) })
                             .hover(|el| el.bg(theme.list_hover))
                             .child(Icon::new(if thread.fork_of.is_some() { IconName::GitBranch } else { IconName::MessageCircle }).xsmall().text_color(theme.muted_foreground))
                             .child(div().flex_1().min_w_0().truncate().text_sm().child(thread.title.clone()))
                             .on_click(cx.listener(move |this, _, window, cx| this.select_thread(id, window, cx))).into_any_element()
                     })).collect()
-                })).track_scroll(&self.thread_scroll).w_full().h(px(self.threads.len().min(5) as f32 * 34.)))))
+                })).track_scroll(&self.thread_scroll).w_full().h(px(self.threads.len().min(5) as f32 * 34.)).border_1().border_color(theme.border).rounded_md())))
             .into_any_element()
     }
 }
