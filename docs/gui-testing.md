@@ -21,7 +21,7 @@ the user's display.
 
 The chat composer fixture checks Enter sending, Shift+Enter line breaks, removal of Ctrl+Enter, empty and disabled input, and send/stop containment. It renders compact, light, dark, and 140%-zoom variants. It uses the production composer with a dropped fixture workspace, so sends do not start agents or open web chats.
 
-Native mode also checks long statement cards at regular and compact sizes, in light and dark themes, and at 140% zoom: visible headers, exclusive expansion, wheel scrolling, PageDown, and Tab/Space activation. Statement PNGs are saved alongside debugger captures.
+Native mode also checks long statement cards at regular and compact sizes, in light and dark themes, and at 140% zoom: visible headers, independent expansion and scrolling, natural short-content sizing, shared saved flags across questions and reopened storage, PageDown, and Tab/Space activation. Statement PNGs are saved alongside debugger captures.
 
 The onboarding fixture renders the production setup view with missing clangd, a missing compiler, and pending tool checks. Hit-tested Continue clicks advance in every case. Prerequisite results are deterministic; this fixture never detects or downloads tools. Setup PNGs are saved alongside the other captures. The ignored `live_private_python_and_cpp_servers` core test verifies completion, hover, definition, and diagnostics against managed tools; isolate its data directory and install the tools there before running it.
 

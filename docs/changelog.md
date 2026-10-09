@@ -8,7 +8,8 @@
 - Synchronize the hero logo and title, add breathing room, and refine installation keycaps and Windows download.
 - Versioned release downloads with readable platform and architecture names.
 
-- Keep Description, Examples, and Constraints visible as pastel-bordered cards with one section open at a time.
+- Open statement cards together with compact text, natural sizing, and visible headers.
+- Remember expanded statement cards across questions and app restarts.
 
 - Replay Python and C++ Codeforces and CodeChef programs in Debug, including CPH samples.
 
@@ -35,7 +36,7 @@
 - Compact AI navigation with centered empty views and time and space analysis placeholders.
 - Show AI-generated edge cases with a sparkle icon.
 - Resize the rounded results panel vertically and remember its height.
-- Keep Constraints visible below statement content and close other sections when opening it.
+- Keep Constraints reachable when reading long statements.
 - Generate extra test cases from the case toolbar with custom counts, types, and instructions.
 - Explorer and Description toggles beside Home, AI and results toggles at the top right, and Code icons on problem tabs.
 - Softly rounded panes with very dim orange outlines in Vesper.
