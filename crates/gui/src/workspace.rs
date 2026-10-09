@@ -798,7 +798,7 @@ impl Workspace {
             && let Some(name)=self.config.snippets.templates.get(session.language.id()) {
             let snippet=self.editor_pane.read(cx).library.iter().find(|s|s.name==*name&&s.applies_to(session.language)&&s.template).cloned();
             if let Some(snippet)=snippet {
-                let expansion=practice::snippets::body::preview(&snippet.body);
+                let expansion=practice::snippets::body::file_template(&snippet.body,&session.path,&self.config.workspace,session.language);
                 let document=self.editor.read(cx).value().to_string();
                 if !expansion.truncated && document==expansion.text {self.editor_pane.update(cx,|pane,cx|pane.activate(expansion,0,document,cx));}
             }
@@ -1214,8 +1214,10 @@ fn load_question(db: &Db, client: &Client, workspace: &std::path::Path, slug: &s
     let frontend_id = q.frontend_id.parse().unwrap_or(0);
     let rel = ws::solution_rel(frontend_id, &q.slug, language);
     if (slug.starts_with("cf:") || slug.starts_with("cc:")) && let Some(template)=template {
-        if language==Language::Python { q.python=template.to_owned(); }
-        else { q.snippets.insert(language.judge_id().into(),template.to_owned()); }
+        let expansion=practice::snippets::body::file_template(template,&workspace.join(&rel),workspace,language);
+        anyhow::ensure!(!expansion.truncated,"File template exceeds the snippet limits");
+        if language==Language::Python { q.python=expansion.text; }
+        else { q.snippets.insert(language.judge_id().into(),expansion.text); }
     }
     let starter = q.starter(language).ok_or_else(|| anyhow::anyhow!("{} has no {} starter", q.title, language.label()))?;
     let path = ws::ensure_solution(workspace, &rel, starter)?;

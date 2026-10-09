@@ -24,4 +24,4 @@ Status: implementation complete and verified. Install the committed milestone wi
 
 Verification covers parser/import/storage regressions, bundled template compilers, Unicode and nested linked edits, ACP question replay, and production GPUI input plus offscreen layouts. Native Windows console behavior and live provider generation remain unverified.
 
-Release target: 0.3.0. Publishing is pending the requested scope decision: current `main` includes ten earlier unpublished commits in addition to this milestone. Preserve that work; do not publish or isolate it without the user's answer.
+Release target: 0.3.0. **[chosen]** Publish the current branch with all ten earlier unpublished commits, as confirmed by the user. Release notes cover changes since 0.2.1; publication waits for all five native builds and the workspace tests.

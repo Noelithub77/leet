@@ -42,7 +42,7 @@ impl Workspace {
     pub fn starting_snippet(&self, language: Language, cx: &App) -> Option<String> {
         let name=self.config.snippets.templates.get(language.id())?;
         let snippet=self.editor_pane.read(cx).library.iter().find(|s|s.name==*name&&s.applies_to(language)&&s.template)?;
-        Some(body::expand(&snippet.body,&body::Context{language:Some(language),unit:"    ".into(),..Default::default()}).text)
+        Some(snippet.body.clone())
     }
     pub fn reload_snippets(&mut self, cx: &mut Context<Self>) {
         let loaded = store::load(&self.snippet_dir);

@@ -214,13 +214,13 @@ jobs:
           cat >> release-notes.md <<'EOF'
           Native leet builds for Linux (x86_64 and ARM64), macOS (Intel and Apple Silicon), and Windows x64.
 
-          Linux/macOS: `curl -fsSL https://noelithub77.github.io/leet/install.sh | sh`
+          Linux/macOS: `curl -fsSL https://leet.allpyq.in/install.sh | sh`
 
           Windows: download the versioned `leet-windows-*.exe` and open it. No installer is needed.
 
           Linux portable: download the versioned `leet-linux-vX.Y.Z.AppImage` or `leet-linux-arm-vX.Y.Z.AppImage`, make it executable, and open it. AppImages include shared application libraries; graphical desktop, compatible glibc, and GPU drivers are still required.
 
-          These first builds are unsigned (macOS uses an ad-hoc signature, without notarization). OS security prompts may appear. Linux needs a graphical desktop and Vulkan GPU drivers; x86_64 requires glibc 2.35+, ARM64 requires glibc 2.39+. macOS requires version 13+. Install Python or your preferred compiler to run solutions locally. Settings, accounts, and solutions are stored separately from the executable.
+          These builds are unsigned (macOS uses an ad-hoc signature, without notarization). OS security prompts may appear. Linux needs a graphical desktop and Vulkan GPU drivers; x86_64 requires glibc 2.35+, ARM64 requires glibc 2.39+. macOS requires version 13+. Use Setup to install Python or editor tools; compiled solutions still need a compiler. Settings, accounts, and solutions are stored separately from the executable.
 
           See `docs/releases.md` for requirements, verification, and release operation.
           EOF

@@ -516,6 +516,11 @@ fn choices_for(nodes: &[Node], index: u32) -> Vec<String> {
 /// The body with every stop at its default and no indentation context, for previews.
 pub fn preview(body: &str) -> Expansion { expand(body, &Context { unit: "    ".into(), seed: 1, ..Context::default() }) }
 
+/// Resolve file variables against the destination of a new solution.
+pub fn file_template(body: &str, path: &std::path::Path, workspace: &std::path::Path, language: Language) -> Expansion {
+    expand(body, &Context { path: Some(path.to_owned()), workspace: Some(workspace.to_owned()), language: Some(language), unit: "    ".into(), ..Context::default() })
+}
+
 /// Places the one final cursor marker, preserving escaped literal markers.
 pub fn place_cursor(body: &str, position: usize) -> (String, usize) {
     let mut out=String::new();let mut at=position.min(body.len());let mut i=0;
@@ -547,6 +552,14 @@ mod tests {
     }
     fn ctx() -> Context { Context { unit: "    ".into(), seed: 7, now: Some(UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000)), ..Context::default() } }
 
+    #[test]
+    fn file_template_uses_destination_variables_and_keeps_cursor() {
+        let workspace=std::path::Path::new("/practice");
+        let relative=std::path::Path::new("task").join("Main.java");
+        let expansion=file_template("class ${TM_FILENAME_BASE} {\n\t$0\n} // $RELATIVE_FILEPATH", &workspace.join(&relative), workspace, Language::Java);
+        assert_eq!(expansion.text,format!("class Main {{\n    \n}} // {}",relative.display()));
+        assert_eq!(expansion.stops[0].range(),17..17);
+    }
     #[test]
     fn repeated_defaults_cannot_amplify_without_bound() {
         let mut text = "${1:x}".to_owned();
