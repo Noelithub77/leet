@@ -189,7 +189,7 @@ pub fn contextual_shortcuts(bindings: &[KeyBinding], config: &practice::config::
     let overridden: Vec<_> = COMMANDS.iter().flat_map(|command| command.effective_key(config).split('|'))
         .filter_map(|keys| keys.split_whitespace().map(Keystroke::parse).collect::<Result<Vec<_>, _>>().ok())
         .map(|keys| keys.iter().map(ToString::to_string).collect::<Vec<_>>().join(" ")).collect();
-    let mut groups = std::collections::BTreeMap::<(String, String), Vec<String>>::new();
+    let mut groups: Vec<(Box<dyn Action>, String, Vec<String>, Vec<String>)> = vec![];
     for binding in bindings {
         let name = binding.action().name();
         if command_names.contains(&name) || name.ends_with("NoAction") || name.ends_with("Unbind") { continue; }
@@ -202,10 +202,15 @@ pub fn contextual_shortcuts(bindings: &[KeyBinding], config: &practice::config::
             if index > 0 && ch.is_uppercase() { label.push(' '); }
             label.push(ch);
         }
-        let group = groups.entry((label, context)).or_default();
-        if !group.contains(&keys) { group.push(keys); }
+        if let Some((_, _, contexts, shortcuts)) = groups.iter_mut().find(|(action, ..)| action.partial_eq(binding.action())) {
+            if !contexts.contains(&context) { contexts.push(context); }
+            if !shortcuts.contains(&keys) { shortcuts.push(keys); }
+        } else {
+            groups.push((binding.action().boxed_clone(), label, vec![context], vec![keys]));
+        }
     }
-    groups.into_iter().map(|((label, context), keys)| ContextShortcut { label, context, keys: keys.join("|") }).collect()
+    groups.sort_by(|a, b| a.1.cmp(&b.1));
+    groups.into_iter().map(|(_, label, contexts, keys)| ContextShortcut { label, context: contexts.join("; "), keys: keys.join("|") }).collect()
 }
 
 impl Command {
@@ -321,7 +326,10 @@ mod tests {
         assert_eq!(shortcuts.len(), 1);
         assert_eq!(shortcuts[0].keys, "down|pagedown");
         config.keybindings.insert("Search".into(), "ctrl-alt-j".into());
-        assert_eq!(contextual_shortcuts(&bindings, &config).len(), 2);
+        let shortcuts = contextual_shortcuts(&bindings, &config);
+        assert_eq!(shortcuts.len(), 1);
+        assert_eq!(shortcuts[0].context, "Input; Statement");
+        assert_eq!(shortcuts[0].keys, "ctrl-K|down|pagedown");
         let command = COMMANDS.iter().find(|command| command.id == "Search").unwrap();
         let text = shortcut_search_text(command.label, command.effective_key(&config));
         assert!(text.contains("ctrl+alt+j")); assert!(!text.contains("ctrl-k"));

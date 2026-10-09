@@ -59,6 +59,7 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         cx.update_window(handle, |_, window, cx| window.render_frame(cx))?;
         if pixels && name == "optional-server" { cx.capture_screenshot(handle)?.save(output.join("onboarding-snippets.png"))?; }
         cx.update_window(handle, |_, window, cx| -> Result<()> {
+            ensure!(window.find("setup-snippet-guide").visible(), "Snippet onboarding explanation is hidden");
             window.click("setup-continue", cx);
             ensure!(setup.read(cx).step == 2, "Snippet onboarding could not be skipped");
             fixture.update(cx, |fixture, cx| { fixture.setup = None; cx.notify(); });

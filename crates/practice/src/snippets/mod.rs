@@ -12,6 +12,7 @@ pub mod session;
 pub mod cli;
 
 pub use builtin::builtin;
+pub mod guide;
 
 /// Where a snippet came from. Only builtins are read-only; editing one saves a user copy.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]

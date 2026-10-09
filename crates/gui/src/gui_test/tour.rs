@@ -41,6 +41,32 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool, v
         ensure!(workspace.read(cx).tour.is_none(), "Skip did not dismiss the tour");
         workspace.update(cx, |view, cx| view.start_default_tour(window, cx));
         ensure!(workspace.read(cx).tour.is_none(), "Dismissed tour restarted automatically");
+        window.press("ctrl-p", cx);
+        window.render_frame(cx);
+        for key in ["s", "n", "i", "p"] { window.press(key, cx); }
+        let results: Vec<_> = workspace.read(cx).omni.results().map(|(title, target)| (title.to_owned(), target.clone())).collect();
+        for title in ["Snippet editor", "Insert snippet", "Cancel Snippet"] {
+            ensure!(results.iter().filter(|(label, _)| label == title).count() == 1, "Duplicate or missing {title} search result");
+        }
+        let command = crate::actions::COMMANDS.iter().position(|command| command.id == "OpenSnippetEditor").context("Missing snippet editor command")?;
+        let position = results.iter().position(|(_, target)| *target == crate::omnibar::Target::Command(command)).context("Missing merged command")?;
+        for _ in 0..position { window.press("down", cx); }
+        window.press("enter", cx);
+        Ok(())
+    })??;
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| -> Result<()> {
+        ensure!(workspace.read(cx).snippet_editor.is_some() && !workspace.read(cx).omni.open, "Merged row did not run its command");
+        window.press("escape", cx);
+        workspace.update(cx, |view, cx| view.omni_open(crate::omnibar::Scope::Shortcuts, window, cx));
+        window.render_frame(cx);
+        for key in ["s", "n", "i", "p"] { window.press(key, cx); }
+        let command = crate::actions::COMMANDS.iter().position(|command| command.id == "OpenSnippetEditor").context("Missing snippet editor command")?;
+        let position = workspace.read(cx).omni.results().position(|(_, target)| *target == crate::omnibar::Target::Command(command)).context("Merged command missing from shortcuts")?;
+        for _ in 0..position { window.press("down", cx); }
+        window.press("enter", cx);
+        ensure!(workspace.read(cx).center == Center::Settings && workspace.read(cx).settings.selected == command, "Shortcuts did not open the binding settings");
+        workspace.update(cx, |view, cx| view.show_home(window, cx));
         for shortcut in ["ctrl-p", "ctrl-shift-p"] {
             window.press(shortcut, cx);
             ensure!(workspace.read(cx).omni.open && workspace.read(cx).omni.scope == crate::omnibar::Scope::All, "{shortcut} did not open full search");
@@ -209,6 +235,10 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool, v
         std::thread::sleep(Duration::from_millis(320));
         cx.update_window(handle, |_, window, cx| window.render_frame(cx))?;
         cx.capture_screenshot(handle)?.save(output.join("search-arrows.png"))?;
+        cx.update_window(handle, |_, window, cx| window.input("snip", cx))?;
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| window.render_frame(cx))?;
+        cx.capture_screenshot(handle)?.save(output.join("search-snippets.png"))?;
     }
     cx.update_window(handle, |_, window, _| window.remove_window())?;
     ensure!(db.get("guided-tour-v1")?.as_deref() == Some("dismissed"), "Tour dismissal was not persisted");

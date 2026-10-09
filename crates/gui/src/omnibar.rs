@@ -80,6 +80,11 @@ pub struct Omnibar {
 }
 
 impl Omnibar {
+    #[cfg(feature = "gui-test")]
+    pub(crate) fn results(&self) -> impl Iterator<Item = (&str, &Target)> {
+        self.hits.iter().map(|&index| (self.items[index].title.as_ref(), &self.items[index].target))
+    }
+
     pub fn new(window: &mut Window, cx: &mut Context<Workspace>) -> (Self, Subscription) {
         let input = cx.new(|cx| InputState::new(window, cx));
         let subscription = cx.subscribe_in(&input, window, |ws, _, event: &InputEvent, window, cx| {
@@ -114,8 +119,6 @@ impl Workspace {
         let mut text = vec!["Open roadmap neetcode graph map".to_string()];
         for (i, c) in COMMANDS.iter().enumerate() {
             items.push(Item { target: Target::Command(i), title: c.label.into() });
-            text.push(crate::actions::shortcut_search_text(c.label, c.effective_key(&self.config)));
-            items.push(Item { target: Target::Setting(Setting::Keybinding(i)), title: c.label.into() });
             text.push(crate::actions::shortcut_search_text(c.label, c.effective_key(&self.config)));
         }
         let bindings: Vec<_> = cx.key_bindings().borrow().bindings().cloned().collect();
@@ -219,7 +222,7 @@ impl Workspace {
             (Scope::Problems, _) => (&raw, Some(|t| matches!(t, Target::Problem(_)))),
             (Scope::Themes, _) => (&raw, Some(|t| matches!(t, Target::Theme(_)))),
             (Scope::Fonts, _) => (&raw, Some(|t| matches!(t, Target::Font(_)))),
-            (Scope::Shortcuts, _) => (&raw, Some(|t| matches!(t, Target::Setting(Setting::Keybinding(_)) | Target::ContextShortcut(_)))),
+            (Scope::Shortcuts, _) => (&raw, Some(|t| matches!(t, Target::Command(_) | Target::ContextShortcut(_)))),
         };
         let items = self.omni.items.clone();
         let keep = |i: usize| only.is_none_or(|f| f(&items[i].target));
@@ -289,6 +292,7 @@ impl Workspace {
     pub fn omni_confirm(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(&i) = self.omni.hits.get(self.omni.selected) else { return };
         let target = self.omni.items[i].target.clone();
+        let shortcuts = self.omni.scope == Scope::Shortcuts;
         if let Target::ContextShortcut(index) = target {
             self.flash(format!("Available in {}", self.omni.shortcuts[index].context), cx);
             return;
@@ -303,6 +307,7 @@ impl Workspace {
             Target::ContextShortcut(_) => {},
             Target::Contest(id) => self.open_contest(id, window, cx),
             Target::Roadmap => self.show_roadmap(window, cx),
+            Target::Command(c) if shortcuts => self.open_settings(Some(Setting::Keybinding(c)), window, cx),
             Target::Command(c) => window.dispatch_action((COMMANDS[c].action)(), cx),
             Target::Setting(s) => self.open_settings(Some(s), window, cx),
             Target::List(list) => {
@@ -432,14 +437,15 @@ impl Workspace {
         let (icon, kind, detail): (IconName, &str, AnyElement) = match &item.target {
             Target::Contest(id) => (IconName::CalendarRange, "Contest", div().child(id.source().label()).into_any_element()),
             Target::Roadmap => (IconName::Map, "View", key(crate::actions::key_for("ToggleRoadmap", &self.config)).into_any_element()),
-            Target::Command(c) => (IconName::SquareTerminal, "Command", crate::view::shortcut_keys(COMMANDS[*c].effective_key(&self.config)).into_any_element()),
+            Target::Command(c) => (if self.omni.scope == Scope::Shortcuts { IconName::Keyboard } else { IconName::SquareTerminal },
+                if self.omni.scope == Scope::Shortcuts { "Shortcut" } else { "Command" },
+                crate::view::shortcut_keys(COMMANDS[*c].effective_key(&self.config)).into_any_element()),
             Target::ContextShortcut(index) => {
                 let shortcut = &self.omni.shortcuts[*index];
                 (IconName::Keyboard, "Shortcut", h_flex().gap_2()
                     .child(div().max_w(px(140.)).truncate().child(shortcut.context.clone()))
                     .child(crate::view::shortcut_keys(&shortcut.keys)).into_any_element())
             }
-            Target::Setting(Setting::Keybinding(index)) => (IconName::Keyboard, "Shortcut", crate::view::shortcut_keys(COMMANDS[*index].effective_key(&self.config)).into_any_element()),
             Target::Setting(s) => (IconName::Settings, "Setting", div().max_w(px(220.)).truncate().child(s.value(self, cx)).into_any_element()),
             Target::List(l) => (
                 IconName::BookOpen,
