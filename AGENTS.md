@@ -27,6 +27,8 @@ Update `docs/changelog.md` for user-visible milestones. Every release must publi
 
 ## GUI verification
 
+Never slow the user's PC down for rendering or verification. Desktop responsiveness takes priority over throughput: run one heavy job at a time, use low CPU and idle I/O priority, and cap rendering at two allowed CPUs and two workers. Do not raise resource limits or run throughput benchmarks without explicit user authorization. If the desktop becomes sluggish, pause the job and reduce resource use before resuming; accept a longer render.
+
 Use isolated headless GUI tests by default. Read `.agents/skills/gui-verification/SKILL.md` and `docs/gui-testing.md`; discover `./ops gui:test --help`. Exercise production views through real GPUI input dispatch and hit testing; assert behavior separately from rendered screenshots or recordings. Use deterministic fixtures and temporary settings, databases, and solution paths, without account loading, network jobs, updates, or Companion startup.
 
 For compositor checks, use a private headless display and scope every capture/input tool to its socket. Never launch, focus, type into, click, restart, or record windows on the user's active desktop unless explicitly requested. Keep repeatable GUI workflows behind the tracked `ops` entry point; discover available commands with `./ops --help`. Report interaction, pixel-rendering, compositor, and real-time recording evidence separately.
