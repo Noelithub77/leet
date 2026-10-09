@@ -25,7 +25,7 @@ Native mode also checks long statement cards at regular and compact sizes, in li
 
 Hint controls share the problem toolbar. Statement captures verify their containment; the production workspace fixture exercises hint cycling, hiding, and a customized shortcut, and saves `hint-tooltip.png` with the shortcut shown on hover.
 
-The onboarding fixture renders the production setup view with missing clangd, a missing compiler, and pending tool checks. Hit-tested Continue clicks advance in every case. Prerequisite results are deterministic; this fixture never detects or downloads tools. Setup PNGs are saved alongside the other captures. The ignored `live_private_python_and_cpp_servers` core test verifies completion, hover, definition, and diagnostics against managed tools; isolate its data directory and install the tools there before running it.
+The onboarding fixture renders the production setup view with missing clangd, a missing compiler, and pending tool checks. Hit-tested Continue clicks advance in every case. The retained workspace receives deterministic installer events after leaving setup: progress stays visible, a hit-tested Retry restarts a failed job, and success shows Ready. Prerequisite results are deterministic; this fixture never detects or downloads tools. Setup PNGs are saved alongside the other captures. The ignored `live_private_python_and_cpp_servers` core test verifies completion, hover, definition, and diagnostics against managed tools; isolate its data directory and install the tools there before running it.
 
 The guided-tour fixture uses isolated SQLite storage and a bundled public
 question. It checks startup defaults, automatic display, search actions, Skip

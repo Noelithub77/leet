@@ -20,6 +20,7 @@ mod case_editor;
 mod library;
 mod roadmap;
 mod onboarding;
+mod tool_install;
 mod language_server;
 mod language_picker;
 mod sources;

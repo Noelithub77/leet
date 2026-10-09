@@ -37,7 +37,6 @@ pub struct Setup {
     error: Option<String>,
     requirements: Option<practice::toolchain::Setup>,
     checking: bool,
-    installing: bool,
     check_epoch: u64,
     check_task: Task<()>,
 }
@@ -48,13 +47,14 @@ impl Workspace {
         self.suspend_language_servers(cx);
         let workspace = cx.weak_entity();
         let config = self.config.clone();
+        if !accounts { self.setup_tools(config.preferred_language, false, window, cx); }
         let setup = cx.new(|cx| Setup {
             focus: cx.focus_handle(), workspace, step: if accounts { 2 } else { 0 },
             language: config.preferred_language, source: config.source,
             python: config.python.clone(),
             handle: cx.new(|cx| InputState::new(window, cx).placeholder("Codeforces handle").default_value(config.codeforces_handle)),
             snippet_found: Vec::new(), snippet_scanning: false, snippet_status: String::new(),
-            busy: false, error: None, requirements: None, checking: false, installing: false, check_epoch: 0, check_task: Task::ready(()),
+            busy: false, error: None, requirements: None, checking: false, check_epoch: 0, check_task: Task::ready(()),
         });
         if !accounts { setup.update(cx, |setup, cx| setup.check_requirements(window, cx)); }
         let focus = setup.read(cx).focus.clone();
@@ -69,6 +69,7 @@ impl Setup {
     fn choose_language(&mut self, language: Language, window: &mut Window, cx: &mut Context<Self>) {
         if self.language == language && self.requirements.is_some() { return; }
         self.language = language;
+        self.install_tools(window, cx);
         self.check_requirements(window, cx);
     }
 
@@ -93,37 +94,20 @@ impl Setup {
         cx.notify();
     }
     fn install_tools(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.installing || !practice::tool_setup::supported(self.language) { return; }
-        self.installing = true;
-        self.error = None;
         let language = self.language;
         let workspace = self.workspace.clone();
-        cx.spawn_in(window, async move |this, cx| {
-            let result = cx.background_spawn(async move {
-                practice::tool_setup::install(language, &practice::tool_setup::directory(), |_| {})
-            }).await;
-            let installed = result.is_ok();
-            let _ = this.update_in(cx, |this, window, cx| {
-                this.installing = false;
-                match result {
-                    Ok(()) => this.check_requirements(window, cx),
-                    Err(error) => this.error = Some(error.to_string()),
-                }
-                cx.notify();
-            });
-            if installed {
-                let _ = workspace.update_in(cx, |workspace, window, cx| {
-                    workspace.suspend_language_servers(cx);
-                    if workspace.center == Center::Editor { workspace.attach_language_server(window, cx); }
-                });
-            }
-        }).detach();
-        cx.notify();
+        window.defer(cx, move |window, cx| { let _ = workspace.update(cx, |workspace, cx| workspace.setup_tools(language, false, window, cx)); });
+    }
+
+    pub(crate) fn tools_installed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.step == 0 { self.check_requirements(window, cx); }
     }
 
     fn scan_snippets(&mut self,window:&mut Window,cx:&mut Context<Self>){
         // A dropped fixture workspace never reads the user's editor configuration.
         if self.workspace.upgrade().is_none(){return;}
+        #[cfg(feature = "gui-test")]
+        if self.workspace.upgrade().is_some_and(|workspace| workspace.read(cx).tool_install.fixture) { return; }
         self.snippet_scanning=true;
         cx.spawn_in(window,async move|this,cx|{
             let found=cx.background_spawn(async {practice::snippets::import::scan(&practice::snippets::import::Roots::detect())}).await;
@@ -148,6 +132,7 @@ impl Setup {
     fn advance(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.busy { return; }
         if self.step == 0 {
+            self.install_tools(window, cx);
             self.step = 1;
             self.scan_snippets(window,cx);
             cx.notify();
@@ -232,16 +217,11 @@ impl Render for Setup {
                                 .child(Icon::new(if requirement.ready { IconName::Check } else { IconName::X }).small()
                                     .text_color(if requirement.ready { theme.success } else { theme.warning }))
                                 .child(div().id(("setup-requirement-detail", index)).flex_1().text_sm().child(requirement.label.clone()).tooltip({ let detail = requirement.detail.clone(); move |window, cx| gpui_kit::component::tooltip::Tooltip::new(detail.clone()).build(window, cx) }))
-                                .when(!requirement.ready && practice::tool_setup::supported(self.language)
-                                    && (!requirement.required || self.language == Language::Python && index == 0)
-                                    && (self.language != Language::Python || index == 0 || setup.requirements.first().is_none_or(|tool| tool.ready)), |row| row.child(Button::new(("setup-requirement", index)).ghost().small()
-                                    .label(if self.installing { "Installing…" } else { "Install" }).disabled(self.installing)
-                                    .on_click(cx.listener(|this, _, window, cx| this.install_tools(window, cx)))))
                                 .when(!requirement.ready && !practice::tool_setup::supported(self.language), |row| row.child(Button::new(("setup-requirement", index)).ghost().small().label("Set up")
                                     .on_click(move |_, _, _| { let _ = open::that(url); })))
                         })))
                         .when(self.requirements.as_ref().is_some_and(|setup| setup.requirements.iter().any(|tool| !tool.ready)), |view| view.child(div().text_xs().text_color(theme.muted_foreground).child(
-                            "You can install tools later and continue now.")))
+                            if practice::tool_setup::supported(self.language) { "Tool setup continues in the background." } else { "You can install tools later and continue now." })))
                         .child(h_flex().justify_end().child(Button::new("recheck-tools").ghost().small().label("Recheck").disabled(self.checking)
                             .on_click(cx.listener(|this, _, window, cx| this.check_requirements(window, cx))))))
                     .child(v_flex().gap_3().child(div().text_color(theme.muted_foreground).child("Practice source"))

@@ -641,7 +641,7 @@ impl Workspace {
             )
     }
 
-    fn render_status(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(crate) fn render_status(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme().clone();
         let flash = self.flash.clone();
         let flash_opacity = transition("flash", if flash.is_some() { 1. } else { 0. }, Transition::new(Duration::from_millis(160)), window, cx);
@@ -658,6 +658,7 @@ impl Workspace {
                 .child(img("leet.svg").size(px(18.)))
                 .tooltip(|window, cx| gpui_kit::component::tooltip::Tooltip::new("leet").build(window, cx)))
             .when(self.syncing, |el| el.child(h_flex().gap_1().child(Spinner::new().xsmall()).child("syncing")))
+            .children(crate::tool_install::status(self, cx))
             .child(div().flex_1())
             .when_some(flash, |el, (label, _)| {
                 el.child(div().opacity(flash_opacity).text_color(theme.foreground).child(label))

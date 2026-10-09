@@ -9,7 +9,7 @@
 - Ask the snippet assistant or chat agents to configure snippets, with preference questions and undo.
 - Review and edit snippet-assistant proposals before applying them to your library.
 - Download and install updates in the background; restart now or on the next launch.
-- Install pinned Python and clangd editor tools privately from Setup and Debug mode.
+- Set up private Python and clangd tools automatically during onboarding, with background progress and retry in the status bar.
 - Open statement cards independently and remember expanded cards across restarts.
 - Show pastel scrollbars on overflowing statement cards and scale long descriptions for readability.
 

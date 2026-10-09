@@ -109,8 +109,6 @@ pub struct Debugger {
     generation: u64,
     unsupported: Option<String>,
     editor_ready: bool,
-    installing: bool,
-    install_error: Option<String>,
     preview: bool,
     code_scroll: ScrollHandle,
 }
@@ -126,7 +124,7 @@ impl Debugger {
 
     fn build(explanation: Option<Explanation>, cx: &mut Context<Self>) -> Self {
         Self { explanation, focus: cx.focus_handle(), snapshot: None, lines: vec![], highlighter: SyntaxHighlighter::new("python"), traces: vec![], selected: 0, playback: Playback::new(0),
-            last_frame: Instant::now(), ticker: None, generation: 0, unsupported: None, editor_ready: true, installing: false, install_error: None, preview: false, code_scroll: ScrollHandle::new() }
+            last_frame: Instant::now(), ticker: None, generation: 0, unsupported: None, editor_ready: true, preview: false, code_scroll: ScrollHandle::new() }
     }
 
     pub fn focus(&self, window: &mut Window, cx: &mut App) { self.focus.focus(window, cx); }
@@ -192,31 +190,11 @@ impl Debugger {
 
     fn install_tools(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(language) = self.snapshot.as_ref().map(|snapshot| snapshot.language) else { return };
-        if self.installing || !practice::tool_setup::supported(language) { return; }
-        self.installing = true;
-        self.install_error = None;
-        cx.spawn_in(window, async move |this, cx| {
-            let result = cx.background_spawn(async move {
-                practice::tool_setup::install(language, &practice::tool_setup::directory(), |_| {})
-            }).await;
-            let _ = this.update_in(cx, |this, window, cx| {
-                this.installing = false;
-                match result {
-                    Ok(()) => {
-                        if let Some(explanation) = &this.explanation {
-                            let _ = explanation.workspace.update(cx, |workspace, cx| {
-                                workspace.suspend_language_servers(cx);
-                                if workspace.center == crate::workspace::Center::Editor { workspace.attach_language_server(window, cx); }
-                            });
-                        }
-                        if let Some(snapshot) = this.snapshot.take() { this.load_mode(snapshot, this.selected, this.preview, cx); }
-                    }
-                    Err(error) => this.install_error = Some(error.to_string()),
-                }
-                cx.notify();
-            });
-        }).detach();
-        cx.notify();
+        let Some(workspace) = self.explanation.as_ref().map(|explanation| explanation.workspace.clone()) else { return };
+        window.defer(cx, move |window, cx| { let _ = workspace.update(cx, |workspace, cx| workspace.setup_tools(language, true, window, cx)); });
+    }
+    pub(crate) fn tools_installed(&mut self, cx: &mut Context<Self>) {
+        if let Some(snapshot) = self.snapshot.take() { self.load_mode(snapshot, self.selected, self.preview, cx); }
     }
 
     #[cfg(feature = "gui-test")]
@@ -332,14 +310,15 @@ impl Render for Debugger {
         let wrong = match &review { Some(Ok(review)) => review.wrong_step, _ => None };
         let step = trace.and_then(|t| t.steps.get(self.playback.index));
         let previous = trace.and_then(|t| self.playback.index.checked_sub(1).and_then(|i| t.steps.get(i)));
+        let tools_busy = self.explanation.as_ref().and_then(|explanation| explanation.workspace.upgrade())
+            .is_some_and(|workspace| self.snapshot.as_ref().is_some_and(|snapshot| workspace.read(cx).tool_install.busy(snapshot.language)));
         let header = h_flex().h_10().px_3().gap_3().items_center().border_b_1().border_color(theme.border)
             .child(Icon::new(IconName::BugPlay).size_4().text_color(theme.primary))
             .child(chips)
             .child(div().flex_1())
             .when(self.snapshot.as_ref().is_some_and(|snapshot| practice::tool_setup::supported(snapshot.language))
                 && (!self.editor_ready || self.snapshot.as_ref().is_some_and(|snapshot| snapshot.language == Language::Python && self.unsupported.is_some())), |el| {
-                el.child(Button::new("debug-install-tools").ghost().xsmall().label(if self.installing { "Installing…" } else { "Install tools" })
-                    .disabled(self.installing)
+                el.child(Button::new("debug-install-tools").ghost().xsmall().label("Install tools").disabled(tools_busy)
                     .tooltip("Install private Python / basedpyright or clangd editor tools. C++ debugging also requires a compiler and GDB with Python support.")
                     .on_click(cx.listener(|this, _, window, cx| this.install_tools(window, cx))))
             })
@@ -428,7 +407,6 @@ impl Render for Debugger {
             .on_action(cx.listener(|this, _: &NextCase, _, cx| { let i = this.selected + 1; this.select(i, cx); }))
             .on_mouse_down(MouseButton::Left, cx.listener(|this, _, window, cx| this.focus.focus(window, cx)))
             .child(header)
-            .when_some(self.install_error.as_ref(), |el, error| el.child(div().px_3().py_2().text_xs().text_color(theme.warning).child(error.clone())))
             .children(banner)
             .child(div().flex().flex_1().min_h_0().overflow_hidden().child(body))
             .child(div().px_3().py_2().border_t_1().border_color(theme.border).child(controls))
