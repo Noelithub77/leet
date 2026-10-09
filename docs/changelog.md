@@ -1,6 +1,13 @@
 <details open>
 <summary>Feat</summary>
 
+- Competitive-programming snippets and file templates for Python, C++, Go, C, and Java.
+- Expand prefixes with Tab, browse snippets with Ctrl+J, and edit them with Ctrl+Shift+S.
+- Linked placeholders, choices, transforms, and a cursor that glides between stops.
+- Create snippets with draggable stops, a final cursor, and a live preview.
+- Import VS Code, Neovim, and Sublime snippets in a skippable onboarding step or the editor.
+- Ask the snippet assistant or regular chat agents to configure snippets, with preference questions and undo.
+
 - Download and install updates in the background; restart now or use the new version on the next launch.
 - Vesper-themed README with an animated logo, real demos, and quick installation.
 - Contribution and security guidance; current source uses GNU AGPL v3.
@@ -89,6 +96,7 @@
 <details>
 <summary>Fix</summary>
 
+- Suppress console popups from background update, Companion, and helper processes on Windows.
 - Suppress Windows console windows for background tool checks, editor servers, and local execution.
 - Keep the update changelog open until its trigger or an outside click closes it, with scrollable release notes.
 - Keep tour shortcuts visible during practice; use Prev/Next with arrow keys and arrow keycaps.

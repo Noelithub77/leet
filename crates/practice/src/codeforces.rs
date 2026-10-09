@@ -242,7 +242,7 @@ fn live_question(slug: &str) -> Result<crate::leetcode::Question> {
 
 fn curl_command(slug: &str) -> Result<std::process::Command> {
     let url = problem_url(slug)?;
-    let mut command = std::process::Command::new("curl");
+    let mut command = crate::background_process::command("curl");
     // Ignore personal curl configuration; fetch only bounded public HTTPS statements.
     command.args(["--disable", "--silent", "--show-error", "--fail", "--location",
         "--max-redirs", "5", "--connect-timeout", "10", "--max-time", "30",

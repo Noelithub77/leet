@@ -116,10 +116,10 @@ pub fn install(update: Available, display: &str, destination: &Path, progress: i
                 std::fs::set_permissions(&binary, permissions)?;
             }
             #[cfg(target_os = "macos")]
-            if path.is_dir() && !std::process::Command::new("codesign").args(["--verify", "--deep", "--strict"]).arg(path).status()?.success() {
+            if path.is_dir() && !crate::background_process::command("codesign").args(["--verify", "--deep", "--strict"]).arg(path).status()?.success() {
                 return Err(self_update::Error::verification_rejected("Downloaded app has an invalid signature"));
             }
-            let mut command = std::process::Command::new(binary);
+            let mut command = crate::background_process::command(binary);
             if appimage { command.arg("--appimage-extract-and-run"); }
             let result = command.arg("--version").output().map_err(self_update::Error::from)?;
             let output = String::from_utf8_lossy(&result.stdout);
@@ -231,7 +231,7 @@ mod tests {
             server.join().unwrap();
             assert_eq!(result.is_ok(), succeeds, "{result:?}");
             if succeeds {
-                let next_launch = std::process::Command::new(&launcher).arg("--version").output().unwrap();
+                let next_launch = crate::background_process::command(&launcher).arg("--version").output().unwrap();
                 assert!(next_launch.status.success());
                 assert_eq!(String::from_utf8(next_launch.stdout).unwrap().trim(), "leet 0.2.0");
             }

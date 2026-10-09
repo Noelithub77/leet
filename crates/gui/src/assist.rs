@@ -15,6 +15,7 @@ use gpui_kit::component::input::{InputEvent, InputState, TextareaState};
 use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, Theme, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
+use gpui_kit::component::WindowExt as _;
 use practice::agents::{self, AgentKind, Cancel, Catalog, Detected, Selection};
 use practice::assist::{self, Action, Answer, Growth};
 use practice::db::Db;
@@ -144,6 +145,9 @@ struct SolveState {
 }
 
 pub struct Run {
+    question: Option<Entity<crate::agent_question::QuestionForm>>,
+    snippet_before: Option<(std::path::PathBuf, Vec<practice::snippets::Snippet>)>,
+    snippet_undo: Option<(std::path::PathBuf, Vec<practice::snippets::Snippet>, Vec<practice::snippets::Snippet>)>,
     id: u64,
     thread_id: i64,
     message_id: i64,
@@ -414,6 +418,7 @@ impl Assist {
         if let Some(kind) = self.runs.iter().find(|run| run.id == id).and_then(|run| run.agent) { self.load_catalog(kind, cx); }
         let Some(run) = self.runs.iter_mut().find(|run| run.id == id) else { return };
         let (Some(snapshot), Some(Target::Agent(agent, selection))) = (run.snapshot.clone(), run.target.clone()) else { return };
+        run.snippet_before = self.workspace.upgrade().map(|ws| { let dir=ws.read(cx).snippet_dir.clone();let loaded=practice::snippets::store::load(&dir);(dir,loaded.snippets) });
         run.phase = Phase::Starting;
         run.cancel = Cancel::default();
         run.generation += 1;
@@ -480,6 +485,7 @@ impl Assist {
         let save = matches!(&msg, Msg::Done(_));
         let follow = self.scroll.offset().y <= -self.scroll.max_offset().y + px(24.);
         match msg {
+            Msg::Event(agents::Event::Question(question)) => { run.question = Some(cx.new(|cx| crate::agent_question::QuestionForm::new(question, window, cx))); }
             Msg::Event(agents::Event::Started { session }) => {
                 if let (Some(solve), Some(session)) = (run.solve.as_mut(), session) { solve.session = Some(session); }
                 run.phase = Phase::Thinking;
@@ -534,6 +540,11 @@ impl Assist {
             for other in previous { self.stop(other, cx); }
         }
         if save {
+            if let Some(run)=self.runs.iter_mut().find(|run|run.id==id) && let Some((dir,before))=run.snippet_before.take() {
+                let after=practice::snippets::store::load(&dir);
+                if after.errors.is_empty() && before!=after.snippets {run.snippet_undo=Some((dir,before,after.snippets));}
+                let workspace=self.workspace.clone();window.defer(cx,move|_,cx|{let _=workspace.update(cx,|ws,cx|ws.reload_snippets(cx));});
+            }
             if let Some(thread) = self.runs.iter().find(|run| run.id == id).map(|run| run.thread_id) { self.refresh_artifacts(thread); }
             if let Some(slug) = self.runs.iter().find(|run| run.id == id).map(|run| run.slug.clone()) { self.save(&slug); }
         }
@@ -774,7 +785,7 @@ impl Run {
     fn new(id: u64, slug: String, action: Action, agent: Option<AgentKind>, model: String, snapshot: Option<Snapshot>, target: Option<Target>) -> Self {
         Self { id, thread_id: 0, message_id: 0, problem_title: String::new(), slug, action, agent, model, started: Instant::now(), elapsed: None, artifact_mtime: None, phase: Phase::Starting, thinking: String::new(), tokens: 0,
             answer: None, cancel: Cancel::default(), hints_shown: 1, playback: Playback::new(0), last_frame: Instant::now(), reveal: false,
-            added: vec![], solve: None, snapshot, target, generation: 0, collapsed: false, instructions: String::new(), request_prompt: action.instructions().to_owned(), history: String::new(), reply: String::new() }
+            question: None, snippet_before: None, snippet_undo: None, added: vec![], solve: None, snapshot, target, generation: 0, collapsed: false, instructions: String::new(), request_prompt: action.instructions().to_owned(), history: String::new(), reply: String::new() }
     }
 
     fn set_answer(&mut self, answer: Option<Answer>) {
@@ -888,6 +899,13 @@ impl Assist {
                     .tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(request_prompt.clone()).build(window, cx))))
                 .when(!run.instructions.is_empty(), |el| el.child(crate::rich_text::markdown(SharedString::from(format!("chat-request-{id}")), run.instructions.clone()).selectable(true))))
             .child(header)
+            .children(run.question.clone())
+            .when(run.snippet_undo.is_some(),|el|el.child(Button::new(("undo-chat-snippets",id)).ghost().small().icon(IconName::Undo).label("Undo snippet changes")
+                .on_click(cx.listener(move|this,_,window,cx|{
+                    let Some(run)=this.runs.iter_mut().find(|run|run.id==id)else{return;};let Some((dir,before,after))=run.snippet_undo.clone()else{return;};
+                    match practice::snippets::store::commit(&dir,&after,&before){Ok(())=>run.snippet_undo=None,Err(e)=>{window.push_notification(gpui_kit::component::notification::Notification::error(e.to_string()),cx);return;}}
+                    let ws=this.workspace.clone();window.defer(cx,move|_,cx|{let _=ws.update(cx,|ws,cx|ws.reload_snippets(cx));});cx.notify();
+                }))))
             .children(status)
             .when(run.answer.is_none() && !run.reply.is_empty() && !run.reply.trim_start().starts_with('{'), |el| el.child(
                 crate::rich_text::markdown(SharedString::from(format!("chat-stream-{id}")), run.reply.clone()).selectable(true)))

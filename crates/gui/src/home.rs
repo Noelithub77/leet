@@ -65,7 +65,8 @@ impl Workspace {
         self.editor = cx.new(|cx| EditorState::new(window, cx).language(self.config.preferred_language.id())
             .line_number(true).indent_guides(true).folding(true).soft_wrap(false)
             .tab_size(TabSize { tab_size: 4, hard_tabs: false }));
-        self.editor_pane = cx.new(|cx| EditorPane::new(self.editor.clone(), cx));
+        self.editor_pane = cx.new(|cx| EditorPane::new(self.editor.clone(), self.config.preferred_language, window, cx));
+        self.reload_snippets(cx);
         self.statement = cx.new(|_| Statement::default());
         self.editor_subscription = Some(cx.subscribe_in(&self.editor, window,
             |this, editor, event: &InputEvent, window, cx| {

@@ -1,0 +1,703 @@
+{
+  "Single Test": {
+    "prefix": "cp",
+    "body": [
+      "#include <stdio.h>",
+      "#include <stdlib.h>",
+      "#include <string.h>",
+      "#include <stdint.h>",
+      "#include <limits.h>",
+      "",
+      "void solve(void) {",
+      "\t$0",
+      "}",
+      "",
+      "int main(void) {",
+      "\tsolve();",
+      "\treturn 0;",
+      "}"
+    ],
+    "description": "Scanf and printf single test template",
+    "isFileTemplate": true
+  },
+  "Multiple Tests": {
+    "prefix": "cpt",
+    "body": [
+      "#include <stdio.h>",
+      "#include <stdlib.h>",
+      "#include <string.h>",
+      "#include <stdint.h>",
+      "#include <limits.h>",
+      "",
+      "void solve(void) {",
+      "\t$0",
+      "}",
+      "",
+      "int main(void) {",
+      "\tint t;",
+      "\tif (scanf(\"%d\", &t) != 1) return 0;",
+      "\twhile (t-- > 0) solve();",
+      "\treturn 0;",
+      "}"
+    ],
+    "description": "Scanf and printf multiple test template",
+    "isFileTemplate": true
+  },
+  "For Range": {
+    "prefix": [
+      "fori",
+      "forn"
+    ],
+    "body": [
+      "for (int ${1:i} = ${2:0}; $1 < ${3:n}; ++$1) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Loop over a half open range"
+  },
+  "Reverse Range": {
+    "prefix": "forr",
+    "body": [
+      "for (int ${1:i} = ${2:n} - 1; $1 >= 0; --$1) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Loop backwards with a signed index"
+  },
+  "For Each": {
+    "prefix": "fore",
+    "body": [
+      "for (size_t ${1:i} = 0; $1 < ${2:count}; ++$1) {",
+      "\t${3:int} value = ${4:a}[$1];",
+      "\t(void)value;",
+      "\t$0",
+      "}"
+    ],
+    "description": "Iterate over an array with an explicit length"
+  },
+  "While Loop": {
+    "prefix": "while",
+    "body": [
+      "int ${1:value};",
+      "while (scanf(\"%d\", &$1) == 1 && $1 != 0) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Loop until zero or the end of input"
+  },
+  "Read Array": {
+    "prefix": "readarr",
+    "body": [
+      "int *${1:a} = malloc((size_t)${2:n} * sizeof *$1);",
+      "for (int i = 0; i < $2; ++i) scanf(\"%d\", &$1[i]);",
+      "$0",
+      "free($1);"
+    ],
+    "description": "Read n integers and release the allocated array"
+  },
+  "Read Grid": {
+    "prefix": "readgrid",
+    "body": [
+      "// Requires n > 0 and 0 < m <= 1000; rows have exactly m characters.",
+      "char (*${1:grid})[1001] = malloc((size_t)${2:n} * sizeof *$1);",
+      "for (int i = 0; i < $2; ++i) scanf(\"%1000s\", $1[i]);",
+      "$0",
+      "free($1);"
+    ],
+    "description": "Read bounded character rows and release the grid"
+  },
+  "Print Array": {
+    "prefix": "printarr",
+    "body": [
+      "for (int i = 0; i < ${1:n}; ++i) {",
+      "\tif (i) putchar(' ');",
+      "\tprintf(\"%d\", ${2:a}[i]);",
+      "}",
+      "putchar('\\n');",
+      "$0"
+    ],
+    "description": "Print space separated integers"
+  },
+  "Verdict Output": {
+    "prefix": [
+      "yn",
+      "out"
+    ],
+    "body": [
+      "puts(\"${1|YES,NO|}\");",
+      "$0"
+    ],
+    "description": "Print a verdict with a newline"
+  },
+  "Gcd And Lcm": {
+    "prefix": "gcd",
+    "body": [
+      "long long gcd(long long a, long long b) {",
+      "\t// Nonnegative inputs.",
+      "\twhile (b) { long long t = a % b; a = b; b = t; }",
+      "\treturn a;",
+      "}",
+      "long long lcm(long long a, long long b) {",
+      "\treturn a == 0 || b == 0 ? 0 : a / gcd(a, b) * b; // Result must fit long long.",
+      "}",
+      "$0"
+    ],
+    "description": "Gcd and lcm for nonnegative integers"
+  },
+  "Modular Arithmetic": {
+    "prefix": [
+      "modpow",
+      "modinv",
+      "mod"
+    ],
+    "body": [
+      "#define MOD ${1|1000000007,998244353|}LL",
+      "long long modpow(long long a, long long e, long long mod) {",
+      "\t// Requires e >= 0 and 0 < mod <= 2e9.",
+      "\ta = (a % mod + mod) % mod;",
+      "\tlong long result = 1 % mod;",
+      "\twhile (e) { if (e & 1) result = result * a % mod; a = a * a % mod; e >>= 1; }",
+      "\treturn result;",
+      "}",
+      "long long mod_inverse(long long a, long long mod) {",
+      "\t// Prime mod, with a not divisible by mod.",
+      "\treturn modpow(a, mod - 2, mod);",
+      "}",
+      "$0"
+    ],
+    "description": "Binary power and Fermat inverse modulo a prime"
+  },
+  "Combinations": {
+    "prefix": "ncr",
+    "body": [
+      "typedef struct { long long *fact, *invfact, mod; } Combinations;",
+      "Combinations combinations_new(int n) {",
+      "\tconst long long mod = ${1|1000000007,998244353|};",
+      "\t// Requires 0 <= n < mod; allocations must succeed.",
+      "\tCombinations c = {malloc((size_t)(n + 1) * sizeof(long long)), malloc((size_t)(n + 1) * sizeof(long long)), mod};",
+      "\tc.fact[0] = 1;",
+      "\tfor (int i = 1; i <= n; ++i) c.fact[i] = c.fact[i - 1] * i % mod;",
+      "\tlong long base = c.fact[n], e = mod - 2, result = 1;",
+      "\twhile (e) { if (e & 1) result = result * base % mod; base = base * base % mod; e >>= 1; }",
+      "\tc.invfact[n] = result;",
+      "\tfor (int i = n; i > 0; --i) c.invfact[i - 1] = c.invfact[i] * i % mod;",
+      "\treturn c;",
+      "}",
+      "long long choose(const Combinations *c, int n, int r) {",
+      "\treturn r < 0 || r > n ? 0 : c->fact[n] * c->invfact[r] % c->mod * c->invfact[n - r] % c->mod;",
+      "}",
+      "void combinations_free(Combinations *c) { free(c->fact); free(c->invfact); }",
+      "$0"
+    ],
+    "description": "Precomputed combinations modulo a prime"
+  },
+  "Prime Sieve": {
+    "prefix": "sieve",
+    "body": [
+      "unsigned char *sieve(int n) {",
+      "\t// Returned flags are caller owned; n >= 0.",
+      "\tunsigned char *prime = malloc((size_t)n + 1);",
+      "\tmemset(prime, 1, (size_t)n + 1); prime[0] = 0;",
+      "\tif (n >= 1) prime[1] = 0;",
+      "\tfor (int p = 2; p <= n / p; ++p) if (prime[p])",
+      "\t\tfor (long long x = (long long)p * p; x <= n; x += p) prime[x] = 0;",
+      "\treturn prime;",
+      "}",
+      "$0"
+    ],
+    "description": "Primality flags up to an inclusive limit"
+  },
+  "Prime Factors": {
+    "prefix": "factor",
+    "body": [
+      "// Requires n >= 1; arrays of length 64 are sufficient for signed 64 bit n.",
+      "int factorize(long long n, long long primes[64], int powers[64]) {",
+      "\tint count = 0;",
+      "\tfor (long long p = 2; p <= n / p; ++p) {",
+      "\t\tif (n % p) continue;",
+      "\t\tprimes[count] = p; powers[count] = 0;",
+      "\t\tdo { n /= p; ++powers[count]; } while (n % p == 0);",
+      "\t\t++count;",
+      "\t}",
+      "\tif (n > 1) { primes[count] = n; powers[count++] = 1; }",
+      "\treturn count;",
+      "}",
+      "$0"
+    ],
+    "description": "Trial division into prime multiplicities"
+  },
+  "Disjoint Set": {
+    "prefix": "dsu",
+    "body": [
+      "typedef struct { int *parent, *size; } DSU;",
+      "DSU dsu_new(int n) {",
+      "\tDSU d = {malloc((size_t)n * sizeof(int)), malloc((size_t)n * sizeof(int))};",
+      "\tfor (int i = 0; i < n; ++i) { d.parent[i] = i; d.size[i] = 1; }",
+      "\treturn d;",
+      "}",
+      "int dsu_find(DSU *d, int x) {",
+      "\twhile (x != d->parent[x]) { d->parent[x] = d->parent[d->parent[x]]; x = d->parent[x]; }",
+      "\treturn x;",
+      "}",
+      "int dsu_union(DSU *d, int a, int b) {",
+      "\ta = dsu_find(d, a); b = dsu_find(d, b); if (a == b) return 0;",
+      "\tif (d->size[a] < d->size[b]) { int t = a; a = b; b = t; }",
+      "\td->parent[b] = a; d->size[a] += d->size[b]; return 1;",
+      "}",
+      "void dsu_free(DSU *d) { free(d->parent); free(d->size); }",
+      "$0"
+    ],
+    "description": "Path compression and union by size"
+  },
+  "Fenwick Tree": {
+    "prefix": "bit",
+    "body": [
+      "typedef struct { int n; long long *tree; } Fenwick;",
+      "Fenwick fenwick_new(int n) { Fenwick f = {n, calloc((size_t)n + 1, sizeof(long long))}; return f; }",
+      "void fenwick_add(Fenwick *f, int i, long long delta) { for (++i; i <= f->n; i += i & -i) f->tree[i] += delta; }",
+      "long long fenwick_prefix(const Fenwick *f, int end) {",
+      "\tlong long sum = 0; for (; end > 0; end -= end & -end) sum += f->tree[end]; return sum;",
+      "}",
+      "long long fenwick_query(const Fenwick *f, int left, int right) { return fenwick_prefix(f, right) - fenwick_prefix(f, left); }",
+      "void fenwick_free(Fenwick *f) { free(f->tree); }",
+      "$0"
+    ],
+    "description": "Zero based point add and half open range sum"
+  },
+  "Segment Tree": {
+    "prefix": "segtree",
+    "body": [
+      "typedef struct { int n; long long *tree; } SegmentTree;",
+      "static const long long seg_identity = ${1:0};",
+      "long long seg_combine(long long a, long long b) { return ${2:a + b}; }",
+      "SegmentTree seg_new(const long long *a, int count) {",
+      "\tint n = 1; while (n < count) n *= 2;",
+      "\tSegmentTree s = {n, malloc((size_t)2 * n * sizeof(long long))};",
+      "\tfor (int i = 0; i < 2 * n; ++i) s.tree[i] = seg_identity;",
+      "\tfor (int i = 0; i < count; ++i) s.tree[n + i] = a[i];",
+      "\tfor (int i = n - 1; i > 0; --i) s.tree[i] = seg_combine(s.tree[2 * i], s.tree[2 * i + 1]);",
+      "\treturn s;",
+      "}",
+      "void seg_set(SegmentTree *s, int i, long long value) {",
+      "\ts->tree[i += s->n] = value;",
+      "\twhile (i > 1) { i /= 2; s->tree[i] = seg_combine(s->tree[2 * i], s->tree[2 * i + 1]); }",
+      "}",
+      "long long seg_query(const SegmentTree *s, int left, int right) {",
+      "\tlong long a = seg_identity, b = seg_identity;",
+      "\tfor (left += s->n, right += s->n; left < right; left /= 2, right /= 2) {",
+      "\t\tif (left & 1) a = seg_combine(a, s->tree[left++]);",
+      "\t\tif (right & 1) b = seg_combine(s->tree[--right], b);",
+      "\t}",
+      "\treturn seg_combine(a, b);",
+      "}",
+      "void seg_free(SegmentTree *s) { free(s->tree); }",
+      "$0"
+    ],
+    "description": "Associative combine with half open queries"
+  },
+  "Sparse Table": {
+    "prefix": "sparse",
+    "body": [
+      "typedef struct { int n, levels; int *table, *log; } SparseTable;",
+      "SparseTable sparse_new(const int *a, int n) {",
+      "\tint levels = 1; while ((1LL << levels) <= n) ++levels;",
+      "\tSparseTable s = {n, levels, malloc((size_t)levels * n * sizeof(int)), calloc((size_t)n + 1, sizeof(int))};",
+      "\tfor (int i = 0; i < n; ++i) s.table[i] = a[i];",
+      "\tfor (int i = 2; i <= n; ++i) s.log[i] = s.log[i / 2] + 1;",
+      "\tfor (int k = 1; k < levels; ++k) {",
+      "\t\tint width = 1 << k;",
+      "\t\tfor (int i = 0; i + width <= n; ++i) {",
+      "\t\t\tint x = s.table[(k - 1) * n + i], y = s.table[(k - 1) * n + i + width / 2];",
+      "\t\t\ts.table[k * n + i] = x < y ? x : y;",
+      "\t\t}",
+      "\t}",
+      "\treturn s;",
+      "}",
+      "int sparse_query(const SparseTable *s, int left, int right) {",
+      "\t// Requires a nonempty half open range.",
+      "\tint k = s->log[right - left];",
+      "\tint a = s->table[k * s->n + left], b = s->table[k * s->n + right - (1 << k)];",
+      "\treturn a < b ? a : b;",
+      "}",
+      "void sparse_free(SparseTable *s) { free(s->table); free(s->log); }",
+      "$0"
+    ],
+    "description": "Static range minimum in constant time"
+  },
+  "Monotonic Stack": {
+    "prefix": "monostack",
+    "body": [
+      "void next_greater(const int *a, int n, int *answer) {",
+      "\tint *stack = malloc((size_t)n * sizeof(int)), size = 0;",
+      "\tfor (int i = 0; i < n; ++i) answer[i] = -1;",
+      "\tfor (int i = 0; i < n; ++i) {",
+      "\t\twhile (size > 0 && a[stack[size - 1]] < a[i]) answer[stack[--size]] = i;",
+      "\t\tstack[size++] = i;",
+      "\t}",
+      "\tfree(stack);",
+      "}",
+      "$0"
+    ],
+    "description": "Index of the next strictly greater element"
+  },
+  "Lowercase Trie": {
+    "prefix": "trie",
+    "body": [
+      "typedef struct Trie { struct Trie *next[26]; int terminal; } Trie;",
+      "Trie *trie_new(void) { return calloc(1, sizeof(Trie)); }",
+      "void trie_insert(Trie *root, const char *word) {",
+      "\tfor (; *word; ++word) { int c = *word - 'a'; if (!root->next[c]) root->next[c] = trie_new(); root = root->next[c]; }",
+      "\troot->terminal = 1;",
+      "}",
+      "int trie_contains(const Trie *root, const char *word) {",
+      "\tfor (; *word; ++word) { root = root->next[*word - 'a']; if (!root) return 0; }",
+      "\treturn root->terminal;",
+      "}",
+      "void trie_free(Trie *root) {",
+      "\tif (!root) return;",
+      "\tfor (int i = 0; i < 26; ++i) trie_free(root->next[i]);",
+      "\tfree(root);",
+      "}",
+      "$0"
+    ],
+    "description": "Insert, find and release lowercase Latin words"
+  },
+  "Read Graph": {
+    "prefix": "graph",
+    "body": [
+      "typedef struct { int n, edges, capacity; int *head, *to, *next; long long *weight; } Graph;",
+      "Graph graph_new(int n, int capacity) {",
+      "\tGraph g = {n, 0, capacity, malloc((size_t)n * sizeof(int)), malloc((size_t)capacity * sizeof(int)), malloc((size_t)capacity * sizeof(int)), malloc((size_t)capacity * sizeof(long long))};",
+      "\tfor (int i = 0; i < n; ++i) g.head[i] = -1;",
+      "\treturn g;",
+      "}",
+      "void graph_add(Graph *g, int u, int v, long long weight) {",
+      "\t// Requires g->edges < g->capacity.",
+      "\tint e = g->edges++; g->to[e] = v; g->weight[e] = weight; g->next[e] = g->head[u]; g->head[u] = e;",
+      "}",
+      "Graph read_graph(void) {",
+      "\tint n, m; scanf(\"%d%d\", &n, &m);",
+      "\tGraph g = graph_new(n, 2 * m);",
+      "\tfor (int i = 0; i < m; ++i) {",
+      "\t\tint u, v; scanf(\"%d%d\", &u, &v); u -= ${1|1,0|}; v -= $1;",
+      "\t\tgraph_add(&g, u, v, 1); graph_add(&g, v, u, 1);",
+      "\t}",
+      "\treturn g;",
+      "}",
+      "void graph_free(Graph *g) { free(g->head); free(g->to); free(g->next); free(g->weight); }",
+      "$0"
+    ],
+    "description": "Owned adjacency list and undirected edge reader"
+  },
+  "Graph Traversals": {
+    "prefix": [
+      "bfs",
+      "dfs"
+    ],
+    "body": [
+      "// Uses Graph from the graph snippet; dist and order have g->n slots.",
+      "void bfs(const Graph *g, int source, int *dist) {",
+      "\tint *queue = malloc((size_t)g->n * sizeof(int)), head = 0, tail = 0;",
+      "\tfor (int i = 0; i < g->n; ++i) dist[i] = -1;",
+      "\tdist[source] = 0; queue[tail++] = source;",
+      "\twhile (head < tail) {",
+      "\t\tint u = queue[head++];",
+      "\t\tfor (int e = g->head[u]; e != -1; e = g->next[e]) {",
+      "\t\t\tint v = g->to[e]; if (dist[v] == -1) { dist[v] = dist[u] + 1; queue[tail++] = v; }",
+      "\t\t}",
+      "\t}",
+      "\tfree(queue);",
+      "}",
+      "int dfs(const Graph *g, int source, int *order) {",
+      "\tint *stack = malloc((size_t)g->n * sizeof(int)), size = 0, count = 0;",
+      "\tunsigned char *seen = calloc((size_t)g->n, 1); seen[source] = 1; stack[size++] = source;",
+      "\twhile (size) {",
+      "\t\tint u = stack[--size]; order[count++] = u;",
+      "\t\tfor (int e = g->head[u]; e != -1; e = g->next[e]) {",
+      "\t\t\tint v = g->to[e]; if (!seen[v]) { seen[v] = 1; stack[size++] = v; }",
+      "\t\t}",
+      "\t}",
+      "\tfree(stack); free(seen); return count;",
+      "}",
+      "$0"
+    ],
+    "description": "BFS distances and iterative DFS visitation order"
+  },
+  "Dijkstra": {
+    "prefix": "dijkstra",
+    "body": [
+      "// Uses Graph from the graph snippet; dist has g->n slots.",
+      "typedef struct { long long cost; int vertex; } HeapState;",
+      "void heap_push(HeapState *heap, int *size, HeapState state) {",
+      "\tint i = (*size)++;",
+      "\twhile (i > 0) { int parent = (i - 1) / 2; if (heap[parent].cost <= state.cost) break; heap[i] = heap[parent]; i = parent; }",
+      "\theap[i] = state;",
+      "}",
+      "HeapState heap_pop(HeapState *heap, int *size) {",
+      "\tHeapState result = heap[0], last = heap[--*size]; int i = 0;",
+      "\twhile (2 * i + 1 < *size) {",
+      "\t\tint child = 2 * i + 1;",
+      "\t\tif (child + 1 < *size && heap[child + 1].cost < heap[child].cost) ++child;",
+      "\t\tif (last.cost <= heap[child].cost) break;",
+      "\t\theap[i] = heap[child]; i = child;",
+      "\t}",
+      "\tif (*size) heap[i] = last;",
+      "\treturn result;",
+      "}",
+      "void dijkstra(const Graph *g, int source, long long *dist) {",
+      "\t// Nonnegative weights; finite path sums below inf.",
+      "\tconst long long inf = 1LL << 62;",
+      "\tHeapState *heap = malloc(((size_t)g->edges + 1) * sizeof(HeapState)); int size = 0;",
+      "\tfor (int i = 0; i < g->n; ++i) dist[i] = inf;",
+      "\tdist[source] = 0; heap_push(heap, &size, (HeapState){0, source});",
+      "\twhile (size) {",
+      "\t\tHeapState state = heap_pop(heap, &size); int u = state.vertex;",
+      "\t\tif (state.cost != dist[u]) continue;",
+      "\t\tfor (int e = g->head[u]; e != -1; e = g->next[e]) {",
+      "\t\t\tint v = g->to[e]; long long w = g->weight[e];",
+      "\t\t\tif (w < inf - state.cost && state.cost + w < dist[v]) {",
+      "\t\t\t\tdist[v] = state.cost + w; heap_push(heap, &size, (HeapState){dist[v], v});",
+      "\t\t\t}",
+      "\t\t}",
+      "\t}",
+      "\tfree(heap);",
+      "}",
+      "$0"
+    ],
+    "description": "Heap shortest paths with nonnegative weights"
+  },
+  "Topological Sort": {
+    "prefix": "topo",
+    "body": [
+      "// Uses a directed Graph; order has g->n slots. Returns -1 for a cycle.",
+      "int topological_sort(const Graph *g, int *order) {",
+      "\tint *indegree = calloc((size_t)g->n, sizeof(int)), head = 0, tail = 0;",
+      "\tfor (int e = 0; e < g->edges; ++e) ++indegree[g->to[e]];",
+      "\tfor (int i = 0; i < g->n; ++i) if (!indegree[i]) order[tail++] = i;",
+      "\twhile (head < tail) {",
+      "\t\tint u = order[head++];",
+      "\t\tfor (int e = g->head[u]; e != -1; e = g->next[e]) if (--indegree[g->to[e]] == 0) order[tail++] = g->to[e];",
+      "\t}",
+      "\tfree(indegree); return tail == g->n ? tail : -1;",
+      "}",
+      "$0"
+    ],
+    "description": "Kahn ordering with cycle detection"
+  },
+  "Zero One Bfs": {
+    "prefix": "bfs01",
+    "body": [
+      "// Uses Graph; weights must be zero or one; dist has g->n slots.",
+      "void zero_one_bfs(const Graph *g, int source, int *dist) {",
+      "\ttypedef struct { int vertex, cost; } State;",
+      "\tint capacity = g->edges + 1, head = 0, size = 1;",
+      "\tState *queue = malloc((size_t)capacity * sizeof(State)); queue[0] = (State){source, 0};",
+      "\tfor (int i = 0; i < g->n; ++i) dist[i] = INT_MAX;",
+      "\tdist[source] = 0;",
+      "\twhile (size) {",
+      "\t\tState state = queue[head]; head = (head + 1) % capacity; --size;",
+      "\t\tif (state.cost != dist[state.vertex]) continue;",
+      "\t\tfor (int e = g->head[state.vertex]; e != -1; e = g->next[e]) {",
+      "\t\t\tint v = g->to[e], w = (int)g->weight[e];",
+      "\t\t\tif (state.cost + w < dist[v]) {",
+      "\t\t\t\tdist[v] = state.cost + w;",
+      "\t\t\t\tState next = {v, dist[v]};",
+      "\t\t\t\tif (!w) { head = (head + capacity - 1) % capacity; queue[head] = next; }",
+      "\t\t\t\telse queue[(head + size) % capacity] = next;",
+      "\t\t\t\t++size;",
+      "\t\t\t}",
+      "\t\t}",
+      "\t}",
+      "\tfree(queue);",
+      "}",
+      "$0"
+    ],
+    "description": "Circular deque shortest paths with binary weights"
+  },
+  "Floyd Warshall": {
+    "prefix": "floyd",
+    "body": [
+      "void floyd_warshall(int n, long long dist[n][n]) {",
+      "\t// n > 0; missing edges inf, zero diagonal, finite sums within +/-inf.",
+      "\tconst long long inf = 1LL << 60;",
+      "\tfor (int k = 0; k < n; ++k) for (int i = 0; i < n; ++i) for (int j = 0; j < n; ++j)",
+      "\t\tif (dist[i][k] < inf && dist[k][j] < inf && dist[i][k] + dist[k][j] < dist[i][j])",
+      "\t\t\tdist[i][j] = dist[i][k] + dist[k][j];",
+      "}",
+      "$0"
+    ],
+    "description": "All pairs shortest paths without negative cycles"
+  },
+  "Grid Bfs": {
+    "prefix": "gridbfs",
+    "body": [
+      "// n,m > 0; grid has n rows of stride bytes; dist has n*m slots.",
+      "void grid_bfs(int n, int m, int stride, const char *grid, int sx, int sy, int *dist) {",
+      "\tint *queue = malloc((size_t)n * m * sizeof(int)), head = 0, tail = 0;",
+      "\tconst int dx[] = {1,-1,0,0}, dy[] = {0,0,1,-1};",
+      "\tfor (int i = 0; i < n * m; ++i) dist[i] = -1;",
+      "\tif (grid[sx * stride + sy] == '#') { free(queue); return; }",
+      "\tdist[sx * m + sy] = 0; queue[tail++] = sx * m + sy;",
+      "\twhile (head < tail) {",
+      "\t\tint u = queue[head++], x = u / m, y = u % m;",
+      "\t\tfor (int d = 0; d < 4; ++d) {",
+      "\t\t\tint nx = x + dx[d], ny = y + dy[d];",
+      "\t\t\tif (nx >= 0 && nx < n && ny >= 0 && ny < m && grid[nx * stride + ny] != '#' && dist[nx * m + ny] == -1) {",
+      "\t\t\t\tdist[nx * m + ny] = dist[u] + 1; queue[tail++] = nx * m + ny;",
+      "\t\t\t}",
+      "\t\t}",
+      "\t}",
+      "\tfree(queue);",
+      "}",
+      "$0"
+    ],
+    "description": "Four direction shortest paths avoiding walls"
+  },
+  "Binary Search And Bounds": {
+    "prefix": [
+      "bs",
+      "bounds"
+    ],
+    "body": [
+      "long long first_true(long long lo, long long hi, int (*check)(long long)) {",
+      "\t// Search [lo,hi); hi-lo must fit long long.",
+      "\twhile (lo < hi) { long long mid = lo + (hi - lo) / 2; if (check(mid)) hi = mid; else lo = mid + 1; }",
+      "\treturn lo;",
+      "}",
+      "int lower_bound(const int *a, int n, int x) {",
+      "\tint lo = 0, hi = n;",
+      "\twhile (lo < hi) { int mid = lo + (hi - lo) / 2; if (a[mid] >= x) hi = mid; else lo = mid + 1; } return lo;",
+      "}",
+      "int upper_bound(const int *a, int n, int x) {",
+      "\tint lo = 0, hi = n;",
+      "\twhile (lo < hi) { int mid = lo + (hi - lo) / 2; if (a[mid] > x) hi = mid; else lo = mid + 1; } return lo;",
+      "}",
+      "$0"
+    ],
+    "description": "Monotone search and bounds on sorted arrays"
+  },
+  "Prefix Sums And Tables": {
+    "prefix": [
+      "pref",
+      "pref2",
+      "dp2"
+    ],
+    "body": [
+      "void prefix_sums(const int *a, int n, long long *pref) {",
+      "\t// pref has n+1 slots.",
+      "\tpref[0] = 0; for (int i = 0; i < n; ++i) pref[i + 1] = pref[i] + a[i];",
+      "}",
+      "void prefix_grid(int n, int m, const int a[n][m], long long pref[n + 1][m + 1]) {",
+      "\t// n,m > 0.",
+      "\tfor (int i = 0; i <= n; ++i) pref[i][0] = 0;",
+      "\tfor (int j = 0; j <= m; ++j) pref[0][j] = 0;",
+      "\tfor (int i = 0; i < n; ++i) for (int j = 0; j < m; ++j)",
+      "\t\tpref[i + 1][j + 1] = a[i][j] + pref[i][j + 1] + pref[i + 1][j] - pref[i][j];",
+      "}",
+      "long long *dp_table(int n, int m) { return calloc((size_t)n * m, sizeof(long long)); }",
+      "$0"
+    ],
+    "description": "Padded prefix sums and owned zero filled DP storage"
+  },
+  "Two Pointers And Window": {
+    "prefix": [
+      "twop",
+      "window"
+    ],
+    "body": [
+      "int has_pair_sum(const int *a, int n, long long target) {",
+      "\t// Sorted input.",
+      "\tint left = 0, right = n - 1;",
+      "\twhile (left < right) { long long sum = (long long)a[left] + a[right]; if (sum == target) return 1; if (sum < target) ++left; else --right; }",
+      "\treturn 0;",
+      "}",
+      "int longest_bounded_sum(const int *a, int n, long long limit) {",
+      "\t// Nonnegative values and limit.",
+      "\tint left = 0, best = 0; long long sum = 0;",
+      "\tfor (int right = 0; right < n; ++right) {",
+      "\t\tsum += a[right]; while (sum > limit) sum -= a[left++];",
+      "\t\tif (right - left + 1 > best) best = right - left + 1;",
+      "\t}",
+      "\treturn best;",
+      "}",
+      "$0"
+    ],
+    "description": "Sorted pair sum and nonnegative sum window"
+  },
+  "String Matching": {
+    "prefix": [
+      "kmp",
+      "zfunc"
+    ],
+    "body": [
+      "void prefix_function(const char *s, int n, int *pi) {",
+      "\tif (n > 0) pi[0] = 0;",
+      "\tfor (int i = 1; i < n; ++i) { int j = pi[i - 1]; while (j && s[i] != s[j]) j = pi[j - 1]; if (s[i] == s[j]) ++j; pi[i] = j; }",
+      "}",
+      "void z_function(const char *s, int n, int *z) {",
+      "\tint left = 0, right = 0; if (n > 0) z[0] = 0;",
+      "\tfor (int i = 1; i < n; ++i) {",
+      "\t\tz[i] = 0; if (i < right) z[i] = z[i - left] < right - i ? z[i - left] : right - i;",
+      "\t\twhile (i + z[i] < n && s[z[i]] == s[i + z[i]]) ++z[i];",
+      "\t\tif (i + z[i] > right) { left = i; right = i + z[i]; }",
+      "\t}",
+      "}",
+      "$0"
+    ],
+    "description": "KMP and Z prefix matching in linear time"
+  },
+  "Rolling Hash": {
+    "prefix": "hash",
+    "body": [
+      "typedef struct { long long *power, *pref; } RollingHash;",
+      "static const long long hash_mod = 1000000007, hash_base = 911382323;",
+      "RollingHash hash_new(const char *s, int n) {",
+      "\tRollingHash h = {malloc(((size_t)n + 1) * sizeof(long long)), calloc((size_t)n + 1, sizeof(long long))}; h.power[0] = 1;",
+      "\tfor (int i = 0; i < n; ++i) { h.power[i + 1] = h.power[i] * hash_base % hash_mod; h.pref[i + 1] = (h.pref[i] * hash_base + (unsigned char)s[i] + 1) % hash_mod; }",
+      "\treturn h;",
+      "}",
+      "long long hash_query(const RollingHash *h, int left, int right) { return (h->pref[right] - h->pref[left] * h->power[right - left] % hash_mod + hash_mod) % hash_mod; }",
+      "void hash_free(RollingHash *h) { free(h->power); free(h->pref); }",
+      "$0"
+    ],
+    "description": "Owned half open substring hash with collision risk"
+  },
+  "Contest Utilities": {
+    "prefix": [
+      "util",
+      "debug",
+      "inf",
+      "dirs",
+      "bits",
+      "yes",
+      "no"
+    ],
+    "body": [
+      "static const long long INF = 1LL << 62;",
+      "static const int DX[] = {1,-1,0,0}, DY[] = {0,0,1,-1};",
+      "void yes(int ok) { puts(ok ? \"YES\" : \"NO\"); }",
+      "int popcount(unsigned long long x) { int count = 0; while (x) { x &= x - 1; ++count; } return count; }",
+      "unsigned long long lowbit(unsigned long long x) { return x & (0ULL - x); }",
+      "#ifdef LOCAL",
+      "#define debug(x) fprintf(stderr, \"%s = %lld\\n\", #x, (long long)(x))",
+      "#else",
+      "#define debug(x) ((void)0)",
+      "#endif",
+      "$0"
+    ],
+    "description": "Constants, verdicts, directions, bits and local debug"
+  },
+  "Wrap Tests": {
+    "prefix": "tests",
+    "body": [
+      "int t;",
+      "if (scanf(\"%d\", &t) == 1) {",
+      "\twhile (t-- > 0) {",
+      "\t\t$TM_SELECTED_TEXT",
+      "\t\t$0",
+      "\t}",
+      "}"
+    ],
+    "description": "Wrap selected code in a multi test loop"
+  }
+}

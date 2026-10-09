@@ -4,7 +4,7 @@ use futures::{FutureExt, future::{select,Either}};
 use serde::Deserialize;
 use serde_json::{Value,json};
 use agent_client_protocol::{AcpAgent,AcpAgentConfig,Agent,ConnectionTo};
-use agent_client_protocol::schema::{ProtocolVersion,v1::{InitializeRequest,NewSessionRequest,LoadSessionRequest,SetSessionConfigOptionRequest,PromptRequest,ContentBlock,TextContent,SessionNotification,RequestPermissionRequest,RequestPermissionResponse,RequestPermissionOutcome,SelectedPermissionOutcome,PermissionOption,PermissionOptionKind}};
+use agent_client_protocol::schema::{v1::{InitializeRequest,NewSessionRequest,LoadSessionRequest,SetSessionConfigOptionRequest,CreateElicitationRequest,CreateElicitationResponse,PromptRequest,ContentBlock,TextContent,SessionNotification,RequestPermissionRequest,RequestPermissionResponse,RequestPermissionOutcome,SelectedPermissionOutcome,PermissionOption,PermissionOptionKind}};
 use super::{Access,AgentKind,Cancel,Catalog,Detected,Effort,Event,Model,Outcome,Request,ToolKind,transport::{outcome,prompt}};
 #[derive(Deserialize)] #[serde(rename_all="camelCase")] struct Config {id:String,#[serde(default)]category:String,current_value:Option<String>,#[serde(default)]options:Vec<OptionEntry>}
 #[derive(Deserialize)] struct OptionEntry {value:Option<String>,#[serde(default)]name:String,#[serde(default)]description:String,#[serde(default)]options:Vec<OptionEntry>}
@@ -48,6 +48,7 @@ fn execute(agent:Detected,request:Option<Request>,events:&mut dyn FnMut(Event),c
             let text=Arc::new(Mutex::new(String::new()));let chunks=text.clone();let notifications=sender.clone();
             let access=request.as_ref().map(|r|r.access.clone()).unwrap_or(Access::ReadOnly);
             let result=Arc::new(Mutex::new(None));let completed=result.clone();
+            let questions=sender.clone();let question_cancel=cancel_thread.clone();
             let connection=agent_client_protocol::Client.builder()
                 .on_receive_notification(async move |notification:SessionNotification,_cx| {
                     if !accepting.load(Ordering::Acquire) {return Ok(());}
@@ -62,8 +63,20 @@ fn execute(agent:Detected,request:Option<Request>,events:&mut dyn FnMut(Event),c
                     let outcome=permission_outcome(&permission.options,&access);
                     responder.respond(RequestPermissionResponse::new(outcome))
                 },agent_client_protocol::on_receive_request!())
+                .on_receive_request(async move |request:CreateElicitationRequest,responder,_cx| {
+                    let value=serde_json::to_value(&request).map_err(protocol_error)?;
+                    if value["mode"] != "form" { return responder.respond(serde_json::from_value::<CreateElicitationResponse>(json!({"action":"decline"})).map_err(protocol_error)?); }
+                    let question=super::Question::new(value);
+                    let _=questions.send(Event::Question(question.clone()));
+                    let response=loop {
+                        if let Some(value)=question.take(){break value;}
+                        if question_cancel.is_cancelled(){break json!({"action":"cancel"});}
+                        async_io::Timer::after(Duration::from_millis(50)).await;
+                    };
+                    responder.respond(serde_json::from_value::<CreateElicitationResponse>(response).map_err(protocol_error)?)
+                },agent_client_protocol::on_receive_request!())
                 .connect_with(transport,move |connection:ConnectionTo<Agent>|async move {
-                    let init=connection.send_request(InitializeRequest::new(ProtocolVersion::V1)).block_task().await?;
+                    let init=connection.send_request(serde_json::from_value::<InitializeRequest>(json!({"protocolVersion":1,"clientCapabilities":{"elicitation":{"form":{}}}})).map_err(protocol_error)?).block_task().await?;
                     let request_session=if let Some(request)=&request { if let Some(session)=&request.resume {
                         let capabilities=serde_json::to_value(&init.agent_capabilities).map_err(protocol_error)?;
                         if capabilities["loadSession"]!=true {return Err(protocol_error("This agent does not support session resume"));}

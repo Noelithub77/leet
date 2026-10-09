@@ -330,3 +330,22 @@ Onboarding checks only the selected language's interpreter/compiler and language
 The app keeps one active language server. Changing languages stops the old server, clears parked editor adapters and diagnostics, and invalidates pending attachments. Returning to a different-language tab starts its server on demand; background problem loads do not start servers.
 
 `./ops workspace:move --path /absolute/path --json` moves the configured solutions folder and Git history on the same filesystem, updates the local configuration, and keeps a compatibility symlink for running instances. It refuses an existing destination and rolls the move back if the configuration cannot be saved. Repeating it after success reports no move.
+
+## Snippets
+
+Open the snippet editor with Ctrl+Shift+S or from Settings. Prefix + Tab expands a matching snippet; Ctrl+J opens the searchable picker, and Ctrl+Space combines snippets with language-server completions. Tab and Shift+Tab visit placeholders, Escape ends the session, and linked occurrences follow edits. The final cursor uses `$0`. Stop, Cursor, and Choice controls can be clicked or dragged into the body; Preview shows expansion without changing the saved body.
+
+User snippets are copied into `<config>/snippets/{python,cpp,go,c,java,all}.json` in VS Code format. Imports discover installed editor snippet folders, including VS Code profiles and common Neovim directories. Rescan adds new entries without replacing edited copies. Executable Vim/Python bodies, regex triggers, and context-dependent UltiSnips definitions are skipped. Text transforms use Rust regular expressions, so unsupported JavaScript regex constructs are rejected. The importer bounds file count, size, and traversal depth; expansion bounds recursion, work, and output. Invalid library files block mutations until repaired.
+
+The snippet assistant works in a private staged copy and offers Review, Apply changes, and Undo. Native ACP agents can ask preference forms; other providers ask in conversation. Normal local-agent chats receive the same snippet tool context and offer undo when their library changes. Saving and undo check the library baseline under an exclusive lock, so stale views cannot silently overwrite another edit. Each scope file is replaced atomically; an interrupted multi-file operation can leave some scopes updated, and an abandoned `.write-lock` needs inspection before removal.
+
+The tool is available in the installed app and operator:
+
+```sh
+leet snippets list
+leet snippets show --key 'cpp/Codeforces Template'
+leet snippets set --preview < snippet.json
+./ops snippets list
+```
+
+`set` reads a Snippet object with `name`, `prefixes`, `body`, `description`, `scope`, and `template`; mutations return JSON. `--directory /absolute/path` selects an isolated library for fixtures or staged reviews. No editor plugin code runs during imports.

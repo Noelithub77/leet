@@ -30,6 +30,9 @@ pub struct Setup {
     source: Source,
     python: String,
     handle: Entity<InputState>,
+    snippet_found: Vec<practice::snippets::import::Found>,
+    snippet_scanning: bool,
+    snippet_status: String,
     busy: bool,
     error: Option<String>,
     requirements: Option<practice::toolchain::Setup>,
@@ -46,10 +49,11 @@ impl Workspace {
         let workspace = cx.weak_entity();
         let config = self.config.clone();
         let setup = cx.new(|cx| Setup {
-            focus: cx.focus_handle(), workspace, step: usize::from(accounts),
+            focus: cx.focus_handle(), workspace, step: if accounts { 2 } else { 0 },
             language: config.preferred_language, source: config.source,
             python: config.python.clone(),
             handle: cx.new(|cx| InputState::new(window, cx).placeholder("Codeforces handle").default_value(config.codeforces_handle)),
+            snippet_found: Vec::new(), snippet_scanning: false, snippet_status: String::new(),
             busy: false, error: None, requirements: None, checking: false, installing: false, check_epoch: 0, check_task: Task::ready(()),
         });
         if !accounts { setup.update(cx, |setup, cx| setup.check_requirements(window, cx)); }
@@ -117,14 +121,39 @@ impl Setup {
         cx.notify();
     }
 
+    fn scan_snippets(&mut self,window:&mut Window,cx:&mut Context<Self>){
+        // A dropped fixture workspace never reads the user's editor configuration.
+        if self.workspace.upgrade().is_none(){return;}
+        self.snippet_scanning=true;
+        cx.spawn_in(window,async move|this,cx|{
+            let found=cx.background_spawn(async {practice::snippets::import::scan(&practice::snippets::import::Roots::detect())}).await;
+            let _=this.update(cx,|this,cx|{this.snippet_scanning=false;this.snippet_found=found;cx.notify();});
+        }).detach();
+    }
+    fn import_snippets(&mut self,window:&mut Window,cx:&mut Context<Self>){
+        let Some(ws)=self.workspace.upgrade()else{return;};let dir=ws.read(cx).snippet_dir.clone();
+        let incoming=self.snippet_found.iter().flat_map(|f|f.snippets.clone()).collect();let workspace=self.workspace.clone();
+        self.snippet_scanning=true;
+        cx.spawn_in(window,async move|this,cx|{
+            let result=cx.background_spawn(async move{
+                let loaded=practice::snippets::store::load(&dir);anyhow::ensure!(loaded.errors.is_empty(),"Repair invalid snippet files before importing");
+                let mut user=loaded.snippets.clone();let report=practice::snippets::import::merge(&mut user,incoming);
+                practice::snippets::store::commit(&dir,&loaded.snippets,&user)?;anyhow::Ok(report.added)
+            }).await;
+            let _=this.update(cx,|this,cx|{this.snippet_scanning=false;match result{Ok(added)=>this.snippet_status=format!("Imported {added} snippets"),Err(e)=>this.error=Some(e.to_string())}cx.notify();});
+            let _=workspace.update(cx,|ws,cx|ws.reload_snippets(cx));
+        }).detach();cx.notify();
+    }
+
     fn advance(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.busy { return; }
         if self.step == 0 {
             self.step = 1;
-            self.handle.update(cx, |handle, cx| handle.focus(window, cx));
+            self.scan_snippets(window,cx);
             cx.notify();
             return;
         }
+        if self.step == 1 { self.step=2; self.handle.update(cx,|handle,cx|handle.focus(window,cx));cx.notify();return; }
         let handle = self.handle.read(cx).value().trim().to_owned();
         if self.source == Source::Codeforces && handle.is_empty() {
             self.error = Some("Enter your Codeforces handle.".into());
@@ -185,8 +214,8 @@ impl Render for Setup {
             .on_action(cx.listener(|this, _: &SetupJava, window, cx| this.choose_language(Language::Java, window, cx)))
             .child(v_flex().w(px(600.)).max_w_full().p_6().gap_5().rounded_lg().border_1().border_color(theme.border).bg(theme.sidebar)
                 .child(h_flex().justify_between().items_center()
-                    .child(div().text_2xl().font_weight(FontWeight::SEMIBOLD).child(if current_step == 0 { "Set up leet" } else { "Connect your accounts" }))
-                    .child(div().text_xs().text_color(theme.muted_foreground).child(format!("{} / 2", current_step + 1))))
+                    .child(div().text_2xl().font_weight(FontWeight::SEMIBOLD).child(match current_step { 0=>"Set up leet",1=>"Your snippets",_=>"Connect your accounts" }))
+                    .child(div().text_xs().text_color(theme.muted_foreground).child(format!("{} / 3", current_step + 1))))
                 .when(current_step == 0, |view| view
                     .child(v_flex().gap_3().child(div().text_color(theme.muted_foreground).child("Preferred language"))
                         .child(h_flex().gap_3().children(Language::ALL.into_iter().enumerate().map(|(index, language)| {
@@ -221,6 +250,12 @@ impl Render for Setup {
                                 .label(source.label()).on_click(cx.listener(move |this, _, _, cx| { this.source = source; cx.notify(); }))
                         })))))
                 .when(current_step == 1, |view| view
+                    .child(h_flex().gap_3().child(Icon::new(IconName::Code).size(px(28.))).child(v_flex().gap_1().child("Competitive-programming library").child(div().text_xs().text_color(theme.muted_foreground).child("Templates and algorithms for all five languages."))))
+                    .child(div().text_sm().child(if self.snippet_scanning { "Finding your snippets…".into() } else if self.snippet_found.is_empty() { "No editor snippets found".into() } else { self.snippet_found.iter().map(|f|format!("{} · {}",f.editor.label(),f.snippets.len())).collect::<Vec<_>>().join("   ") }))
+                    .child(Button::new("setup-import-snippets").outline().icon(IconName::Download).label("Import found snippets").disabled(self.snippet_scanning || self.snippet_found.iter().all(|f|f.snippets.is_empty())).on_click(cx.listener(|this,_,window,cx|this.import_snippets(window,cx))))
+                    .child(div().text_xs().text_color(theme.muted_foreground).child(self.snippet_status.clone()))
+                    .child(div().text_xs().text_color(theme.muted_foreground).child("Edit anytime · Ctrl+Shift+S")))
+                .when(current_step == 2, |view| view
                     .child(v_flex().gap_3().children([Account::LeetCode, Account::NeetCode].into_iter().map(|account| {
                         let workspace = self.workspace.clone();
                         let status = accounts[account.index()].clone();
@@ -236,11 +271,11 @@ impl Render for Setup {
                 .child(h_flex().w_full().justify_between().items_center()
                     .child(Button::new("setup-back").ghost().small().icon(IconName::ArrowLeft).disabled(current_step == 0 || self.busy)
                         .accessibility_label("Previous setup step").tooltip("Back")
-                        .on_click(cx.listener(|this, _, window, cx| { this.step = 0; this.check_requirements(window, cx); this.focus.focus(window, cx); cx.notify(); })))
+                        .on_click(cx.listener(|this, _, window, cx| { this.step = this.step.saturating_sub(1); if this.step==0 { this.check_requirements(window, cx); } this.focus.focus(window, cx); cx.notify(); })))
                     .child(Button::new("setup-continue").primary().disabled(self.busy)
-                        .label(if self.busy { "Checking…" } else if current_step == 0 { "Continue" } else { "Start practicing" })
+                        .label(if self.busy { "Checking…" } else if current_step == 0 { "Continue" } else if current_step == 1 { "Continue / skip" } else { "Start practicing" })
                         .tooltip("Continue · Ctrl+Enter").on_click(cx.listener(|this, _, window, cx| this.advance(window, cx)))))
-                .child(div().text_xs().text_color(theme.muted_foreground).child(if current_step == 0 { "Ctrl+1…5 language · Ctrl+Enter continue" } else { "Connect accounts for judging and progress sync." })))
+                .child(div().text_xs().text_color(theme.muted_foreground).child(if current_step == 0 { "Ctrl+1…5 language · Ctrl+Enter continue" } else if current_step == 1 { "Imports are copies; your original snippets stay in your editor." } else { "Connect accounts for judging and progress sync." })))
     }
 }
 

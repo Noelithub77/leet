@@ -87,6 +87,7 @@ impl Render for Workspace {
         let bottom_h = bottom_height * bottom_reveal;
         let tabs = self.render_tabs(window, cx);
         let center = match self.center {
+            Center::Snippets => div().flex_1().h_full().children(self.snippet_editor.clone()).into_any_element(),
             Center::Onboarding => div().flex_1().h_full().children(self.onboarding.clone()).into_any_element(),
             Center::Home => self.render_home(window, cx).into_any_element(),
             Center::Editor => v_flex()

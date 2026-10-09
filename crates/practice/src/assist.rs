@@ -421,6 +421,7 @@ pub fn environment_prompt(web: bool) -> String {
     } else {
         out.push_str("Native agent capabilities: your selected provider's installed file read/write/edit, search, and command tools have full user-authorized access with non-interactive permissions. Use your actual tool catalog; other provider-specific capabilities depend on that provider. Work directly in files with native tools. Edit only files relevant to the user's request; report actual execution results.\nLeet renders validated native response kinds: chat (Markdown), hints, tests (addable cases), bugs (line links), analyze (complexity curves), stuck, explain, visualize (animated scenes), optimize, pattern (problem links), dry-run, review (combined analysis), and solve (solution report). Native scenes support arrays, grids, linked lists, trees, graphs, heaps, stacks/queues, sets, maps, variables and playback. These are typed response/artifact formats, not callable app tools or arbitrary executable UI.\nThe app provides editor reload, local tests, trace recording, judge runs and submission confirmation through its existing controls. You may run available runtimes or commands directly. Never submit to a judge via commands or HTTP: return a solve report and leave submission to the app's explicit confirmation. Never fabricate runtime results.\n");
     }
+    if !web { out.push_str(&crate::snippets::cli::context()); }
     out
 }
 

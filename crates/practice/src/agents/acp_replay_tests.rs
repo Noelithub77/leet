@@ -38,3 +38,34 @@ for line in sys.stdin:
     assert_eq!(answer.text, "{\"answer\":\"corrected\"}");
     assert!(!received.iter().any(|event| matches!(event, Event::Text(text) if text.contains("stale"))));
 }
+
+#[test]
+fn agents_acp_elicitation_waits_for_answer() {
+    let dir=tempfile::tempdir().unwrap();let path=dir.path().join("agent");
+    fs::write(&path,r#"#!/usr/bin/env python3
+import sys,json
+
+def send(value): print(json.dumps(value),flush=True)
+for line in sys.stdin:
+ request=json.loads(line); method=request.get('method')
+ if method=='initialize':
+  assert request['params']['clientCapabilities']['elicitation']['form']=={}
+  result={'protocolVersion':1,'agentCapabilities':{}}
+ elif method=='session/new':
+  result={'sessionId':'q','configOptions':[{'id':'model','name':'Model','type':'select','category':'model','currentValue':'mock','options':[{'value':'mock','name':'Mock'}]}]}
+ elif method=='session/set_config_option': result={'configOptions':[]}
+ elif method=='session/prompt':
+  send({'jsonrpc':'2.0','id':'question','method':'elicitation/create','params':{'mode':'form','sessionId':'q','message':'Choose a trigger','requestedSchema':{'type':'object','properties':{'trigger':{'type':'string'}},'required':['trigger']}}})
+  reply=json.loads(sys.stdin.readline())
+  assert reply['result']['action']=='accept'
+  assert reply['result']['content']['trigger']=='cp'
+  send({'jsonrpc':'2.0','method':'session/update','params':{'sessionId':'q','update':{'sessionUpdate':'agent_message_chunk','content':{'type':'text','text':'Preferences received'}}}})
+  result={'stopReason':'end_turn'}
+ else: continue
+ send({'jsonrpc':'2.0','id':request['id'],'result':result})
+"#).unwrap();fs::set_permissions(&path,fs::Permissions::from_mode(0o755)).unwrap();
+    let request=Request{agent:Detected{kind:AgentKind::OpenCode,path,version:None},selection:super::super::Selection{agent:AgentKind::OpenCode,model:"mock".into(),effort:None,fast:false},prompt:"Create snippet".into(),schema:None,cwd:dir.path().into(),access:Access::Full,resume:None};
+    let mut asked=false;
+    let outcome=run(&request,&mut|event|if let Event::Question(q)=event{asked=true;q.answer(json!({"action":"accept","content":{"trigger":"cp"}}));},&Cancel::default()).unwrap();
+    assert!(asked);assert_eq!(outcome.text,"Preferences received");
+}

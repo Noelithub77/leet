@@ -32,6 +32,8 @@ gpui_kit::actions!(
         ShowContests,
         TogglePastContests,
         OpenSettings,
+        OpenSnippetEditor,
+        InsertSnippet,
         PickTheme,
         CycleList,
         CycleSource,
@@ -113,6 +115,8 @@ pub const COMMANDS: &[Command] = &[
     cmd!("Guided tour", "", GuidedTour),
     cmd!("Codeforces contests", "ctrl-alt-c", ShowContests),
     cmd!("Show/hide past Codeforces contests", "", TogglePastContests),
+    cmd!("Snippet editor", "ctrl-shift-s", OpenSnippetEditor),
+    cmd!("Insert snippet", "ctrl-j", InsertSnippet),
     cmd!("Settings", "ctrl-,", OpenSettings),
     cmd!("Run tests", "ctrl-enter", RunTests),
     cmd!("Run on LeetCode", "ctrl-shift-enter", JudgeRun),
@@ -227,6 +231,8 @@ pub fn reload_keys(config: &practice::config::Config, cx: &mut App) {
     crate::tour::bind_keys(cx);
     crate::onboarding::bind_keys(cx);
     crate::statement::bind_keys(cx);
+    crate::snippets::expansion::bind_keys(cx);
+    crate::snippets::editor_bind_keys(cx);
 }
 
 pub fn bind_keys(config: &practice::config::Config, cx: &mut App) {

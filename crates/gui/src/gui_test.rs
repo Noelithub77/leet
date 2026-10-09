@@ -62,6 +62,8 @@ pub fn run() -> Result<()> {
     cx.allow_parking();
     cx.update(init);
     let mut reports = vec![crate::onboarding::fixture::native(&mut cx, &output, pixels)?, statement::native(&mut cx, &output, pixels)?, update::native(&mut cx, &output, pixels)?];
+    reports.push(crate::snippets::fixture::native(&mut cx,&output,pixels)?);
+    reports.push(crate::agent_question::fixture(&mut cx)?);
     reports.push(tour::native(&mut cx, &output, pixels, video)?);
     reports.push(crate::assist::composer_fixture::native(&mut cx, &output, pixels)?);
     for slug in ["cf:1:A", "cc:GUIFIXTURE"] {

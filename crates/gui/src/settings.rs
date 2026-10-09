@@ -518,6 +518,7 @@ impl Workspace {
             .child(v_flex().w_full().max_w(px(780.)).h_full().min_h_0().px_4().pt_10().gap_4()
                 .child(div().flex_shrink_0().text_xl().font_weight(FontWeight::SEMIBOLD).child("Settings"))
                 .when(self.settings.tab == SettingsTab::Keybindings, |column| column.child(div().text_xs().text_color(theme.muted_foreground).child("Primary first; separate alternatives with |")))
+                .child(Button::new("settings-snippet-editor").label("Snippet editor").on_click(cx.listener(|this,_,window,cx|this.open_snippet_editor(window,cx))))
                 .child(Tabs::new("settings-tabs").flex().flex_row().flex_nowrap().flex_shrink_0().gap_1()
                     .children(SettingsTab::ALL.into_iter().enumerate().map(|(index, tab)| {
                         Tab::new(("settings-tab", index)).selected(self.settings.tab == tab).set_position(index + 1, SettingsTab::ALL.len())

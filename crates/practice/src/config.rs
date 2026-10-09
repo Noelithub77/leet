@@ -37,6 +37,7 @@ pub struct Config {
     /// UI scale; `ctrl+=` / `ctrl+-` change it.
     pub zoom: f32,
     pub keybindings: BTreeMap<String, String>,
+    pub snippets: crate::snippets::Settings,
 }
 
 impl Default for Config {
@@ -60,6 +61,7 @@ impl Default for Config {
             test_timeout_secs: 10,
             zoom: 1.0,
             keybindings: BTreeMap::new(),
+            snippets: Default::default(),
         }
     }
 }

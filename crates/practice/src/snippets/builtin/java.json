@@ -1,0 +1,647 @@
+{
+  "Single Test": {
+    "prefix": "cp",
+    "body": [
+      "import java.io.*;",
+      "import java.util.*;",
+      "",
+      "public class Main {",
+      "\tstatic final FastReader in = new FastReader();",
+      "\tstatic final PrintWriter out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.out)));",
+      "\tstatic class FastReader {",
+      "\t\tfinal InputStream stream = System.in;",
+      "\t\tfinal byte[] buffer = new byte[1 << 16];",
+      "\t\tint ptr, len;",
+      "\t\tint read() throws IOException {",
+      "\t\t\tif (ptr >= len) { len = stream.read(buffer); ptr = 0; if (len <= 0) return -1; }",
+      "\t\t\treturn buffer[ptr++] & 255;",
+      "\t\t}",
+      "\t\tString next() throws IOException {",
+      "\t\t\tStringBuilder s = new StringBuilder();",
+      "\t\t\tint c; do { c = read(); } while (c <= 32 && c != -1);",
+      "\t\t\tif (c == -1) throw new EOFException();",
+      "\t\t\twhile (c > 32) { s.append((char)c); c = read(); }",
+      "\t\t\treturn s.toString();",
+      "\t\t}",
+      "\t\tint nextInt() throws IOException { return Integer.parseInt(next()); }",
+      "\t\tlong nextLong() throws IOException { return Long.parseLong(next()); }",
+      "\t}",
+      "\tstatic void solve() throws Exception {",
+      "\t\t$0",
+      "\t}",
+      "\tpublic static void main(String[] args) throws Exception {",
+      "\t\tsolve();",
+      "\t\tout.flush();",
+      "\t}",
+      "}"
+    ],
+    "description": "Main class with buffered input and output",
+    "isFileTemplate": true
+  },
+  "Multiple Tests": {
+    "prefix": "cpt",
+    "body": [
+      "import java.io.*;",
+      "import java.util.*;",
+      "",
+      "public class Main {",
+      "\tstatic final FastReader in = new FastReader();",
+      "\tstatic final PrintWriter out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.out)));",
+      "\tstatic class FastReader {",
+      "\t\tfinal InputStream stream = System.in;",
+      "\t\tfinal byte[] buffer = new byte[1 << 16];",
+      "\t\tint ptr, len;",
+      "\t\tint read() throws IOException {",
+      "\t\t\tif (ptr >= len) { len = stream.read(buffer); ptr = 0; if (len <= 0) return -1; }",
+      "\t\t\treturn buffer[ptr++] & 255;",
+      "\t\t}",
+      "\t\tString next() throws IOException {",
+      "\t\t\tStringBuilder s = new StringBuilder();",
+      "\t\t\tint c; do { c = read(); } while (c <= 32 && c != -1);",
+      "\t\t\tif (c == -1) throw new EOFException();",
+      "\t\t\twhile (c > 32) { s.append((char)c); c = read(); }",
+      "\t\t\treturn s.toString();",
+      "\t\t}",
+      "\t\tint nextInt() throws IOException { return Integer.parseInt(next()); }",
+      "\t\tlong nextLong() throws IOException { return Long.parseLong(next()); }",
+      "\t}",
+      "\tstatic void solve() throws Exception {",
+      "\t\t$0",
+      "\t}",
+      "\tpublic static void main(String[] args) throws Exception {",
+      "\t\tint t = in.nextInt();",
+      "\t\twhile (t-- > 0) solve();",
+      "\t\tout.flush();",
+      "\t}",
+      "}"
+    ],
+    "description": "Main class with buffered multiple test cases",
+    "isFileTemplate": true
+  },
+  "For Range": {
+    "prefix": [
+      "fori",
+      "forn"
+    ],
+    "body": [
+      "for (int ${1:i} = ${2:0}; $1 < ${3:n}; $1++) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Loop over a half open range"
+  },
+  "Reverse Range": {
+    "prefix": "forr",
+    "body": [
+      "for (int ${1:i} = ${2:n} - 1; $1 >= 0; $1--) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Loop backwards from n minus one"
+  },
+  "For Each": {
+    "prefix": "fore",
+    "body": [
+      "for (${1:int} ${2:value} : ${3:a}) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Iterate over array or collection values"
+  },
+  "While Loop": {
+    "prefix": "while",
+    "body": [
+      "while (${1:in.nextInt() != 0}) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Loop while an input condition holds"
+  },
+  "Read Array": {
+    "prefix": "readarr",
+    "body": [
+      "int[] ${1:a} = new int[${2:n}];",
+      "for (int i = 0; i < $2; i++) $1[i] = in.nextInt();",
+      "$0"
+    ],
+    "description": "Read n integers with the template reader"
+  },
+  "Read Grid": {
+    "prefix": "readgrid",
+    "body": [
+      "char[][] ${1:grid} = new char[${2:n}][];",
+      "for (int i = 0; i < $2; i++) $1[i] = in.next().toCharArray();",
+      "$0"
+    ],
+    "description": "Read a character grid with the template reader"
+  },
+  "Print Array": {
+    "prefix": "printarr",
+    "body": [
+      "for (int i = 0; i < ${1:a}.length; i++) {",
+      "\tif (i > 0) out.print(\" \");",
+      "\tout.print($1[i]);",
+      "}",
+      "out.println();",
+      "$0"
+    ],
+    "description": "Print space separated values"
+  },
+  "Verdict Output": {
+    "prefix": [
+      "yn",
+      "out"
+    ],
+    "body": [
+      "out.println(\"${1|YES,NO|}\");",
+      "$0"
+    ],
+    "description": "Print a verdict with buffered output"
+  },
+  "Gcd And Lcm": {
+    "prefix": "gcd",
+    "body": [
+      "static long gcd(long a, long b) {",
+      "\t// Nonnegative inputs.",
+      "\twhile (b != 0) { long t = a % b; a = b; b = t; }",
+      "\treturn a;",
+      "}",
+      "static long lcm(long a, long b) {",
+      "\treturn a == 0 || b == 0 ? 0 : a / gcd(a, b) * b; // Result must fit long.",
+      "}",
+      "$0"
+    ],
+    "description": "Gcd and lcm for nonnegative integers"
+  },
+  "Modular Arithmetic": {
+    "prefix": [
+      "modpow",
+      "modinv",
+      "mod"
+    ],
+    "body": [
+      "static final long MOD = ${1|1000000007,998244353|};",
+      "static long modpow(long a, long e, long mod) {",
+      "\t// Requires e >= 0 and 0 < mod <= 2e9.",
+      "\ta = (a % mod + mod) % mod;",
+      "\tlong result = 1 % mod;",
+      "\twhile (e > 0) {",
+      "\t\tif ((e & 1) != 0) result = result * a % mod;",
+      "\t\ta = a * a % mod; e >>= 1;",
+      "\t}",
+      "\treturn result;",
+      "}",
+      "static long modInverse(long a, long mod) {",
+      "\t// Prime mod, with a not divisible by mod.",
+      "\treturn modpow(a, mod - 2, mod);",
+      "}",
+      "$0"
+    ],
+    "description": "Binary power and Fermat inverse modulo a prime"
+  },
+  "Combinations": {
+    "prefix": "ncr",
+    "body": [
+      "static class Combinations {",
+      "\tfinal long mod = ${1|1000000007,998244353|};",
+      "\tfinal long[] fact, invfact;",
+      "\tCombinations(int n) {",
+      "\t\t// Requires 0 <= n < mod.",
+      "\t\tfact = new long[n + 1]; invfact = new long[n + 1]; fact[0] = 1;",
+      "\t\tfor (int i = 1; i <= n; i++) fact[i] = fact[i - 1] * i % mod;",
+      "\t\tlong base = fact[n], e = mod - 2, result = 1;",
+      "\t\twhile (e > 0) { if ((e & 1) != 0) result = result * base % mod; base = base * base % mod; e >>= 1; }",
+      "\t\tinvfact[n] = result;",
+      "\t\tfor (int i = n; i > 0; i--) invfact[i - 1] = invfact[i] * i % mod;",
+      "\t}",
+      "\tlong choose(int n, int r) {",
+      "\t\treturn r < 0 || r > n ? 0 : fact[n] * invfact[r] % mod * invfact[n - r] % mod;",
+      "\t}",
+      "}",
+      "$0"
+    ],
+    "description": "Precomputed combinations modulo a prime"
+  },
+  "Prime Sieve": {
+    "prefix": "sieve",
+    "body": [
+      "static List<Integer> sieve(int n) {",
+      "\tboolean[] composite = new boolean[n + 1];",
+      "\tfor (int p = 2; p <= n / p; p++) {",
+      "\t\tif (!composite[p]) for (long x = (long)p * p; x <= n; x += p) composite[(int)x] = true;",
+      "\t}",
+      "\tList<Integer> primes = new ArrayList<>();",
+      "\tfor (int i = 2; i <= n; i++) if (!composite[i]) primes.add(i);",
+      "\treturn primes;",
+      "}",
+      "$0"
+    ],
+    "description": "Primes up to an inclusive nonnegative limit"
+  },
+  "Prime Factors": {
+    "prefix": "factor",
+    "body": [
+      "static Map<Long, Integer> factorize(long n) {",
+      "\t// Requires n >= 1.",
+      "\tMap<Long, Integer> factors = new LinkedHashMap<>();",
+      "\tfor (long p = 2; p <= n / p; p++) {",
+      "\t\twhile (n % p == 0) { factors.merge(p, 1, Integer::sum); n /= p; }",
+      "\t}",
+      "\tif (n > 1) factors.merge(n, 1, Integer::sum);",
+      "\treturn factors;",
+      "}",
+      "$0"
+    ],
+    "description": "Trial division into prime multiplicities"
+  },
+  "Disjoint Set": {
+    "prefix": "dsu",
+    "body": [
+      "static class DSU {",
+      "\tfinal int[] parent, size;",
+      "\tDSU(int n) { parent = new int[n]; size = new int[n]; for (int i = 0; i < n; i++) { parent[i] = i; size[i] = 1; } }",
+      "\tint find(int x) {",
+      "\t\twhile (x != parent[x]) { parent[x] = parent[parent[x]]; x = parent[x]; }",
+      "\t\treturn x;",
+      "\t}",
+      "\tboolean union(int a, int b) {",
+      "\t\ta = find(a); b = find(b); if (a == b) return false;",
+      "\t\tif (size[a] < size[b]) { int t = a; a = b; b = t; }",
+      "\t\tparent[b] = a; size[a] += size[b]; return true;",
+      "\t}",
+      "}",
+      "$0"
+    ],
+    "description": "Path compression and union by size"
+  },
+  "Fenwick Tree": {
+    "prefix": "bit",
+    "body": [
+      "static class Fenwick {",
+      "\tfinal long[] tree;",
+      "\tFenwick(int n) { tree = new long[n + 1]; }",
+      "\tvoid add(int i, long delta) { for (++i; i < tree.length; i += i & -i) tree[i] += delta; }",
+      "\tlong prefix(int end) { long result = 0; for (; end > 0; end -= end & -end) result += tree[end]; return result; }",
+      "\tlong query(int left, int right) { return prefix(right) - prefix(left); }",
+      "}",
+      "$0"
+    ],
+    "description": "Zero based point add and half open range sum"
+  },
+  "Segment Tree": {
+    "prefix": "segtree",
+    "body": [
+      "static class SegmentTree {",
+      "\tint n = 1;",
+      "\tfinal long identity = ${1:0};",
+      "\tfinal long[] tree;",
+      "\tlong combine(long a, long b) { return ${2:a + b}; }",
+      "\tSegmentTree(long[] a) {",
+      "\t\twhile (n < a.length) n *= 2;",
+      "\t\ttree = new long[2 * n]; Arrays.fill(tree, identity);",
+      "\t\tSystem.arraycopy(a, 0, tree, n, a.length);",
+      "\t\tfor (int i = n - 1; i > 0; i--) tree[i] = combine(tree[2 * i], tree[2 * i + 1]);",
+      "\t}",
+      "\tvoid set(int i, long value) { tree[i += n] = value; while (i > 1) { i /= 2; tree[i] = combine(tree[2 * i], tree[2 * i + 1]); } }",
+      "\tlong query(int left, int right) {",
+      "\t\tlong a = identity, b = identity;",
+      "\t\tfor (left += n, right += n; left < right; left /= 2, right /= 2) {",
+      "\t\t\tif ((left & 1) != 0) a = combine(a, tree[left++]);",
+      "\t\t\tif ((right & 1) != 0) b = combine(tree[--right], b);",
+      "\t\t}",
+      "\t\treturn combine(a, b);",
+      "\t}",
+      "}",
+      "$0"
+    ],
+    "description": "Associative combine with half open queries"
+  },
+  "Sparse Table": {
+    "prefix": "sparse",
+    "body": [
+      "static class SparseTable {",
+      "\tfinal int[][] table;",
+      "\tfinal int[] log;",
+      "\tSparseTable(int[] a) {",
+      "\t\tlog = new int[a.length + 1]; for (int i = 2; i <= a.length; i++) log[i] = log[i / 2] + 1;",
+      "\t\ttable = new int[log[a.length] + 1][]; table[0] = a.clone();",
+      "\t\tfor (int k = 1; k < table.length; k++) {",
+      "\t\t\tint width = 1 << k; table[k] = new int[a.length - width + 1];",
+      "\t\t\tfor (int i = 0; i < table[k].length; i++) table[k][i] = Math.min(table[k - 1][i], table[k - 1][i + width / 2]);",
+      "\t\t}",
+      "\t}",
+      "\tint query(int left, int right) {",
+      "\t\t// Requires a nonempty half open range.",
+      "\t\tint k = log[right - left]; return Math.min(table[k][left], table[k][right - (1 << k)]);",
+      "\t}",
+      "}",
+      "$0"
+    ],
+    "description": "Static range minimum in constant time"
+  },
+  "Monotonic Stack": {
+    "prefix": "monostack",
+    "body": [
+      "static int[] nextGreater(int[] a) {",
+      "\tint[] answer = new int[a.length], stack = new int[a.length]; Arrays.fill(answer, -1);",
+      "\tint size = 0;",
+      "\tfor (int i = 0; i < a.length; i++) {",
+      "\t\twhile (size > 0 && a[stack[size - 1]] < a[i]) answer[stack[--size]] = i;",
+      "\t\tstack[size++] = i;",
+      "\t}",
+      "\treturn answer;",
+      "}",
+      "$0"
+    ],
+    "description": "Index of the next strictly greater element"
+  },
+  "Lowercase Trie": {
+    "prefix": "trie",
+    "body": [
+      "static class Trie {",
+      "\tfinal Trie[] next = new Trie[26];",
+      "\tboolean terminal;",
+      "\tvoid insert(String word) {",
+      "\t\tTrie node = this;",
+      "\t\tfor (int i = 0; i < word.length(); i++) { int c = word.charAt(i) - 'a'; if (node.next[c] == null) node.next[c] = new Trie(); node = node.next[c]; }",
+      "\t\tnode.terminal = true;",
+      "\t}",
+      "\tboolean contains(String word) {",
+      "\t\tTrie node = this;",
+      "\t\tfor (int i = 0; i < word.length(); i++) { node = node.next[word.charAt(i) - 'a']; if (node == null) return false; }",
+      "\t\treturn node.terminal;",
+      "\t}",
+      "}",
+      "$0"
+    ],
+    "description": "Insert and find lowercase Latin words"
+  },
+  "Read Graph": {
+    "prefix": "graph",
+    "body": [
+      "int n = in.nextInt(), m = in.nextInt();",
+      "List<List<Integer>> graph = new ArrayList<>();",
+      "for (int i = 0; i < n; i++) graph.add(new ArrayList<>());",
+      "for (int i = 0; i < m; i++) {",
+      "\tint u = in.nextInt() - ${1|1,0|}, v = in.nextInt() - $1;",
+      "\tgraph.get(u).add(v); graph.get(v).add(u);",
+      "}",
+      "$0"
+    ],
+    "description": "Read undirected edges with index offset"
+  },
+  "Graph Traversals": {
+    "prefix": [
+      "bfs",
+      "dfs"
+    ],
+    "body": [
+      "static int[] bfs(List<List<Integer>> graph, int source) {",
+      "\tint[] dist = new int[graph.size()]; Arrays.fill(dist, -1); dist[source] = 0;",
+      "\tArrayDeque<Integer> queue = new ArrayDeque<>(); queue.add(source);",
+      "\twhile (!queue.isEmpty()) {",
+      "\t\tint u = queue.remove();",
+      "\t\tfor (int v : graph.get(u)) if (dist[v] == -1) { dist[v] = dist[u] + 1; queue.add(v); }",
+      "\t}",
+      "\treturn dist;",
+      "}",
+      "static List<Integer> dfs(List<List<Integer>> graph, int source) {",
+      "\tboolean[] seen = new boolean[graph.size()]; seen[source] = true;",
+      "\tArrayDeque<Integer> stack = new ArrayDeque<>(); stack.push(source);",
+      "\tList<Integer> order = new ArrayList<>();",
+      "\twhile (!stack.isEmpty()) {",
+      "\t\tint u = stack.pop(); order.add(u);",
+      "\t\tfor (int v : graph.get(u)) if (!seen[v]) { seen[v] = true; stack.push(v); }",
+      "\t}",
+      "\treturn order;",
+      "}",
+      "$0"
+    ],
+    "description": "BFS distances and iterative DFS visitation order"
+  },
+  "Dijkstra": {
+    "prefix": "dijkstra",
+    "body": [
+      "static class Edge { final int to; final long weight; Edge(int to, long weight) { this.to = to; this.weight = weight; } }",
+      "static long[] dijkstra(List<List<Edge>> graph, int source) {",
+      "\t// Nonnegative weights; finite path sums below inf.",
+      "\tfinal long inf = 1L << 62;",
+      "\tlong[] dist = new long[graph.size()]; Arrays.fill(dist, inf); dist[source] = 0;",
+      "\tPriorityQueue<long[]> heap = new PriorityQueue<>(Comparator.comparingLong(a -> a[0]));",
+      "\theap.add(new long[]{0, source});",
+      "\twhile (!heap.isEmpty()) {",
+      "\t\tlong[] state = heap.remove(); long cost = state[0]; int u = (int)state[1];",
+      "\t\tif (cost != dist[u]) continue;",
+      "\t\tfor (Edge e : graph.get(u)) if (e.weight < inf - cost && cost + e.weight < dist[e.to]) {",
+      "\t\t\tdist[e.to] = cost + e.weight; heap.add(new long[]{dist[e.to], e.to});",
+      "\t\t}",
+      "\t}",
+      "\treturn dist;",
+      "}",
+      "$0"
+    ],
+    "description": "Heap shortest paths with nonnegative weights"
+  },
+  "Topological Sort": {
+    "prefix": "topo",
+    "body": [
+      "static List<Integer> topologicalSort(List<List<Integer>> graph) {",
+      "\tint[] indegree = new int[graph.size()]; for (List<Integer> edges : graph) for (int v : edges) indegree[v]++;",
+      "\tArrayDeque<Integer> queue = new ArrayDeque<>(); for (int i = 0; i < indegree.length; i++) if (indegree[i] == 0) queue.add(i);",
+      "\tList<Integer> order = new ArrayList<>();",
+      "\twhile (!queue.isEmpty()) { int u = queue.remove(); order.add(u); for (int v : graph.get(u)) if (--indegree[v] == 0) queue.add(v); }",
+      "\treturn order.size() == graph.size() ? order : null;",
+      "}",
+      "$0"
+    ],
+    "description": "Kahn ordering with cycle detection"
+  },
+  "Zero One Bfs": {
+    "prefix": "bfs01",
+    "body": [
+      "static int[] zeroOneBfs(List<List<int[]>> graph, int source) {",
+      "\t// Edges are {vertex, weight}; weights must be zero or one.",
+      "\tint[] dist = new int[graph.size()]; Arrays.fill(dist, Integer.MAX_VALUE); dist[source] = 0;",
+      "\tArrayDeque<int[]> queue = new ArrayDeque<>(); queue.add(new int[]{source, 0});",
+      "\twhile (!queue.isEmpty()) {",
+      "\t\tint[] state = queue.removeFirst(); int u = state[0], cost = state[1]; if (cost != dist[u]) continue;",
+      "\t\tfor (int[] e : graph.get(u)) if (cost + e[1] < dist[e[0]]) {",
+      "\t\t\tdist[e[0]] = cost + e[1]; int[] next = {e[0], dist[e[0]]};",
+      "\t\t\tif (e[1] == 0) queue.addFirst(next); else queue.addLast(next);",
+      "\t\t}",
+      "\t}",
+      "\treturn dist;",
+      "}",
+      "$0"
+    ],
+    "description": "Deque shortest paths with binary edge weights"
+  },
+  "Floyd Warshall": {
+    "prefix": "floyd",
+    "body": [
+      "static void floydWarshall(long[][] dist) {",
+      "\t// Use inf for missing edges, zero diagonal, finite sums within +/-inf.",
+      "\tfinal long inf = 1L << 60;",
+      "\tfor (int k = 0; k < dist.length; k++) for (int i = 0; i < dist.length; i++) for (int j = 0; j < dist.length; j++)",
+      "\t\tif (dist[i][k] < inf && dist[k][j] < inf) dist[i][j] = Math.min(dist[i][j], dist[i][k] + dist[k][j]);",
+      "}",
+      "$0"
+    ],
+    "description": "All pairs shortest paths without negative cycles"
+  },
+  "Grid Bfs": {
+    "prefix": "gridbfs",
+    "body": [
+      "static int[][] gridBfs(char[][] grid, int sx, int sy) {",
+      "\tint n = grid.length, m = grid[0].length;",
+      "\tint[][] dist = new int[n][m]; for (int[] row : dist) Arrays.fill(row, -1);",
+      "\tif (grid[sx][sy] == '#') return dist;",
+      "\tint[] dx = {1, -1, 0, 0}, dy = {0, 0, 1, -1};",
+      "\tArrayDeque<int[]> queue = new ArrayDeque<>(); queue.add(new int[]{sx, sy}); dist[sx][sy] = 0;",
+      "\twhile (!queue.isEmpty()) {",
+      "\t\tint[] cell = queue.remove(); int x = cell[0], y = cell[1];",
+      "\t\tfor (int d = 0; d < 4; d++) {",
+      "\t\t\tint nx = x + dx[d], ny = y + dy[d];",
+      "\t\t\tif (nx >= 0 && nx < n && ny >= 0 && ny < m && grid[nx][ny] != '#' && dist[nx][ny] == -1) {",
+      "\t\t\t\tdist[nx][ny] = dist[x][y] + 1; queue.add(new int[]{nx, ny});",
+      "\t\t\t}",
+      "\t\t}",
+      "\t}",
+      "\treturn dist;",
+      "}",
+      "$0"
+    ],
+    "description": "Four direction shortest paths avoiding walls"
+  },
+  "Binary Search And Bounds": {
+    "prefix": [
+      "bs",
+      "bounds"
+    ],
+    "body": [
+      "static long firstTrue(long lo, long hi, java.util.function.LongPredicate check) {",
+      "\t// Search [lo, hi), returning hi if no answer exists.",
+      "\twhile (lo < hi) { long mid = lo + (hi - lo) / 2; if (check.test(mid)) hi = mid; else lo = mid + 1; }",
+      "\treturn lo;",
+      "}",
+      "static int lowerBound(int[] a, int x) { return (int)firstTrue(0, a.length, i -> a[(int)i] >= x); }",
+      "static int upperBound(int[] a, int x) { return (int)firstTrue(0, a.length, i -> a[(int)i] > x); }",
+      "$0"
+    ],
+    "description": "Monotone search and bounds on sorted arrays"
+  },
+  "Prefix Sums And Tables": {
+    "prefix": [
+      "pref",
+      "pref2",
+      "dp2"
+    ],
+    "body": [
+      "static long[] prefixSums(int[] a) {",
+      "\tlong[] pref = new long[a.length + 1]; for (int i = 0; i < a.length; i++) pref[i + 1] = pref[i] + a[i]; return pref;",
+      "}",
+      "static long[][] prefixGrid(int[][] a) {",
+      "\tint n = a.length, m = n == 0 ? 0 : a[0].length; long[][] pref = new long[n + 1][m + 1];",
+      "\tfor (int i = 0; i < n; i++) for (int j = 0; j < m; j++) pref[i + 1][j + 1] = a[i][j] + pref[i][j + 1] + pref[i + 1][j] - pref[i][j];",
+      "\treturn pref;",
+      "}",
+      "static long[][] dpTable(int n, int m) { return new long[n][m]; }",
+      "$0"
+    ],
+    "description": "Padded prefix sums and independent DP rows"
+  },
+  "Two Pointers And Window": {
+    "prefix": [
+      "twop",
+      "window"
+    ],
+    "body": [
+      "static boolean hasPairSum(int[] a, long target) {",
+      "\t// Sorted input.",
+      "\tint left = 0, right = a.length - 1;",
+      "\twhile (left < right) { long sum = (long)a[left] + a[right]; if (sum == target) return true; if (sum < target) left++; else right--; }",
+      "\treturn false;",
+      "}",
+      "static int longestBoundedSum(int[] a, long limit) {",
+      "\t// Nonnegative values and limit.",
+      "\tint left = 0, best = 0; long sum = 0;",
+      "\tfor (int right = 0; right < a.length; right++) { sum += a[right]; while (sum > limit) sum -= a[left++]; best = Math.max(best, right - left + 1); }",
+      "\treturn best;",
+      "}",
+      "$0"
+    ],
+    "description": "Sorted pair sum and nonnegative sum window"
+  },
+  "String Matching": {
+    "prefix": [
+      "kmp",
+      "zfunc"
+    ],
+    "body": [
+      "static int[] prefixFunction(String s) {",
+      "\tint[] pi = new int[s.length()];",
+      "\tfor (int i = 1; i < s.length(); i++) { int j = pi[i - 1]; while (j > 0 && s.charAt(i) != s.charAt(j)) j = pi[j - 1]; if (s.charAt(i) == s.charAt(j)) j++; pi[i] = j; }",
+      "\treturn pi;",
+      "}",
+      "static int[] zFunction(String s) {",
+      "\tint[] z = new int[s.length()]; int left = 0, right = 0;",
+      "\tfor (int i = 1; i < s.length(); i++) {",
+      "\t\tif (i < right) z[i] = Math.min(right - i, z[i - left]);",
+      "\t\twhile (i + z[i] < s.length() && s.charAt(z[i]) == s.charAt(i + z[i])) z[i]++;",
+      "\t\tif (i + z[i] > right) { left = i; right = i + z[i]; }",
+      "\t}",
+      "\treturn z;",
+      "}",
+      "$0"
+    ],
+    "description": "KMP and Z prefix matching in linear time"
+  },
+  "Rolling Hash": {
+    "prefix": "hash",
+    "body": [
+      "static class RollingHash {",
+      "\tfinal long mod = 1000000007, base = 911382323;",
+      "\tfinal long[] power, pref;",
+      "\tRollingHash(String s) {",
+      "\t\tpower = new long[s.length() + 1]; pref = new long[s.length() + 1]; power[0] = 1;",
+      "\t\tfor (int i = 0; i < s.length(); i++) { power[i + 1] = power[i] * base % mod; pref[i + 1] = (pref[i] * base + s.charAt(i) + 1) % mod; }",
+      "\t}",
+      "\tlong query(int left, int right) { return (pref[right] - pref[left] * power[right - left] % mod + mod) % mod; }",
+      "}",
+      "$0"
+    ],
+    "description": "Half open substring hash with collision risk"
+  },
+  "Contest Utilities": {
+    "prefix": [
+      "util",
+      "debug",
+      "inf",
+      "dirs",
+      "bits",
+      "yes",
+      "no"
+    ],
+    "body": [
+      "static final long INF = 1L << 62;",
+      "static final int[] DX = {1, -1, 0, 0}, DY = {0, 0, 1, -1};",
+      "static void debug(Object... values) { System.err.println(Arrays.deepToString(values)); }",
+      "static void yes(boolean ok) { out.println(ok ? \"YES\" : \"NO\"); }",
+      "static int popcount(long x) { return Long.bitCount(x); }",
+      "static long lowbit(long x) { return x & -x; }",
+      "$0"
+    ],
+    "description": "Constants, verdicts, directions, bits and stderr"
+  },
+  "Wrap Tests": {
+    "prefix": "tests",
+    "body": [
+      "int t = in.nextInt();",
+      "while (t-- > 0) {",
+      "\t$TM_SELECTED_TEXT",
+      "\t$0",
+      "}"
+    ],
+    "description": "Wrap selected code in a multi test loop"
+  }
+}

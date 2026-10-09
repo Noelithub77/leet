@@ -17,6 +17,7 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             cx.new(|cx| Setup {
                 focus: cx.focus_handle(), workspace: workspace.downgrade(), step: 0,
                 language: Language::Cpp, source: Source::NeetCode, python: config.python.clone(),
+                snippet_found: Vec::new(), snippet_scanning: false, snippet_status: String::new(),
                 handle: cx.new(|cx| InputState::new(window, cx)), busy: false, error: None,
                 requirements: (!checking).then_some(practice::toolchain::Setup { requirements: vec![
                     Requirement { label: "C++ compiler".into(), required: true, ready: compiler_ready, detail: "Fixture compiler".into(), setup_url: "https://gcc.gnu.org/install/" },
@@ -31,10 +32,17 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         cx.update_window(handle, |_, window, cx| -> Result<()> {
             window.click("setup-continue", cx);
             ensure!(setup.read(cx).step == 1, "Onboarding prerequisite gate is incorrect for {name}");
-            window.remove_window();
             Ok(())
         })??;
         cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| window.render_frame(cx))?;
+        if pixels && name == "optional-server" { cx.capture_screenshot(handle)?.save(output.join("onboarding-snippets.png"))?; }
+        cx.update_window(handle, |_, window, cx| -> Result<()> {
+            window.click("setup-continue", cx);
+            ensure!(setup.read(cx).step == 2, "Snippet onboarding could not be skipped");
+            window.remove_window();
+            Ok(())
+        })??;
     }
-    Ok(serde_json::json!({"fixture":"onboarding","passed":true,"pixels":pixels,"checks":["missing clangd permits Continue","missing compiler permits Continue","pending checks permit Continue"]}))
+    Ok(serde_json::json!({"fixture":"onboarding","passed":true,"pixels":pixels,"checks":["missing clangd permits Continue","missing compiler permits Continue","pending checks permit Continue","snippet step is skippable"]}))
 }

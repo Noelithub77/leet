@@ -1,0 +1,744 @@
+{
+  "Single Test": {
+    "prefix": "cp",
+    "body": [
+      "import sys",
+      "input = sys.stdin.readline",
+      "",
+      "def solve():",
+      "\t$0",
+      "\tpass",
+      "",
+      "if __name__ == \"__main__\":",
+      "\tsolve()"
+    ],
+    "description": "Fast input contest template",
+    "isFileTemplate": true
+  },
+  "Multiple Tests": {
+    "prefix": "cpt",
+    "body": [
+      "import sys",
+      "input = sys.stdin.readline",
+      "",
+      "def solve():",
+      "\t$0",
+      "\tpass",
+      "",
+      "if __name__ == \"__main__\":",
+      "\tfor _ in range(int(input())):",
+      "\t\tsolve()"
+    ],
+    "description": "Fast input contest template",
+    "isFileTemplate": true
+  },
+  "Deep Recursion": {
+    "prefix": "cprec",
+    "body": [
+      "import sys",
+      "import threading",
+      "input = sys.stdin.readline",
+      "sys.setrecursionlimit(1_000_000)",
+      "threading.stack_size(1 << 27)",
+      "",
+      "def solve():",
+      "\t$0",
+      "\tpass",
+      "",
+      "if __name__ == \"__main__\":",
+      "\tworker = threading.Thread(target=solve)",
+      "\tworker.start()",
+      "\tworker.join()"
+    ],
+    "description": "Larger stack for recursive graph traversal",
+    "isFileTemplate": true
+  },
+  "For Range": {
+    "prefix": "fori",
+    "body": [
+      "for ${1:i} in range(${2:start}, ${3:stop}):",
+      "\t$0",
+      "\tpass"
+    ],
+    "description": "Loop over a half open range"
+  },
+  "Reverse Range": {
+    "prefix": "forr",
+    "body": [
+      "for ${1:i} in range(${2:n} - 1, -1, -1):",
+      "\t$0",
+      "\tpass"
+    ],
+    "description": "Loop backwards from n minus one"
+  },
+  "For Count": {
+    "prefix": "forn",
+    "body": [
+      "for ${1:i} in range(${2:n}):",
+      "\tprint($1)",
+      "\t$0"
+    ],
+    "description": "Loop n times with a mirrored index"
+  },
+  "For Each": {
+    "prefix": "fore",
+    "body": [
+      "for ${1:value} in ${2:values}:",
+      "\t$0",
+      "\tpass"
+    ],
+    "description": "Iterate over values"
+  },
+  "While Loop": {
+    "prefix": "while",
+    "body": [
+      "while ${1:False}:",
+      "\t$0",
+      "\tpass"
+    ],
+    "description": "Loop while a condition holds"
+  },
+  "Read Array": {
+    "prefix": "readarr",
+    "body": [
+      "${1:a} = list(map(int, input().split()))",
+      "$0"
+    ],
+    "description": "Read an integer array"
+  },
+  "Read Grid": {
+    "prefix": "readgrid",
+    "body": [
+      "${1:grid} = [list(input().rstrip(\"\\n\")) for _ in range(${2:n})]",
+      "$0"
+    ],
+    "description": "Read a character grid"
+  },
+  "Print Array": {
+    "prefix": "printarr",
+    "body": [
+      "print(*${1:a})",
+      "$0"
+    ],
+    "description": "Print space separated values"
+  },
+  "Yes Or No": {
+    "prefix": "yn",
+    "body": [
+      "print(\"${1|YES,NO|}\")",
+      "$0"
+    ],
+    "description": "Print a verdict choice"
+  },
+  "Buffered Output": {
+    "prefix": "out",
+    "body": [
+      "sys.stdout.write(\"\\n\".join(map(str, ${1:answers})) + \"\\n\")",
+      "$0"
+    ],
+    "description": "Write accumulated answers"
+  },
+  "Gcd And Lcm": {
+    "prefix": [
+      "gcd",
+      "util",
+      "debug",
+      "inf",
+      "mod",
+      "dirs",
+      "bits",
+      "yes",
+      "no"
+    ],
+    "body": [
+      "from math import gcd",
+      "",
+      "def lcm(a, b):",
+      "\treturn abs(a // gcd(a, b) * b) if a and b else 0",
+      "",
+      "INF = float(\"inf\")",
+      "MOD = ${1|1000000007,998244353|}",
+      "DIRECTIONS = ((1, 0), (-1, 0), (0, 1), (0, -1))",
+      "",
+      "def debug(*values):",
+      "\timport sys",
+      "\tprint(*values, file=sys.stderr)",
+      "",
+      "def yes(ok=True):",
+      "\tprint(\"YES\" if ok else \"NO\")",
+      "",
+      "def no():",
+      "\tyes(False)",
+      "",
+      "def lowbit(x):",
+      "\treturn x & -x",
+      "",
+      "def popcount(x):",
+      "\treturn x.bit_count()",
+      "$0"
+    ],
+    "description": "Gcd, lcm, verdicts, constants and bit utilities"
+  },
+  "Modular Power": {
+    "prefix": "modpow",
+    "body": [
+      "${1:result} = pow(${2:base}, ${3:exponent}, ${4:mod})",
+      "$0"
+    ],
+    "description": "Power modulo a positive modulus"
+  },
+  "Modular Inverse": {
+    "prefix": "modinv",
+    "body": [
+      "${1:inverse} = pow(${2:a}, -1, ${3:mod})",
+      "$0"
+    ],
+    "description": "Inverse for coprime base and modulus"
+  },
+  "Combinations": {
+    "prefix": "ncr",
+    "body": [
+      "MOD = ${1|1000000007,998244353|}",
+      "",
+      "def build_combinations(n):",
+      "\t# Requires n < MOD, with MOD prime.",
+      "\tfact = [1] * (n + 1)",
+      "\tfor i in range(1, n + 1):",
+      "\t\tfact[i] = fact[i - 1] * i % MOD",
+      "\tinvfact = [1] * (n + 1)",
+      "\tinvfact[n] = pow(fact[n], MOD - 2, MOD)",
+      "\tfor i in range(n, 0, -1):",
+      "\t\tinvfact[i - 1] = invfact[i] * i % MOD",
+      "\tdef choose(n, r):",
+      "\t\treturn fact[n] * invfact[r] % MOD * invfact[n - r] % MOD if 0 <= r <= n else 0",
+      "\treturn choose",
+      "$0"
+    ],
+    "description": "Factorials and combinations modulo a prime"
+  },
+  "Prime Sieve": {
+    "prefix": "sieve",
+    "body": [
+      "def sieve(n):",
+      "\tprime = [True] * (n + 1)",
+      "\tprime[0] = False",
+      "\tif n >= 1:",
+      "\t\tprime[1] = False",
+      "\tp = 2",
+      "\twhile p * p <= n:",
+      "\t\tif prime[p]:",
+      "\t\t\tfor x in range(p * p, n + 1, p):",
+      "\t\t\t\tprime[x] = False",
+      "\t\tp += 1",
+      "\treturn [i for i in range(2, n + 1) if prime[i]]",
+      "$0"
+    ],
+    "description": "Primes up to an inclusive nonnegative limit"
+  },
+  "Prime Factors": {
+    "prefix": "factor",
+    "body": [
+      "def factorize(n):",
+      "\t# Requires n >= 1.",
+      "\tfactors = {}",
+      "\tp = 2",
+      "\twhile p * p <= n:",
+      "\t\twhile n % p == 0:",
+      "\t\t\tfactors[p] = factors.get(p, 0) + 1",
+      "\t\t\tn //= p",
+      "\t\tp += 1",
+      "\tif n > 1:",
+      "\t\tfactors[n] = factors.get(n, 0) + 1",
+      "\treturn factors",
+      "$0"
+    ],
+    "description": "Trial division into prime multiplicities"
+  },
+  "Disjoint Set": {
+    "prefix": "dsu",
+    "body": [
+      "class DSU:",
+      "\tdef __init__(self, n):",
+      "\t\tself.parent = list(range(n))",
+      "\t\tself.size = [1] * n",
+      "\tdef find(self, x):",
+      "\t\twhile x != self.parent[x]:",
+      "\t\t\tself.parent[x] = self.parent[self.parent[x]]",
+      "\t\t\tx = self.parent[x]",
+      "\t\treturn x",
+      "\tdef union(self, a, b):",
+      "\t\ta, b = self.find(a), self.find(b)",
+      "\t\tif a == b:",
+      "\t\t\treturn False",
+      "\t\tif self.size[a] < self.size[b]:",
+      "\t\t\ta, b = b, a",
+      "\t\tself.parent[b] = a",
+      "\t\tself.size[a] += self.size[b]",
+      "\t\treturn True",
+      "$0"
+    ],
+    "description": "Path compression and union by size"
+  },
+  "Fenwick Tree": {
+    "prefix": "bit",
+    "body": [
+      "class Fenwick:",
+      "\tdef __init__(self, n):",
+      "\t\tself.tree = [0] * (n + 1)",
+      "\tdef add(self, i, delta):",
+      "\t\ti += 1",
+      "\t\twhile i < len(self.tree):",
+      "\t\t\tself.tree[i] += delta",
+      "\t\t\ti += i & -i",
+      "\tdef prefix(self, end):",
+      "\t\ttotal = 0",
+      "\t\twhile end > 0:",
+      "\t\t\ttotal += self.tree[end]",
+      "\t\t\tend -= end & -end",
+      "\t\treturn total",
+      "\tdef query(self, left, right):",
+      "\t\treturn self.prefix(right) - self.prefix(left)",
+      "$0"
+    ],
+    "description": "Zero based point add and half open range sum"
+  },
+  "Segment Tree": {
+    "prefix": "segtree",
+    "body": [
+      "class SegmentTree:",
+      "\tdef __init__(self, values):",
+      "\t\tself.n = 1",
+      "\t\twhile self.n < len(values):",
+      "\t\t\tself.n *= 2",
+      "\t\tself.identity = ${1:0}",
+      "\t\tself.tree = [self.identity] * (2 * self.n)",
+      "\t\tself.tree[self.n:self.n + len(values)] = values",
+      "\t\tfor i in range(self.n - 1, 0, -1):",
+      "\t\t\tself.tree[i] = self.combine(self.tree[2 * i], self.tree[2 * i + 1])",
+      "\t@staticmethod",
+      "\tdef combine(a, b):",
+      "\t\treturn ${2:a + b}",
+      "\tdef set(self, i, value):",
+      "\t\ti += self.n",
+      "\t\tself.tree[i] = value",
+      "\t\twhile i > 1:",
+      "\t\t\ti //= 2",
+      "\t\t\tself.tree[i] = self.combine(self.tree[2 * i], self.tree[2 * i + 1])",
+      "\tdef query(self, left, right):",
+      "\t\tleft, right = left + self.n, right + self.n",
+      "\t\ta = b = self.identity",
+      "\t\twhile left < right:",
+      "\t\t\tif left & 1:",
+      "\t\t\t\ta = self.combine(a, self.tree[left])",
+      "\t\t\t\tleft += 1",
+      "\t\t\tif right & 1:",
+      "\t\t\t\tright -= 1",
+      "\t\t\t\tb = self.combine(self.tree[right], b)",
+      "\t\t\tleft //= 2",
+      "\t\t\tright //= 2",
+      "\t\treturn self.combine(a, b)",
+      "$0"
+    ],
+    "description": "Associative combine with half open queries"
+  },
+  "Sparse Table": {
+    "prefix": "sparse",
+    "body": [
+      "class SparseTable:",
+      "\tdef __init__(self, values):",
+      "\t\tself.table = [list(values)]",
+      "\t\twidth = 2",
+      "\t\twhile width <= len(values):",
+      "\t\t\tprev = self.table[-1]",
+      "\t\t\thalf = width // 2",
+      "\t\t\tself.table.append([min(prev[i], prev[i + half]) for i in range(len(values) - width + 1)])",
+      "\t\t\twidth *= 2",
+      "\tdef query(self, left, right):",
+      "\t\t# Requires a nonempty half open range.",
+      "\t\tk = (right - left).bit_length() - 1",
+      "\t\treturn min(self.table[k][left], self.table[k][right - (1 << k)])",
+      "$0"
+    ],
+    "description": "Static range minimum in constant time"
+  },
+  "Monotonic Stack": {
+    "prefix": "monostack",
+    "body": [
+      "def next_greater(a):",
+      "\tanswer = [-1] * len(a)",
+      "\tstack = []",
+      "\tfor i, value in enumerate(a):",
+      "\t\twhile stack and a[stack[-1]] < value:",
+      "\t\t\tanswer[stack.pop()] = i",
+      "\t\tstack.append(i)",
+      "\treturn answer",
+      "$0"
+    ],
+    "description": "Index of the next strictly greater element"
+  },
+  "Trie": {
+    "prefix": "trie",
+    "body": [
+      "class Trie:",
+      "\tdef __init__(self):",
+      "\t\tself.children = [{}]",
+      "\t\tself.terminal = [False]",
+      "\tdef insert(self, word):",
+      "\t\tnode = 0",
+      "\t\tfor char in word:",
+      "\t\t\tif char not in self.children[node]:",
+      "\t\t\t\tself.children[node][char] = len(self.children)",
+      "\t\t\t\tself.children.append({})",
+      "\t\t\t\tself.terminal.append(False)",
+      "\t\t\tnode = self.children[node][char]",
+      "\t\tself.terminal[node] = True",
+      "\tdef contains(self, word):",
+      "\t\tnode = 0",
+      "\t\tfor char in word:",
+      "\t\t\tif char not in self.children[node]:",
+      "\t\t\t\treturn False",
+      "\t\t\tnode = self.children[node][char]",
+      "\t\treturn self.terminal[node]",
+      "$0"
+    ],
+    "description": "Insert and find words in a trie"
+  },
+  "Read Graph": {
+    "prefix": "graph",
+    "body": [
+      "n, m = map(int, input().split())",
+      "graph = [[] for _ in range(n)]",
+      "for _ in range(m):",
+      "\tu, v = map(int, input().split())",
+      "\tu -= ${1|1,0|}",
+      "\tv -= $1",
+      "\tgraph[u].append(v)",
+      "\tgraph[v].append(u)",
+      "$0"
+    ],
+    "description": "Read undirected edges with index offset"
+  },
+  "Breadth First Search": {
+    "prefix": "bfs",
+    "body": [
+      "from collections import deque",
+      "",
+      "def bfs(graph, source):",
+      "\tdist = [-1] * len(graph)",
+      "\tdist[source] = 0",
+      "\tqueue = deque([source])",
+      "\twhile queue:",
+      "\t\tu = queue.popleft()",
+      "\t\tfor v in graph[u]:",
+      "\t\t\tif dist[v] == -1:",
+      "\t\t\t\tdist[v] = dist[u] + 1",
+      "\t\t\t\tqueue.append(v)",
+      "\treturn dist",
+      "$0"
+    ],
+    "description": "Unweighted shortest paths"
+  },
+  "Iterative Depth First Search": {
+    "prefix": "dfs",
+    "body": [
+      "def dfs(graph, source):",
+      "\tseen = [False] * len(graph)",
+      "\tseen[source] = True",
+      "\tstack = [source]",
+      "\torder = []",
+      "\twhile stack:",
+      "\t\tu = stack.pop()",
+      "\t\torder.append(u)",
+      "\t\tfor v in graph[u]:",
+      "\t\t\tif not seen[v]:",
+      "\t\t\t\tseen[v] = True",
+      "\t\t\t\tstack.append(v)",
+      "\treturn order",
+      "$0"
+    ],
+    "description": "Visit reachable vertices without recursion"
+  },
+  "Dijkstra": {
+    "prefix": "dijkstra",
+    "body": [
+      "from heapq import heappop, heappush",
+      "",
+      "def dijkstra(graph, source):",
+      "\t# Edges are (vertex, nonnegative weight).",
+      "\tdist = [float(\"inf\")] * len(graph)",
+      "\tdist[source] = 0",
+      "\theap = [(0, source)]",
+      "\twhile heap:",
+      "\t\tcost, u = heappop(heap)",
+      "\t\tif cost != dist[u]:",
+      "\t\t\tcontinue",
+      "\t\tfor v, weight in graph[u]:",
+      "\t\t\tif cost + weight < dist[v]:",
+      "\t\t\t\tdist[v] = cost + weight",
+      "\t\t\t\theappush(heap, (dist[v], v))",
+      "\treturn dist",
+      "$0"
+    ],
+    "description": "Shortest paths for nonnegative edge weights"
+  },
+  "Topological Sort": {
+    "prefix": "topo",
+    "body": [
+      "from collections import deque",
+      "",
+      "def topological_sort(graph):",
+      "\tindegree = [0] * len(graph)",
+      "\tfor edges in graph:",
+      "\t\tfor v in edges:",
+      "\t\t\tindegree[v] += 1",
+      "\tqueue = deque(i for i, degree in enumerate(indegree) if degree == 0)",
+      "\torder = []",
+      "\twhile queue:",
+      "\t\tu = queue.popleft()",
+      "\t\torder.append(u)",
+      "\t\tfor v in graph[u]:",
+      "\t\t\tindegree[v] -= 1",
+      "\t\t\tif indegree[v] == 0:",
+      "\t\t\t\tqueue.append(v)",
+      "\treturn order if len(order) == len(graph) else None",
+      "$0"
+    ],
+    "description": "Kahn ordering with cycle detection"
+  },
+  "Zero One Bfs": {
+    "prefix": "bfs01",
+    "body": [
+      "from collections import deque",
+      "",
+      "def zero_one_bfs(graph, source):",
+      "\t# Weights must be zero or one.",
+      "\tdist = [float(\"inf\")] * len(graph)",
+      "\tdist[source] = 0",
+      "\tqueue = deque([(source, 0)])",
+      "\twhile queue:",
+      "\t\tu, cost = queue.popleft()",
+      "\t\tif cost != dist[u]:",
+      "\t\t\tcontinue",
+      "\t\tfor v, weight in graph[u]:",
+      "\t\t\tif cost + weight < dist[v]:",
+      "\t\t\t\tdist[v] = cost + weight",
+      "\t\t\t\tif weight == 0:",
+      "\t\t\t\t\tqueue.appendleft((v, dist[v]))",
+      "\t\t\t\telse:",
+      "\t\t\t\t\tqueue.append((v, dist[v]))",
+      "\treturn dist",
+      "$0"
+    ],
+    "description": "Shortest paths with binary edge weights"
+  },
+  "Floyd Warshall": {
+    "prefix": "floyd",
+    "body": [
+      "def floyd_warshall(dist):",
+      "\t# Initialize absent edges to infinity and diagonal to zero.",
+      "\tn = len(dist)",
+      "\tfor k in range(n):",
+      "\t\tfor i in range(n):",
+      "\t\t\tfor j in range(n):",
+      "\t\t\t\tdist[i][j] = min(dist[i][j], dist[i][k] + dist[k][j])",
+      "\treturn dist",
+      "$0"
+    ],
+    "description": "All pairs shortest paths without negative cycles"
+  },
+  "Grid Bfs": {
+    "prefix": "gridbfs",
+    "body": [
+      "from collections import deque",
+      "",
+      "def grid_bfs(grid, start):",
+      "\tn, m = len(grid), len(grid[0])",
+      "\tdist = [[-1] * m for _ in range(n)]",
+      "\tx, y = start",
+      "\tif grid[x][y] == \"#\":",
+      "\t\treturn dist",
+      "\tdist[x][y] = 0",
+      "\tqueue = deque([start])",
+      "\twhile queue:",
+      "\t\tx, y = queue.popleft()",
+      "\t\tfor dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):",
+      "\t\t\tnx, ny = x + dx, y + dy",
+      "\t\t\tif 0 <= nx < n and 0 <= ny < m and grid[nx][ny] != \"#\" and dist[nx][ny] == -1:",
+      "\t\t\t\tdist[nx][ny] = dist[x][y] + 1",
+      "\t\t\t\tqueue.append((nx, ny))",
+      "\treturn dist",
+      "$0"
+    ],
+    "description": "Four direction shortest paths avoiding walls"
+  },
+  "Binary Search Answer": {
+    "prefix": "bs",
+    "body": [
+      "def first_true(lo, hi, check):",
+      "\t# Search [lo, hi), returning hi when no answer exists.",
+      "\twhile lo < hi:",
+      "\t\tmid = lo + (hi - lo) // 2",
+      "\t\tif check(mid):",
+      "\t\t\thi = mid",
+      "\t\telse:",
+      "\t\t\tlo = mid + 1",
+      "\treturn lo",
+      "$0"
+    ],
+    "description": "First true position for a monotone predicate"
+  },
+  "Bounds": {
+    "prefix": "bounds",
+    "body": [
+      "from bisect import bisect_left, bisect_right",
+      "${1:left} = bisect_left(${2:a}, ${3:x})",
+      "${4:right} = bisect_right($2, $3)",
+      "$0"
+    ],
+    "description": "Lower and upper insertion positions in a sorted list"
+  },
+  "Memoization": {
+    "prefix": "memo",
+    "body": [
+      "from functools import lru_cache",
+      "",
+      "@lru_cache(maxsize=None)",
+      "def ${1:dp}(${2:state}):",
+      "\t$0",
+      "\treturn 0"
+    ],
+    "description": "Memoize a recurrence with hashable arguments"
+  },
+  "Dp Table": {
+    "prefix": "dp2",
+    "body": [
+      "${1:dp} = [[${2:0}] * ${3:m} for _ in range(${4:n})]",
+      "$0"
+    ],
+    "description": "Initialize independent rows of a two dimensional table"
+  },
+  "Prefix Sums": {
+    "prefix": "pref",
+    "body": [
+      "def prefix_sums(a):",
+      "\tpref = [0]",
+      "\tfor value in a:",
+      "\t\tpref.append(pref[-1] + value)",
+      "\treturn pref",
+      "$0"
+    ],
+    "description": "Range sum is pref[right] minus pref[left]"
+  },
+  "Grid Prefix Sums": {
+    "prefix": "pref2",
+    "body": [
+      "def prefix_grid(a):",
+      "\tn, m = len(a), len(a[0]) if a else 0",
+      "\tpref = [[0] * (m + 1) for _ in range(n + 1)]",
+      "\tfor i in range(n):",
+      "\t\tfor j in range(m):",
+      "\t\t\tpref[i + 1][j + 1] = a[i][j] + pref[i][j + 1] + pref[i + 1][j] - pref[i][j]",
+      "\treturn pref",
+      "$0"
+    ],
+    "description": "Padded two dimensional prefix sums"
+  },
+  "Two Pointers": {
+    "prefix": "twop",
+    "body": [
+      "def has_pair_sum(a, target):",
+      "\t# Requires a sorted array.",
+      "\tleft, right = 0, len(a) - 1",
+      "\twhile left < right:",
+      "\t\ttotal = a[left] + a[right]",
+      "\t\tif total == target:",
+      "\t\t\treturn True",
+      "\t\tif total < target:",
+      "\t\t\tleft += 1",
+      "\t\telse:",
+      "\t\t\tright -= 1",
+      "\treturn False",
+      "$0"
+    ],
+    "description": "Find a target pair sum in sorted values"
+  },
+  "Sliding Window": {
+    "prefix": "window",
+    "body": [
+      "def longest_bounded_sum(a, limit):",
+      "\t# Requires nonnegative values and limit.",
+      "\tleft = total = best = 0",
+      "\tfor right, value in enumerate(a):",
+      "\t\ttotal += value",
+      "\t\twhile total > limit:",
+      "\t\t\ttotal -= a[left]",
+      "\t\t\tleft += 1",
+      "\t\tbest = max(best, right - left + 1)",
+      "\treturn best",
+      "$0"
+    ],
+    "description": "Longest nonnegative window within a sum limit"
+  },
+  "Prefix Function": {
+    "prefix": "kmp",
+    "body": [
+      "def prefix_function(s):",
+      "\tpi = [0] * len(s)",
+      "\tfor i in range(1, len(s)):",
+      "\t\tj = pi[i - 1]",
+      "\t\twhile j and s[i] != s[j]:",
+      "\t\t\tj = pi[j - 1]",
+      "\t\tif s[i] == s[j]:",
+      "\t\t\tj += 1",
+      "\t\tpi[i] = j",
+      "\treturn pi",
+      "$0"
+    ],
+    "description": "KMP prefix function in linear time"
+  },
+  "Z Function": {
+    "prefix": "zfunc",
+    "body": [
+      "def z_function(s):",
+      "\tz = [0] * len(s)",
+      "\tleft = right = 0",
+      "\tfor i in range(1, len(s)):",
+      "\t\tif i < right:",
+      "\t\t\tz[i] = min(right - i, z[i - left])",
+      "\t\twhile i + z[i] < len(s) and s[z[i]] == s[i + z[i]]:",
+      "\t\t\tz[i] += 1",
+      "\t\tif i + z[i] > right:",
+      "\t\t\tleft, right = i, i + z[i]",
+      "\treturn z",
+      "$0"
+    ],
+    "description": "Prefix match lengths in linear time"
+  },
+  "Rolling Hash": {
+    "prefix": "hash",
+    "body": [
+      "class RollingHash:",
+      "\tdef __init__(self, s, base=911382323, mod=1000000007):",
+      "\t\tself.mod = mod",
+      "\t\tself.power = [1]",
+      "\t\tself.prefix = [0]",
+      "\t\tfor char in s:",
+      "\t\t\tself.power.append(self.power[-1] * base % mod)",
+      "\t\t\tself.prefix.append((self.prefix[-1] * base + ord(char) + 1) % mod)",
+      "\tdef query(self, left, right):",
+      "\t\treturn (self.prefix[right] - self.prefix[left] * self.power[right - left]) % self.mod",
+      "$0"
+    ],
+    "description": "Half open substring hash with collision risk"
+  },
+  "Wrap Tests": {
+    "prefix": "tests",
+    "body": [
+      "for _ in range(int(input())):",
+      "\t$TM_SELECTED_TEXT",
+      "\t$0",
+      "\tpass"
+    ],
+    "description": "Wrap selected code in a multi test loop"
+  }
+}

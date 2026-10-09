@@ -7,11 +7,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use gpui_kit::component::input::{Editor, EditorState, InputEvent, TabSize};
+use gpui_kit::component::input::{EditorState, InputEvent, TabSize};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::*;
-use gpui_kit::prelude::FluentBuilder as _;
 use practice::config::Config;
 use practice::creds::{self, Account};
 use practice::db::Db;
@@ -59,6 +58,7 @@ pub enum Center {
     Editor,
     Roadmap,
     Settings,
+    Snippets,
 }
 
 pub enum Judge {
@@ -121,57 +121,11 @@ impl Session {
     }
 }
 
-/// The editor in its own view, so typing re-renders only the editor.
-pub struct EditorPane { state: Entity<EditorState>, _observe: Subscription }
-impl EditorPane {
-    pub fn new(state: Entity<EditorState>, cx: &mut Context<Self>) -> Self {
-        let observe = cx.observe(&state, |_, _, cx| cx.notify());
-        Self { state, _observe: observe }
-    }
-}
-
-
-impl Render for EditorPane {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let state = self.state.read(cx);
-        let hover = state.diagnostics().and_then(|set| set.iter().find_map(|entry| {
-            let mut bounds = state.range_to_bounds(&entry.range)?;
-            bounds.size.width = bounds.size.width.max(px(8.));
-            bounds.contains(&window.mouse_position()).then(|| (entry.message.clone(), bounds))
-        }));
-        let input_bounds = state.input_bounds();
-        let origin = input_bounds.origin;
-        let cursor = state.cursor_layout().map(|(bounds, _)| bounds);
-        // The default diagnostic popover sits on the source line. Keep its squiggles,
-        // and place the message below the hovered range instead.
-        self.state.update(cx, |editor, cx| editor.clear_diagnostic_popover(cx));
-        div().relative().size_full().on_mouse_move(cx.listener(|this, _, _, cx| {
-            this.state.update(cx, |editor, cx| editor.clear_diagnostic_popover(cx)); cx.notify();
-        })).on_action(cx.listener(|this, _: &crate::language_server::Complete, window, cx| {
-            let editor = this.state.clone();
-            let state = editor.read(cx); let offset = state.cursor();
-            let Some(provider) = state.lsp().completion_provider.clone() else { return; };
-            let text = state.text().clone(); let snapshot = text.to_string();
-            let start = snapshot[..offset].char_indices().rev().find(|(_, ch)| !ch.is_alphanumeric() && *ch != '_').map_or(0, |(index, ch)| index + ch.len_utf8());
-            let query = snapshot[start..offset].to_owned();
-            let task = provider.completions(&text, offset, lsp_types::CompletionContext { trigger_kind: lsp_types::CompletionTriggerKind::INVOKED, trigger_character: None }, window, cx);
-            cx.spawn_in(window, async move |_, cx| {
-                if let Ok(response) = task.await {
-                    let items = match response { lsp_types::CompletionResponse::Array(items) => items, lsp_types::CompletionResponse::List(list) => list.items };
-                    let _ = editor.update(cx, |editor, cx| { if editor.cursor() == offset && editor.value().as_str() == snapshot { editor.present_completion_items(start, &query, items, cx); } });
-                }
-            }).detach();
-        })).child(Editor::new(&self.state).bordered(false).h_full())
-            .when_some(hover, |view, (message, bounds)| view.child(deferred(
-                div().absolute().left((cursor.unwrap_or(bounds).origin.x - origin.x).clamp(px(0.), (input_bounds.size.width - px(420.)).max(px(0.))))
-                    .top(cursor.unwrap_or(bounds).bottom().max(bounds.bottom()) - origin.y + px(8.)).max_w(px(420.)).max_h(px(180.)).id("hovered-diagnostic").overflow_y_scroll().p_3().rounded_lg()
-                    .bg(rgb(0x202024)).border_1().border_color(rgb(0xffa6a6).opacity(0.4)).shadow_md()
-                    .text_sm().text_color(rgb(0xffb4b4)).child(message)
-            )))
-    }
-}
+pub use crate::snippets::expansion::EditorPane;
 
 pub struct Workspace {
+    pub snippet_dir: PathBuf,
+    pub snippet_editor: Option<Entity<crate::snippets::SnippetEditor>>,
     pub companion_task: Option<Task<()>>,
     pub intelligence: crate::language_server::Intelligence,
     pub onboarding: Option<Entity<crate::onboarding::Setup>>,
@@ -240,6 +194,8 @@ impl Workspace {
         let db = Arc::new(Db::open(&practice::config::database_path()).expect("open leet database"));
         let accounts = [Account::LeetCode, Account::NeetCode].map(|account| creds::load(account).ok());
         let mut this = Self::from_storage(config, db, accounts.clone(), window, cx);
+        this.snippet_dir = practice::snippets::store::dir();
+        this.reload_snippets(cx);
         this.assist.update(cx, |assist, cx| assist.detect(cx));
         let workspace = this.config.workspace.clone();
         cx.background_spawn(async move {
@@ -293,6 +249,8 @@ impl Workspace {
         let ai_chip = cx.new(|cx| crate::ai::Chip::new(weak.clone(), assist.clone(), cx));
         let debugger = cx.new(|cx| crate::debug_view::Debugger::new(weak, assist.clone(), cx));
         let mut this = Self {
+            snippet_dir: config.workspace.join(".fixture-snippets"),
+            snippet_editor: None,
             companion_task: None,
             onboarding: None,
             home: crate::home::HomeState::default(),
@@ -331,7 +289,7 @@ impl Workspace {
             session: None,
             tabs: vec![],
             active_tab: None,
-            editor_pane: cx.new(|cx| EditorPane::new(editor.clone(), cx)),
+            editor_pane: cx.new(|cx| EditorPane::new(editor.clone(), config.preferred_language, window, cx)),
             editor,
             editor_subscription: Some(editor_sub),
             statement: cx.new(|_| Statement::default()),
@@ -717,11 +675,12 @@ impl Workspace {
         let language = session.language;
         let (db, client) = (self.db.clone(), self.client.clone());
         let workspace = self.config.workspace.clone();
+        let template = self.starting_snippet(language,cx);
         cx.spawn_in(window, async move |this, cx| {
             let fetch_slug = slug.clone();
             let loaded = cx
                 .background_spawn(async move {
-                    load_question(&db, &client, &workspace, &fetch_slug, language)
+                    load_question(&db, &client, &workspace, &fetch_slug, language, template.as_deref())
                 })
                 .await;
             let _ = this.update_in(cx, |this, window, cx| {
@@ -752,12 +711,13 @@ impl Workspace {
             self.toast(Notification::error("Solution could not be saved; language kept"), window, cx);
             return;
         }
+        let template = self.starting_snippet(language,cx);
         self.language_picker.loading = true;
         let (db, client, directory) = (self.db.clone(), self.client.clone(), self.config.workspace.clone());
         cx.notify();
         cx.spawn_in(window, async move |this, cx| {
             let fetch_slug = slug.clone();
-            let loaded = cx.background_spawn(async move { load_question(&db, &client, &directory, &fetch_slug, language) }).await;
+            let loaded = cx.background_spawn(async move { load_question(&db, &client, &directory, &fetch_slug, language, template.as_deref()) }).await;
             let _ = this.update_in(cx, |this, window, cx| {
                 this.language_picker.loading = false;
                 if this.active_tab != tab || this.editor != editor || !this.session.as_ref().is_some_and(|session| session.slug == slug && session.language == previous && !session.running && !matches!(session.judge, Some(Judge::Running { .. }))) { cx.notify(); return; }
@@ -831,7 +791,18 @@ impl Workspace {
             *s = statement;
             cx.notify();
         });
+        let path=self.session.as_ref().map(|s|s.path.clone());
+        self.editor_pane.update(cx,|pane,cx|{pane.path=path;cx.notify();});
         self.editor.update(cx, |e, cx| e.set_value(code, window, cx));
+        if let Some(session)=&self.session && (session.slug.starts_with("cf:") || session.slug.starts_with("cc:"))
+            && let Some(name)=self.config.snippets.templates.get(session.language.id()) {
+            let snippet=self.editor_pane.read(cx).library.iter().find(|s|s.name==*name&&s.applies_to(session.language)&&s.template).cloned();
+            if let Some(snippet)=snippet {
+                let expansion=practice::snippets::body::preview(&snippet.body);
+                let document=self.editor.read(cx).value().to_string();
+                if !expansion.truncated && document==expansion.text {self.editor_pane.update(cx,|pane,cx|pane.activate(expansion,0,document,cx));}
+            }
+        }
         if let Some(error) = statement_error { self.toast(Notification::warning(format!("Full statement unavailable: {error}")), window, cx); }
         if self.focus_area == Focus::Editor {
             self.focus_editor(window, cx);
@@ -1220,7 +1191,7 @@ impl Workspace {
     }
 }
 
-fn load_question(db: &Db, client: &Client, workspace: &std::path::Path, slug: &str, language: Language) -> anyhow::Result<Loaded> {
+fn load_question(db: &Db, client: &Client, workspace: &std::path::Path, slug: &str, language: Language, template: Option<&str>) -> anyhow::Result<Loaded> {
     let mut q = match db.question(slug)? {
         Some(q) => q,
         None => {
@@ -1242,6 +1213,10 @@ fn load_question(db: &Db, client: &Client, workspace: &std::path::Path, slug: &s
     }
     let frontend_id = q.frontend_id.parse().unwrap_or(0);
     let rel = ws::solution_rel(frontend_id, &q.slug, language);
+    if (slug.starts_with("cf:") || slug.starts_with("cc:")) && let Some(template)=template {
+        if language==Language::Python { q.python=template.to_owned(); }
+        else { q.snippets.insert(language.judge_id().into(),template.to_owned()); }
+    }
     let starter = q.starter(language).ok_or_else(|| anyhow::anyhow!("{} has no {} starter", q.title, language.label()))?;
     let path = ws::ensure_solution(workspace, &rel, starter)?;
     let code = std::fs::read_to_string(&path)?;

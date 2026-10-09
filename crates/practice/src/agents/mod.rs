@@ -9,6 +9,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use serde::{Deserialize, Serialize};
 
 mod acp;
+mod question;
+pub use question::Question;
 mod catalog_cache;
 pub use catalog_cache::CatalogCache;
 mod antigravity;
@@ -159,6 +161,7 @@ pub enum ToolKind {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Event {
+    Question(Question),
     /// The agent accepted the request; carries its session or thread id.
     Started { session: Option<String> },
     /// Streamed answer text.

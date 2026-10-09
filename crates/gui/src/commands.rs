@@ -110,6 +110,10 @@ impl Workspace {
                     this.show_roadmap(window, cx);
                 }
             }))
+            .on_action(cx.listener(|this, _: &OpenSnippetEditor, window, cx| this.open_snippet_editor(window,cx)))
+            .on_action(cx.listener(|this, _: &InsertSnippet, window, cx| {
+                if this.center == Center::Editor { this.editor_pane.update(cx, |pane,cx|pane.open_picker(false,window,cx)); }
+            }))
             .on_action(cx.listener(|this, _: &OpenSettings, window, cx| {
                 if this.center == Center::Settings {
                     this.back_to_editor(window, cx);

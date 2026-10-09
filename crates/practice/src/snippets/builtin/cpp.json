@@ -1,0 +1,840 @@
+{
+  "Single Test": {
+    "prefix": "cp",
+    "body": [
+      "#include <bits/stdc++.h>",
+      "using namespace std;",
+      "",
+      "void solve() {",
+      "\t$0",
+      "}",
+      "",
+      "int main() {",
+      "\tios::sync_with_stdio(false);",
+      "\tcin.tie(nullptr);",
+      "\tsolve();",
+      "\treturn 0;",
+      "}"
+    ],
+    "description": "Fast input contest template",
+    "isFileTemplate": true
+  },
+  "Multiple Tests": {
+    "prefix": "cpt",
+    "body": [
+      "#include <bits/stdc++.h>",
+      "using namespace std;",
+      "",
+      "void solve() {",
+      "\t$0",
+      "}",
+      "",
+      "int main() {",
+      "\tios::sync_with_stdio(false);",
+      "\tcin.tie(nullptr);",
+      "\tint t;",
+      "\tcin >> t;",
+      "\twhile (t--) solve();",
+      "\treturn 0;",
+      "}"
+    ],
+    "description": "Fast input contest template",
+    "isFileTemplate": true
+  },
+  "Codeforces Template": {
+    "prefix": "cpfull",
+    "body": [
+      "#include <bits/stdc++.h>",
+      "using namespace std;",
+      "using ll = long long;",
+      "using vi = vector<int>;",
+      "using pii = pair<int, int>;",
+      "#define all(x) (x).begin(), (x).end()",
+      "#define sz(x) int((x).size())",
+      "#define pb push_back",
+      "#ifdef LOCAL",
+      "#define debug(x) cerr << #x << \" = \" << (x) << '\\n'",
+      "#else",
+      "#define debug(x) ((void)0)",
+      "#endif",
+      "constexpr ll INF = (1LL << 62);",
+      "constexpr ll MOD = ${1|1000000007,998244353|};",
+      "",
+      "void solve() {",
+      "\t$0",
+      "}",
+      "",
+      "int main() {",
+      "\tios::sync_with_stdio(false);",
+      "\tcin.tie(nullptr);",
+      "\tint t;",
+      "\tcin >> t;",
+      "\twhile (t--) solve();",
+      "\treturn 0;",
+      "}"
+    ],
+    "description": "Contest aliases, local debug and multiple tests",
+    "isFileTemplate": true
+  },
+  "For Range": {
+    "prefix": "fori",
+    "body": [
+      "for (int ${1:i} = ${2:0}; $1 < ${3:n}; ++$1) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Loop over a half open range"
+  },
+  "Reverse Range": {
+    "prefix": "forr",
+    "body": [
+      "for (int ${1:i} = ${2:n} - 1; $1 >= 0; --$1) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Loop backwards with a signed index"
+  },
+  "For Count": {
+    "prefix": "forn",
+    "body": [
+      "for (int ${1:i} = 0; $1 < ${2:n}; ++$1) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Loop n times with a mirrored index"
+  },
+  "For Each": {
+    "prefix": "fore",
+    "body": [
+      "for (auto &${1:value} : ${2:a}) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Iterate by reference over a container"
+  },
+  "While Loop": {
+    "prefix": "while",
+    "body": [
+      "while (${1:false}) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Loop while a condition holds"
+  },
+  "Read Vector": {
+    "prefix": "readarr",
+    "body": [
+      "vector<int> ${1:a}(${2:n});",
+      "for (auto &value : $1) cin >> value;",
+      "$0"
+    ],
+    "description": "Read n integers into a vector"
+  },
+  "Read Grid": {
+    "prefix": "readgrid",
+    "body": [
+      "vector<string> ${1:grid}(${2:n});",
+      "for (auto &row : $1) cin >> row;",
+      "$0"
+    ],
+    "description": "Read a character grid"
+  },
+  "Print Container": {
+    "prefix": "printarr",
+    "body": [
+      "for (size_t i = 0; i < ${1:a}.size(); ++i) {",
+      "\tif (i) cout << ' ';",
+      "\tcout << $1[i];",
+      "}",
+      "cout << '\\n';",
+      "$0"
+    ],
+    "description": "Print space separated values"
+  },
+  "Yes Or No": {
+    "prefix": "yn",
+    "body": [
+      "cout << \"${1|YES,NO|}\\n\";",
+      "$0"
+    ],
+    "description": "Print a verdict choice"
+  },
+  "Fast Output": {
+    "prefix": "out",
+    "body": [
+      "ostringstream ${1:output};",
+      "$1 << ${2:answer} << '\\n';",
+      "cout << $1.str();",
+      "$0"
+    ],
+    "description": "Accumulate output before writing"
+  },
+  "Long Long": {
+    "prefix": "ll",
+    "body": [
+      "using ll = long long;",
+      "$0"
+    ],
+    "description": "Signed 64 bit integer alias"
+  },
+  "Integer Vector": {
+    "prefix": "vi",
+    "body": [
+      "using vi = vector<int>;",
+      "$0"
+    ],
+    "description": "Integer vector alias"
+  },
+  "Vector Matrix": {
+    "prefix": "vvi",
+    "body": [
+      "using vvi = vector<vector<int>>;",
+      "$0"
+    ],
+    "description": "Integer matrix alias"
+  },
+  "Integer Pair": {
+    "prefix": "pii",
+    "body": [
+      "using pii = pair<int, int>;",
+      "$0"
+    ],
+    "description": "Integer pair alias"
+  },
+  "Pair Vector": {
+    "prefix": "vpii",
+    "body": [
+      "using vpii = vector<pair<int, int>>;",
+      "$0"
+    ],
+    "description": "Integer pair vector alias"
+  },
+  "Hash Map": {
+    "prefix": "umap",
+    "body": [
+      "unordered_map<${1:int}, ${2:int}> ${3:counts};",
+      "$0"
+    ],
+    "description": "Hash map declaration"
+  },
+  "Min Heap": {
+    "prefix": "pq",
+    "body": [
+      "priority_queue<${1:long long}, vector<$1>, greater<$1>> ${2:heap};",
+      "$0"
+    ],
+    "description": "Minimum priority queue"
+  },
+  "All Iterators": {
+    "prefix": [
+      "all",
+      "rall"
+    ],
+    "body": [
+      "#define all(x) (x).begin(), (x).end()",
+      "#define rall(x) (x).rbegin(), (x).rend()",
+      "$0"
+    ],
+    "description": "Forward and reverse iterator macros"
+  },
+  "Gcd And Lcm": {
+    "prefix": "gcd",
+    "body": [
+      "auto ${1:g} = std::gcd(${2:a}, ${3:b});",
+      "auto ${4:l} = std::lcm($2, $3);",
+      "$0"
+    ],
+    "description": "Gcd and lcm when the result fits the type"
+  },
+  "Modular Power": {
+    "prefix": "modpow",
+    "body": [
+      "long long modpow(long long a, long long e, long long mod) {",
+      "\t// Requires e >= 0 and 0 < mod <= 2e9.",
+      "\ta = (a % mod + mod) % mod;",
+      "\tlong long result = 1 % mod;",
+      "\twhile (e > 0) {",
+      "\t\tif (e & 1) result = result * a % mod;",
+      "\t\ta = a * a % mod;",
+      "\t\te >>= 1;",
+      "\t}",
+      "\treturn result;",
+      "}",
+      "$0"
+    ],
+    "description": "Binary exponentiation modulo a bounded modulus"
+  },
+  "Modular Inverse": {
+    "prefix": "modinv",
+    "body": [
+      "long long mod_inverse(long long a, long long mod) {",
+      "\t// Requires prime mod <= 2e9 and a not divisible by mod.",
+      "\ta = (a % mod + mod) % mod;",
+      "\tlong long result = 1, e = mod - 2;",
+      "\twhile (e > 0) {",
+      "\t\tif (e & 1) result = result * a % mod;",
+      "\t\ta = a * a % mod;",
+      "\t\te >>= 1;",
+      "\t}",
+      "\treturn result;",
+      "}",
+      "$0"
+    ],
+    "description": "Fermat inverse modulo a prime"
+  },
+  "Combinations": {
+    "prefix": "ncr",
+    "body": [
+      "struct Combinations {",
+      "\tstatic constexpr long long mod = ${1|1000000007,998244353|};",
+      "\tvector<long long> fact, invfact;",
+      "\texplicit Combinations(int n) : fact(n + 1, 1), invfact(n + 1, 1) {",
+      "\t\t// Requires 0 <= n < mod.",
+      "\t\tfor (int i = 1; i <= n; ++i) fact[i] = fact[i - 1] * i % mod;",
+      "\t\tlong long base = fact[n], e = mod - 2;",
+      "\t\twhile (e) {",
+      "\t\t\tif (e & 1) invfact[n] = invfact[n] * base % mod;",
+      "\t\t\tbase = base * base % mod;",
+      "\t\t\te >>= 1;",
+      "\t\t}",
+      "\t\tfor (int i = n; i > 0; --i) invfact[i - 1] = invfact[i] * i % mod;",
+      "\t}",
+      "\tlong long choose(int n, int r) const {",
+      "\t\treturn r < 0 || r > n ? 0 : fact[n] * invfact[r] % mod * invfact[n - r] % mod;",
+      "\t}",
+      "};",
+      "$0"
+    ],
+    "description": "Precomputed factorials and inverse factorials"
+  },
+  "Prime Sieve": {
+    "prefix": "sieve",
+    "body": [
+      "vector<int> sieve(int n) {",
+      "\tvector<bool> prime(n + 1, true);",
+      "\tprime[0] = false;",
+      "\tif (n >= 1) prime[1] = false;",
+      "\tfor (int p = 2; p <= n / p; ++p)",
+      "\t\tif (prime[p]) for (long long x = 1LL * p * p; x <= n; x += p) prime[x] = false;",
+      "\tvector<int> result;",
+      "\tfor (int i = 2; i <= n; ++i) if (prime[i]) result.push_back(i);",
+      "\treturn result;",
+      "}",
+      "$0"
+    ],
+    "description": "Primes up to an inclusive nonnegative limit"
+  },
+  "Prime Factors": {
+    "prefix": "factor",
+    "body": [
+      "vector<pair<long long, int>> factorize(long long n) {",
+      "\t// Requires n >= 1.",
+      "\tvector<pair<long long, int>> factors;",
+      "\tfor (long long p = 2; p <= n / p; ++p) {",
+      "\t\tif (n % p) continue;",
+      "\t\tint count = 0;",
+      "\t\tdo { n /= p; ++count; } while (n % p == 0);",
+      "\t\tfactors.emplace_back(p, count);",
+      "\t}",
+      "\tif (n > 1) factors.emplace_back(n, 1);",
+      "\treturn factors;",
+      "}",
+      "$0"
+    ],
+    "description": "Trial division into prime multiplicities"
+  },
+  "Modulus": {
+    "prefix": "mod",
+    "body": [
+      "constexpr long long MOD = ${1|1000000007,998244353|};",
+      "$0"
+    ],
+    "description": "Choose a common contest prime"
+  },
+  "Disjoint Set": {
+    "prefix": "dsu",
+    "body": [
+      "struct DSU {",
+      "\tvector<int> parent, size;",
+      "\texplicit DSU(int n) : parent(n), size(n, 1) { iota(parent.begin(), parent.end(), 0); }",
+      "\tint find(int x) {",
+      "\t\twhile (parent[x] != x) { parent[x] = parent[parent[x]]; x = parent[x]; }",
+      "\t\treturn x;",
+      "\t}",
+      "\tbool unite(int a, int b) {",
+      "\t\ta = find(a); b = find(b);",
+      "\t\tif (a == b) return false;",
+      "\t\tif (size[a] < size[b]) swap(a, b);",
+      "\t\tparent[b] = a; size[a] += size[b];",
+      "\t\treturn true;",
+      "\t}",
+      "};",
+      "$0"
+    ],
+    "description": "Path compression and union by size"
+  },
+  "Fenwick Tree": {
+    "prefix": "bit",
+    "body": [
+      "struct Fenwick {",
+      "\tvector<long long> tree;",
+      "\texplicit Fenwick(int n) : tree(n + 1) {}",
+      "\tvoid add(int i, long long delta) {",
+      "\t\tfor (++i; i < int(tree.size()); i += i & -i) tree[i] += delta;",
+      "\t}",
+      "\tlong long prefix(int end) const {",
+      "\t\tlong long result = 0;",
+      "\t\tfor (; end > 0; end -= end & -end) result += tree[end];",
+      "\t\treturn result;",
+      "\t}",
+      "\tlong long query(int left, int right) const { return prefix(right) - prefix(left); }",
+      "};",
+      "$0"
+    ],
+    "description": "Zero based point add and half open range sum"
+  },
+  "Segment Tree": {
+    "prefix": "segtree",
+    "body": [
+      "struct SegmentTree {",
+      "\tint n = 1;",
+      "\tconst long long identity = ${1:0};",
+      "\tvector<long long> tree;",
+      "\tlong long combine(long long a, long long b) const { return ${2:a + b}; }",
+      "\texplicit SegmentTree(const vector<long long>& a) {",
+      "\t\twhile (n < int(a.size())) n *= 2;",
+      "\t\ttree.assign(2 * n, identity);",
+      "\t\tcopy(a.begin(), a.end(), tree.begin() + n);",
+      "\t\tfor (int i = n - 1; i; --i) tree[i] = combine(tree[2 * i], tree[2 * i + 1]);",
+      "\t}",
+      "\tvoid set(int i, long long value) {",
+      "\t\ttree[i += n] = value;",
+      "\t\twhile (i > 1) { i /= 2; tree[i] = combine(tree[2 * i], tree[2 * i + 1]); }",
+      "\t}",
+      "\tlong long query(int left, int right) const {",
+      "\t\tlong long a = identity, b = identity;",
+      "\t\tfor (left += n, right += n; left < right; left /= 2, right /= 2) {",
+      "\t\t\tif (left & 1) a = combine(a, tree[left++]);",
+      "\t\t\tif (right & 1) b = combine(tree[--right], b);",
+      "\t\t}",
+      "\t\treturn combine(a, b);",
+      "\t}",
+      "};",
+      "$0"
+    ],
+    "description": "Associative combine with half open queries"
+  },
+  "Sparse Table": {
+    "prefix": "sparse",
+    "body": [
+      "struct SparseTable {",
+      "\tvector<vector<int>> table;",
+      "\texplicit SparseTable(const vector<int>& a) : table(1, a) {",
+      "\t\tfor (int width = 2; width <= int(a.size()); width *= 2) {",
+      "\t\t\tconst auto& prev = table.back();",
+      "\t\t\tvector<int> row(a.size() - width + 1);",
+      "\t\t\tfor (int i = 0; i < int(row.size()); ++i) row[i] = min(prev[i], prev[i + width / 2]);",
+      "\t\t\ttable.push_back(move(row));",
+      "\t\t}",
+      "\t}",
+      "\tint query(int left, int right) const {",
+      "\t\t// Requires a nonempty half open range.",
+      "\t\tint k = 31 - __builtin_clz(unsigned(right - left));",
+      "\t\treturn min(table[k][left], table[k][right - (1 << k)]);",
+      "\t}",
+      "};",
+      "$0"
+    ],
+    "description": "Static range minimum in constant time"
+  },
+  "Monotonic Stack": {
+    "prefix": "monostack",
+    "body": [
+      "vector<int> next_greater(const vector<int>& a) {",
+      "\tvector<int> answer(a.size(), -1), stack;",
+      "\tfor (int i = 0; i < int(a.size()); ++i) {",
+      "\t\twhile (!stack.empty() && a[stack.back()] < a[i]) {",
+      "\t\t\tanswer[stack.back()] = i;",
+      "\t\t\tstack.pop_back();",
+      "\t\t}",
+      "\t\tstack.push_back(i);",
+      "\t}",
+      "\treturn answer;",
+      "}",
+      "$0"
+    ],
+    "description": "Index of the next strictly greater element"
+  },
+  "Ordered Set": {
+    "prefix": "oset",
+    "body": [
+      "#include <ext/pb_ds/assoc_container.hpp>",
+      "#include <ext/pb_ds/tree_policy.hpp>",
+      "using namespace __gnu_pbds;",
+      "template<class T>",
+      "using ordered_set = tree<T, null_type, less<T>, rb_tree_tag, tree_order_statistics_node_update>;",
+      "// order_of_key(x) counts smaller keys; find_by_order(k) is zero based.",
+      "$0"
+    ],
+    "description": "GNU ordered set with rank and select"
+  },
+  "Lowercase Trie": {
+    "prefix": "trie",
+    "body": [
+      "struct Trie {",
+      "\tstruct Node { array<int, 26> next; bool terminal = false; Node() { next.fill(-1); } };",
+      "\tvector<Node> nodes = vector<Node>(1);",
+      "\tvoid insert(const string& word) {",
+      "\t\tint u = 0;",
+      "\t\tfor (char ch : word) {",
+      "\t\t\tint c = ch - 'a';",
+      "\t\t\tif (nodes[u].next[c] == -1) {",
+      "\t\t\t\tnodes[u].next[c] = int(nodes.size());",
+      "\t\t\t\tnodes.emplace_back();",
+      "\t\t\t}",
+      "\t\t\tu = nodes[u].next[c];",
+      "\t\t}",
+      "\t\tnodes[u].terminal = true;",
+      "\t}",
+      "\tbool contains(const string& word) const {",
+      "\t\tint u = 0;",
+      "\t\tfor (char ch : word) { u = nodes[u].next[ch - 'a']; if (u == -1) return false; }",
+      "\t\treturn nodes[u].terminal;",
+      "\t}",
+      "};",
+      "$0"
+    ],
+    "description": "Insert and find lowercase Latin words"
+  },
+  "Read Graph": {
+    "prefix": "graph",
+    "body": [
+      "int n, m;",
+      "cin >> n >> m;",
+      "vector<vector<int>> graph(n);",
+      "for (int i = 0; i < m; ++i) {",
+      "\tint u, v; cin >> u >> v;",
+      "\tu -= ${1|1,0|}; v -= $1;",
+      "\tgraph[u].push_back(v);",
+      "\tgraph[v].push_back(u);",
+      "}",
+      "$0"
+    ],
+    "description": "Read undirected edges with index offset"
+  },
+  "Breadth First Search": {
+    "prefix": "bfs",
+    "body": [
+      "vector<int> bfs(const vector<vector<int>>& graph, int source) {",
+      "\tvector<int> dist(graph.size(), -1);",
+      "\tqueue<int> q; q.push(source); dist[source] = 0;",
+      "\twhile (!q.empty()) {",
+      "\t\tint u = q.front(); q.pop();",
+      "\t\tfor (int v : graph[u]) if (dist[v] == -1) { dist[v] = dist[u] + 1; q.push(v); }",
+      "\t}",
+      "\treturn dist;",
+      "}",
+      "$0"
+    ],
+    "description": "Unweighted shortest paths"
+  },
+  "Iterative Depth First Search": {
+    "prefix": "dfs",
+    "body": [
+      "vector<int> dfs(const vector<vector<int>>& graph, int source) {",
+      "\tvector<bool> seen(graph.size());",
+      "\tvector<int> stack{source}, order;",
+      "\tseen[source] = true;",
+      "\twhile (!stack.empty()) {",
+      "\t\tint u = stack.back(); stack.pop_back(); order.push_back(u);",
+      "\t\tfor (int v : graph[u]) if (!seen[v]) { seen[v] = true; stack.push_back(v); }",
+      "\t}",
+      "\treturn order;",
+      "}",
+      "$0"
+    ],
+    "description": "Visit reachable vertices without recursion"
+  },
+  "Dijkstra": {
+    "prefix": "dijkstra",
+    "body": [
+      "vector<long long> dijkstra(const vector<vector<pair<int, long long>>>& graph, int source) {",
+      "\t// Nonnegative weights; finite path sums must be below INF.",
+      "\tconst long long INF = 1LL << 62;",
+      "\tvector<long long> dist(graph.size(), INF);",
+      "\tusing State = pair<long long, int>;",
+      "\tpriority_queue<State, vector<State>, greater<State>> heap;",
+      "\tdist[source] = 0; heap.emplace(0, source);",
+      "\twhile (!heap.empty()) {",
+      "\t\tauto [cost, u] = heap.top(); heap.pop();",
+      "\t\tif (cost != dist[u]) continue;",
+      "\t\tfor (auto [v, weight] : graph[u]) if (weight < INF - cost && cost + weight < dist[v]) {",
+      "\t\t\tdist[v] = cost + weight; heap.emplace(dist[v], v);",
+      "\t\t}",
+      "\t}",
+      "\treturn dist;",
+      "}",
+      "$0"
+    ],
+    "description": "Shortest paths for nonnegative edge weights"
+  },
+  "Topological Sort": {
+    "prefix": "topo",
+    "body": [
+      "vector<int> topological_sort(const vector<vector<int>>& graph) {",
+      "\tvector<int> indegree(graph.size()), order;",
+      "\tfor (const auto& edges : graph) for (int v : edges) ++indegree[v];",
+      "\tqueue<int> q;",
+      "\tfor (int i = 0; i < int(graph.size()); ++i) if (!indegree[i]) q.push(i);",
+      "\twhile (!q.empty()) {",
+      "\t\tint u = q.front(); q.pop(); order.push_back(u);",
+      "\t\tfor (int v : graph[u]) if (--indegree[v] == 0) q.push(v);",
+      "\t}",
+      "\tif (order.size() != graph.size()) return {};",
+      "\treturn order;",
+      "}",
+      "$0"
+    ],
+    "description": "Kahn ordering with cycle detection"
+  },
+  "Zero One Bfs": {
+    "prefix": "bfs01",
+    "body": [
+      "vector<int> zero_one_bfs(const vector<vector<pair<int, int>>>& graph, int source) {",
+      "\t// Weights must be zero or one.",
+      "\tvector<int> dist(graph.size(), INT_MAX);",
+      "\tdeque<pair<int, int>> q;",
+      "\tdist[source] = 0; q.emplace_back(source, 0);",
+      "\twhile (!q.empty()) {",
+      "\t\tauto [u, cost] = q.front(); q.pop_front();",
+      "\t\tif (cost != dist[u]) continue;",
+      "\t\tfor (auto [v, weight] : graph[u]) if (cost + weight < dist[v]) {",
+      "\t\t\tdist[v] = cost + weight;",
+      "\t\t\tif (weight == 0) q.emplace_front(v, dist[v]); else q.emplace_back(v, dist[v]);",
+      "\t\t}",
+      "\t}",
+      "\treturn dist;",
+      "}",
+      "$0"
+    ],
+    "description": "Shortest paths with binary edge weights"
+  },
+  "Floyd Warshall": {
+    "prefix": "floyd",
+    "body": [
+      "void floyd_warshall(vector<vector<long long>>& dist) {",
+      "\t// Use INF for missing edges, zero diagonal, finite sums within +/-INF.",
+      "\tconst long long INF = 1LL << 60;",
+      "\tint n = int(dist.size());",
+      "\tfor (int k = 0; k < n; ++k)",
+      "\t\tfor (int i = 0; i < n; ++i)",
+      "\t\t\tfor (int j = 0; j < n; ++j)",
+      "\t\t\t\tif (dist[i][k] < INF && dist[k][j] < INF)",
+      "\t\t\t\t\tdist[i][j] = min(dist[i][j], dist[i][k] + dist[k][j]);",
+      "}",
+      "$0"
+    ],
+    "description": "All pairs shortest paths without negative cycles"
+  },
+  "Grid Bfs": {
+    "prefix": "gridbfs",
+    "body": [
+      "vector<vector<int>> grid_bfs(const vector<string>& grid, int sx, int sy) {",
+      "\tint n = int(grid.size()), m = int(grid[0].size());",
+      "\tvector<vector<int>> dist(n, vector<int>(m, -1));",
+      "\tif (grid[sx][sy] == '#') return dist;",
+      "\tconst int dx[] = {1, -1, 0, 0}, dy[] = {0, 0, 1, -1};",
+      "\tqueue<pair<int, int>> q; q.emplace(sx, sy); dist[sx][sy] = 0;",
+      "\twhile (!q.empty()) {",
+      "\t\tauto [x, y] = q.front(); q.pop();",
+      "\t\tfor (int d = 0; d < 4; ++d) {",
+      "\t\t\tint nx = x + dx[d], ny = y + dy[d];",
+      "\t\t\tif (nx >= 0 && nx < n && ny >= 0 && ny < m && grid[nx][ny] != '#' && dist[nx][ny] == -1) {",
+      "\t\t\t\tdist[nx][ny] = dist[x][y] + 1; q.emplace(nx, ny);",
+      "\t\t\t}",
+      "\t\t}",
+      "\t}",
+      "\treturn dist;",
+      "}",
+      "$0"
+    ],
+    "description": "Four direction shortest paths avoiding walls"
+  },
+  "Binary Search Answer": {
+    "prefix": "bs",
+    "body": [
+      "long long lo = ${1:0}, hi = ${2:1000000000};",
+      "auto check = [&](long long x) { return ${3:x >= 0}; };",
+      "while (lo < hi) {",
+      "\tlong long mid = lo + (hi - lo) / 2;",
+      "\tif (check(mid)) hi = mid; else lo = mid + 1;",
+      "}",
+      "$0"
+    ],
+    "description": "First true answer in a bounded monotone range"
+  },
+  "Bounds": {
+    "prefix": "bounds",
+    "body": [
+      "auto ${1:left} = lower_bound(${2:a}.begin(), $2.end(), ${3:x});",
+      "auto ${4:right} = upper_bound($2.begin(), $2.end(), $3);",
+      "$0"
+    ],
+    "description": "Lower and upper bound iterators in a sorted container"
+  },
+  "Dp Table": {
+    "prefix": "dp2",
+    "body": [
+      "vector<vector<long long>> ${1:dp}(${2:n}, vector<long long>(${3:m}, ${4:0}));",
+      "$0"
+    ],
+    "description": "Initialize a two dimensional dynamic table"
+  },
+  "Prefix Sums": {
+    "prefix": "pref",
+    "body": [
+      "vector<long long> ${1:pref}(${2:a}.size() + 1);",
+      "for (size_t i = 0; i < $2.size(); ++i) $1[i + 1] = $1[i] + $2[i];",
+      "$0"
+    ],
+    "description": "Range sum is pref[right] minus pref[left]"
+  },
+  "Grid Prefix Sums": {
+    "prefix": "pref2",
+    "body": [
+      "vector<vector<long long>> ${1:pref}(${2:n} + 1, vector<long long>(${3:m} + 1));",
+      "for (int i = 0; i < $2; ++i)",
+      "\tfor (int j = 0; j < $3; ++j)",
+      "\t\t$1[i + 1][j + 1] = ${4:a}[i][j] + $1[i][j + 1] + $1[i + 1][j] - $1[i][j];",
+      "$0"
+    ],
+    "description": "Padded two dimensional prefix sums"
+  },
+  "Two Pointers": {
+    "prefix": "twop",
+    "body": [
+      "bool has_pair_sum(const vector<int>& a, long long target) {",
+      "\t// Requires sorted values.",
+      "\tint left = 0, right = int(a.size()) - 1;",
+      "\twhile (left < right) {",
+      "\t\tlong long sum = 1LL * a[left] + a[right];",
+      "\t\tif (sum == target) return true;",
+      "\t\tif (sum < target) ++left; else --right;",
+      "\t}",
+      "\treturn false;",
+      "}",
+      "$0"
+    ],
+    "description": "Find a target pair sum in sorted values"
+  },
+  "Sliding Window": {
+    "prefix": "window",
+    "body": [
+      "int longest_bounded_sum(const vector<int>& a, long long limit) {",
+      "\t// Requires nonnegative values and limit.",
+      "\tint left = 0, best = 0;",
+      "\tlong long sum = 0;",
+      "\tfor (int right = 0; right < int(a.size()); ++right) {",
+      "\t\tsum += a[right];",
+      "\t\twhile (sum > limit) sum -= a[left++];",
+      "\t\tbest = max(best, right - left + 1);",
+      "\t}",
+      "\treturn best;",
+      "}",
+      "$0"
+    ],
+    "description": "Longest nonnegative window within a sum limit"
+  },
+  "Prefix Function": {
+    "prefix": "kmp",
+    "body": [
+      "vector<int> prefix_function(const string& s) {",
+      "\tvector<int> pi(s.size());",
+      "\tfor (int i = 1; i < int(s.size()); ++i) {",
+      "\t\tint j = pi[i - 1];",
+      "\t\twhile (j && s[i] != s[j]) j = pi[j - 1];",
+      "\t\tif (s[i] == s[j]) ++j;",
+      "\t\tpi[i] = j;",
+      "\t}",
+      "\treturn pi;",
+      "}",
+      "$0"
+    ],
+    "description": "KMP prefix function in linear time"
+  },
+  "Z Function": {
+    "prefix": "zfunc",
+    "body": [
+      "vector<int> z_function(const string& s) {",
+      "\tint n = int(s.size()), left = 0, right = 0;",
+      "\tvector<int> z(n);",
+      "\tfor (int i = 1; i < n; ++i) {",
+      "\t\tif (i < right) z[i] = min(right - i, z[i - left]);",
+      "\t\twhile (i + z[i] < n && s[z[i]] == s[i + z[i]]) ++z[i];",
+      "\t\tif (i + z[i] > right) { left = i; right = i + z[i]; }",
+      "\t}",
+      "\treturn z;",
+      "}",
+      "$0"
+    ],
+    "description": "Prefix match lengths in linear time"
+  },
+  "Rolling Hash": {
+    "prefix": "hash",
+    "body": [
+      "struct RollingHash {",
+      "\tstatic constexpr long long mod = 1000000007, base = 911382323;",
+      "\tvector<long long> power, pref;",
+      "\texplicit RollingHash(const string& s) : power(s.size() + 1, 1), pref(s.size() + 1) {",
+      "\t\tfor (int i = 0; i < int(s.size()); ++i) {",
+      "\t\t\tpower[i + 1] = power[i] * base % mod;",
+      "\t\t\tpref[i + 1] = (pref[i] * base + static_cast<unsigned char>(s[i]) + 1) % mod;",
+      "\t\t}",
+      "\t}",
+      "\tlong long query(int left, int right) const {",
+      "\t\treturn (pref[right] - pref[left] * power[right - left] % mod + mod) % mod;",
+      "\t}",
+      "};",
+      "$0"
+    ],
+    "description": "Half open substring hash with collision risk"
+  },
+  "Contest Utilities": {
+    "prefix": [
+      "rng",
+      "debug",
+      "inf",
+      "dirs",
+      "bits",
+      "yes",
+      "no"
+    ],
+    "body": [
+      "mt19937 rng(static_cast<unsigned>(chrono::steady_clock::now().time_since_epoch().count()));",
+      "constexpr long long INF = 1LL << 62;",
+      "const int dx[] = {1, -1, 0, 0}, dy[] = {0, 0, 1, -1};",
+      "void yes(bool ok = true) { cout << (ok ? \"YES\\n\" : \"NO\\n\"); }",
+      "void no() { yes(false); }",
+      "int popcount(unsigned long long x) { return __builtin_popcountll(x); }",
+      "unsigned long long lowbit(unsigned long long x) { return x & (0ULL - x); }",
+      "#ifdef LOCAL",
+      "#define debug(x) cerr << #x << \" = \" << (x) << '\\n'",
+      "#else",
+      "#define debug(x) ((void)0)",
+      "#endif",
+      "$0"
+    ],
+    "description": "Random engine, bits, directions and local debug"
+  },
+  "Wrap Tests": {
+    "prefix": "tests",
+    "body": [
+      "int t; cin >> t;",
+      "while (t--) {",
+      "\t$TM_SELECTED_TEXT",
+      "\t$0",
+      "}"
+    ],
+    "description": "Wrap selected code in a multi test loop"
+  }
+}

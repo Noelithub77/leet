@@ -29,6 +29,8 @@ mod contests;
 mod history;
 mod omnibar;
 mod settings;
+mod snippets;
+mod agent_question;
 mod statement;
 mod rich_text;
 mod theme;
@@ -41,6 +43,10 @@ use gpui_kit::*;
 use practice::config::Config;
 
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some("snippets") {
+        if let Err(error) = practice::snippets::cli::cli(&std::env::args().skip(2).collect::<Vec<_>>()) { eprintln!("leet snippets: {error:#}"); std::process::exit(1); }
+        return;
+    }
     if std::env::args().nth(1).as_deref() == Some("--setup-tools") {
         if let Err(error) = practice::tool_setup::cli(&std::env::args().skip(2).collect::<Vec<_>>()) { eprintln!("leet tool setup: {error:#}"); std::process::exit(1); }
         return;
@@ -91,6 +97,8 @@ fn main() {
         case_editor::bind_keys(cx);
         onboarding::bind_keys(cx);
         statement::bind_keys(cx);
+        snippets::expansion::bind_keys(cx);
+        snippets::editor_bind_keys(cx);
         cx.activate(true);
 
         let options = WindowOptions {

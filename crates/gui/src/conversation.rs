@@ -1,7 +1,6 @@
 //! Thread selection, history mutations, drafts, and editable response artifacts.
 use super::*;
 use gpui_kit::component::notification::Notification;
-use gpui_kit::component::WindowExt as _;
 
 impl Assist {
     pub(super) fn selection_key(&self) -> String { format!("chat:selected:{}", self.slug.as_deref().unwrap_or("")) }

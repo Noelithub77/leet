@@ -276,7 +276,7 @@ pub fn restart(this: &mut Workspace, cx: &mut Context<Workspace>) {
     // current_exe can refer to a deleted/renamed file after an in-place update.
     let path = this.release_update.restart_path.clone().unwrap_or_else(launcher);
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if std::process::Command::new(path).args(args).spawn().is_ok() {
+    if practice::background_process::command(path).args(args).spawn().is_ok() {
         cx.quit();
     } else {
         this.release_update.error = Some("Update installed; click to retry restarting".into());

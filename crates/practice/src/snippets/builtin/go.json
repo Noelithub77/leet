@@ -1,0 +1,685 @@
+{
+  "Single Test": {
+    "prefix": "cp",
+    "body": [
+      "package main",
+      "",
+      "import (",
+      "\t\"bufio\"",
+      "\t\"fmt\"",
+      "\t\"os\"",
+      ")",
+      "",
+      "var in = bufio.NewReader(os.Stdin)",
+      "var out = bufio.NewWriter(os.Stdout)",
+      "",
+      "func readInt() int { var x int; fmt.Fscan(in, &x); return x }",
+      "func readInt64() int64 { var x int64; fmt.Fscan(in, &x); return x }",
+      "func readString() string { var s string; fmt.Fscan(in, &s); return s }",
+      "",
+      "func solve() {",
+      "\t$0",
+      "}",
+      "",
+      "func main() {",
+      "\tdefer out.Flush()",
+      "\tsolve()",
+      "}"
+    ],
+    "description": "Buffered input and output single test",
+    "isFileTemplate": true
+  },
+  "Multiple Tests": {
+    "prefix": "cpt",
+    "body": [
+      "package main",
+      "",
+      "import (",
+      "\t\"bufio\"",
+      "\t\"fmt\"",
+      "\t\"os\"",
+      ")",
+      "",
+      "var in = bufio.NewReader(os.Stdin)",
+      "var out = bufio.NewWriter(os.Stdout)",
+      "",
+      "func readInt() int { var x int; fmt.Fscan(in, &x); return x }",
+      "func readInt64() int64 { var x int64; fmt.Fscan(in, &x); return x }",
+      "func readString() string { var s string; fmt.Fscan(in, &s); return s }",
+      "",
+      "func solve() {",
+      "\t$0",
+      "}",
+      "",
+      "func main() {",
+      "\tdefer out.Flush()",
+      "\tfor t := readInt(); t > 0; t-- { solve() }",
+      "}"
+    ],
+    "description": "Buffered input and output multiple tests",
+    "isFileTemplate": true
+  },
+  "For Range": {
+    "prefix": [
+      "fori",
+      "forn"
+    ],
+    "body": [
+      "for ${1:i} := ${2:0}; $1 < ${3:n}; $1++ {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Loop over a half open range"
+  },
+  "Reverse Range": {
+    "prefix": "forr",
+    "body": [
+      "for ${1:i} := ${2:n} - 1; $1 >= 0; $1-- {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Loop backwards with a signed index"
+  },
+  "For Each": {
+    "prefix": "fore",
+    "body": [
+      "for ${1:i}, ${2:value} := range ${3:a} {",
+      "\t_, _ = $1, $2",
+      "\t$0",
+      "}"
+    ],
+    "description": "Iterate over indices and values"
+  },
+  "Read Slice": {
+    "prefix": "readarr",
+    "body": [
+      "${1:a} := make([]int, ${2:n})",
+      "for i := range $1 { $1[i] = readInt() }",
+      "$0"
+    ],
+    "description": "Read n integers with the template helper"
+  },
+  "Read Grid": {
+    "prefix": "readgrid",
+    "body": [
+      "${1:grid} := make([]string, ${2:n})",
+      "for i := range $1 { $1[i] = readString() }",
+      "$0"
+    ],
+    "description": "Read a character grid with the template helper"
+  },
+  "Print Slice": {
+    "prefix": "printarr",
+    "body": [
+      "for i, value := range ${1:a} {",
+      "\tif i > 0 { fmt.Fprint(out, \" \") }",
+      "\tfmt.Fprint(out, value)",
+      "}",
+      "fmt.Fprintln(out)",
+      "$0"
+    ],
+    "description": "Print space separated values through buffered output"
+  },
+  "Verdict Output": {
+    "prefix": [
+      "yn",
+      "out"
+    ],
+    "body": [
+      "fmt.Fprintln(out, \"${1|YES,NO|}\")",
+      "$0"
+    ],
+    "description": "Print a verdict through buffered output"
+  },
+  "Gcd And Lcm": {
+    "prefix": "gcd",
+    "body": [
+      "func gcd(a, b int64) int64 {",
+      "\t// Nonnegative inputs.",
+      "\tfor b != 0 { a, b = b, a%b }",
+      "\treturn a",
+      "}",
+      "func lcm(a, b int64) int64 {",
+      "\tif a == 0 || b == 0 { return 0 }",
+      "\treturn a / gcd(a, b) * b // Result must fit int64.",
+      "}",
+      "$0"
+    ],
+    "description": "Gcd and lcm for nonnegative integers"
+  },
+  "Modular Arithmetic": {
+    "prefix": [
+      "modpow",
+      "modinv",
+      "mod"
+    ],
+    "body": [
+      "const MOD int64 = ${1|1000000007,998244353|}",
+      "func modpow(a, e, mod int64) int64 {",
+      "\t// Requires e >= 0 and 0 < mod <= 2e9.",
+      "\ta = (a%mod + mod)%mod",
+      "\tresult := int64(1)%mod",
+      "\tfor e > 0 {",
+      "\t\tif e&1 != 0 { result = result*a%mod }",
+      "\t\ta = a*a%mod",
+      "\t\te >>= 1",
+      "\t}",
+      "\treturn result",
+      "}",
+      "func modInverse(a, mod int64) int64 {",
+      "\t// Prime mod, with a not divisible by mod.",
+      "\treturn modpow(a, mod-2, mod)",
+      "}",
+      "$0"
+    ],
+    "description": "Binary power and Fermat inverse modulo a prime"
+  },
+  "Combinations": {
+    "prefix": "ncr",
+    "body": [
+      "type Combinations struct { fact, invfact []int64; mod int64 }",
+      "func newCombinations(n int) *Combinations {",
+      "\tconst mod int64 = ${1|1000000007,998244353|}",
+      "\t// Requires 0 <= n < mod.",
+      "\tc := &Combinations{make([]int64, n+1), make([]int64, n+1), mod}",
+      "\tc.fact[0] = 1",
+      "\tfor i := 1; i <= n; i++ { c.fact[i] = c.fact[i-1]*int64(i)%mod }",
+      "\tbase, e, result := c.fact[n], mod-2, int64(1)",
+      "\tfor e > 0 {",
+      "\t\tif e&1 != 0 { result = result*base%mod }",
+      "\t\tbase = base*base%mod; e >>= 1",
+      "\t}",
+      "\tc.invfact[n] = result",
+      "\tfor i := n; i > 0; i-- { c.invfact[i-1] = c.invfact[i]*int64(i)%mod }",
+      "\treturn c",
+      "}",
+      "func (c *Combinations) Choose(n, r int) int64 {",
+      "\tif r < 0 || r > n { return 0 }",
+      "\treturn c.fact[n]*c.invfact[r]%c.mod*c.invfact[n-r]%c.mod",
+      "}",
+      "$0"
+    ],
+    "description": "Precomputed combinations modulo a prime"
+  },
+  "Prime Sieve": {
+    "prefix": "sieve",
+    "body": [
+      "func sieve(n int) []int {",
+      "\tcomposite := make([]bool, n+1)",
+      "\tfor p := 2; p <= n/p; p++ {",
+      "\t\tif !composite[p] { for x := p*p; x <= n; x += p { composite[x] = true } }",
+      "\t}",
+      "\tprimes := []int{}",
+      "\tfor i := 2; i <= n; i++ { if !composite[i] { primes = append(primes, i) } }",
+      "\treturn primes",
+      "}",
+      "$0"
+    ],
+    "description": "Primes up to an inclusive nonnegative limit"
+  },
+  "Prime Factors": {
+    "prefix": "factor",
+    "body": [
+      "func factorize(n int64) map[int64]int {",
+      "\t// Requires n >= 1.",
+      "\tfactors := make(map[int64]int)",
+      "\tfor p := int64(2); p <= n/p; p++ {",
+      "\t\tfor n%p == 0 { factors[p]++; n /= p }",
+      "\t}",
+      "\tif n > 1 { factors[n]++ }",
+      "\treturn factors",
+      "}",
+      "$0"
+    ],
+    "description": "Trial division into prime multiplicities"
+  },
+  "Disjoint Set": {
+    "prefix": "dsu",
+    "body": [
+      "type DSU struct { parent, size []int }",
+      "func newDSU(n int) *DSU {",
+      "\td := &DSU{make([]int, n), make([]int, n)}",
+      "\tfor i := range d.parent { d.parent[i], d.size[i] = i, 1 }",
+      "\treturn d",
+      "}",
+      "func (d *DSU) Find(x int) int {",
+      "\tfor x != d.parent[x] { d.parent[x] = d.parent[d.parent[x]]; x = d.parent[x] }",
+      "\treturn x",
+      "}",
+      "func (d *DSU) Union(a, b int) bool {",
+      "\ta, b = d.Find(a), d.Find(b)",
+      "\tif a == b { return false }",
+      "\tif d.size[a] < d.size[b] { a, b = b, a }",
+      "\td.parent[b] = a; d.size[a] += d.size[b]",
+      "\treturn true",
+      "}",
+      "$0"
+    ],
+    "description": "Path compression and union by size"
+  },
+  "Fenwick Tree": {
+    "prefix": "bit",
+    "body": [
+      "type Fenwick struct { tree []int64 }",
+      "func newFenwick(n int) *Fenwick { return &Fenwick{make([]int64, n+1)} }",
+      "func (f *Fenwick) Add(i int, delta int64) {",
+      "\tfor i++; i < len(f.tree); i += i & -i { f.tree[i] += delta }",
+      "}",
+      "func (f *Fenwick) Prefix(end int) int64 {",
+      "\tvar result int64",
+      "\tfor ; end > 0; end -= end & -end { result += f.tree[end] }",
+      "\treturn result",
+      "}",
+      "func (f *Fenwick) Query(left, right int) int64 { return f.Prefix(right)-f.Prefix(left) }",
+      "$0"
+    ],
+    "description": "Zero based point add and half open range sum"
+  },
+  "Segment Tree": {
+    "prefix": "segtree",
+    "body": [
+      "type SegmentTree struct { n int; tree []int64 }",
+      "const segIdentity int64 = ${1:0}",
+      "func segCombine(a, b int64) int64 { return ${2:a + b} }",
+      "func newSegmentTree(a []int64) *SegmentTree {",
+      "\tn := 1",
+      "\tfor n < len(a) { n *= 2 }",
+      "\ts := &SegmentTree{n, make([]int64, 2*n)}",
+      "\tfor i := range s.tree { s.tree[i] = segIdentity }",
+      "\tcopy(s.tree[n:], a)",
+      "\tfor i := n-1; i > 0; i-- { s.tree[i] = segCombine(s.tree[2*i], s.tree[2*i+1]) }",
+      "\treturn s",
+      "}",
+      "func (s *SegmentTree) Set(i int, value int64) {",
+      "\ti += s.n; s.tree[i] = value",
+      "\tfor i > 1 { i /= 2; s.tree[i] = segCombine(s.tree[2*i], s.tree[2*i+1]) }",
+      "}",
+      "func (s *SegmentTree) Query(left, right int) int64 {",
+      "\ta, b := segIdentity, segIdentity",
+      "\tfor left, right = left+s.n, right+s.n; left < right; left, right = left/2, right/2 {",
+      "\t\tif left&1 != 0 { a = segCombine(a, s.tree[left]); left++ }",
+      "\t\tif right&1 != 0 { right--; b = segCombine(s.tree[right], b) }",
+      "\t}",
+      "\treturn segCombine(a, b)",
+      "}",
+      "$0"
+    ],
+    "description": "Associative combine with half open queries"
+  },
+  "Sparse Table": {
+    "prefix": "sparse",
+    "body": [
+      "type SparseTable struct { table [][]int; log []int }",
+      "func newSparseTable(a []int) *SparseTable {",
+      "\ts := &SparseTable{table: [][]int{append([]int(nil), a...)}, log: make([]int, len(a)+1)}",
+      "\tfor i := 2; i <= len(a); i++ { s.log[i] = s.log[i/2]+1 }",
+      "\tfor width := 2; width <= len(a); width *= 2 {",
+      "\t\tprev := s.table[len(s.table)-1]",
+      "\t\trow := make([]int, len(a)-width+1)",
+      "\t\tfor i := range row { row[i] = prev[i]; if prev[i+width/2] < row[i] { row[i] = prev[i+width/2] } }",
+      "\t\ts.table = append(s.table, row)",
+      "\t}",
+      "\treturn s",
+      "}",
+      "func (s *SparseTable) Query(left, right int) int {",
+      "\t// Requires a nonempty half open range.",
+      "\tk := s.log[right-left]",
+      "\ta, b := s.table[k][left], s.table[k][right-(1<<k)]",
+      "\tif a < b { return a }; return b",
+      "}",
+      "$0"
+    ],
+    "description": "Static range minimum in constant time"
+  },
+  "Monotonic Stack": {
+    "prefix": "monostack",
+    "body": [
+      "func nextGreater(a []int) []int {",
+      "\tanswer, stack := make([]int, len(a)), []int{}",
+      "\tfor i := range answer { answer[i] = -1 }",
+      "\tfor i, value := range a {",
+      "\t\tfor len(stack) > 0 && a[stack[len(stack)-1]] < value {",
+      "\t\t\tanswer[stack[len(stack)-1]] = i; stack = stack[:len(stack)-1]",
+      "\t\t}",
+      "\t\tstack = append(stack, i)",
+      "\t}",
+      "\treturn answer",
+      "}",
+      "$0"
+    ],
+    "description": "Index of the next strictly greater element"
+  },
+  "Lowercase Trie": {
+    "prefix": "trie",
+    "body": [
+      "type TrieNode struct { next [26]*TrieNode; terminal bool }",
+      "func (root *TrieNode) Insert(word string) {",
+      "\tnode := root",
+      "\tfor i := 0; i < len(word); i++ {",
+      "\t\tc := word[i]-'a'",
+      "\t\tif node.next[c] == nil { node.next[c] = &TrieNode{} }",
+      "\t\tnode = node.next[c]",
+      "\t}",
+      "\tnode.terminal = true",
+      "}",
+      "func (root *TrieNode) Contains(word string) bool {",
+      "\tnode := root",
+      "\tfor i := 0; i < len(word); i++ { node = node.next[word[i]-'a']; if node == nil { return false } }",
+      "\treturn node.terminal",
+      "}",
+      "$0"
+    ],
+    "description": "Insert and find lowercase Latin words"
+  },
+  "Read Graph": {
+    "prefix": "graph",
+    "body": [
+      "n, m := readInt(), readInt()",
+      "graph := make([][]int, n)",
+      "for i := 0; i < m; i++ {",
+      "\tu, v := readInt()-${1|1,0|}, readInt()-$1",
+      "\tgraph[u] = append(graph[u], v)",
+      "\tgraph[v] = append(graph[v], u)",
+      "}",
+      "$0"
+    ],
+    "description": "Read undirected edges with index offset"
+  },
+  "Graph Traversals": {
+    "prefix": [
+      "bfs",
+      "dfs"
+    ],
+    "body": [
+      "func bfs(graph [][]int, source int) []int {",
+      "\tdist := make([]int, len(graph))",
+      "\tfor i := range dist { dist[i] = -1 }",
+      "\tdist[source] = 0; queue := []int{source}",
+      "\tfor head := 0; head < len(queue); head++ {",
+      "\t\tu := queue[head]",
+      "\t\tfor _, v := range graph[u] { if dist[v] == -1 { dist[v] = dist[u]+1; queue = append(queue, v) } }",
+      "\t}",
+      "\treturn dist",
+      "}",
+      "func dfs(graph [][]int, source int) []int {",
+      "\tseen := make([]bool, len(graph)); seen[source] = true",
+      "\tstack, order := []int{source}, []int{}",
+      "\tfor len(stack) > 0 {",
+      "\t\tu := stack[len(stack)-1]; stack = stack[:len(stack)-1]; order = append(order, u)",
+      "\t\tfor _, v := range graph[u] { if !seen[v] { seen[v] = true; stack = append(stack, v) } }",
+      "\t}",
+      "\treturn order",
+      "}",
+      "$0"
+    ],
+    "description": "BFS distances and iterative DFS visitation order"
+  },
+  "Dijkstra": {
+    "prefix": "dijkstra",
+    "body": [
+      "// Add import \"container/heap\" to the import block.",
+      "type Edge struct { to int; weight int64 }",
+      "type State struct { cost int64; vertex int }",
+      "type MinHeap []State",
+      "func (h MinHeap) Len() int { return len(h) }",
+      "func (h MinHeap) Less(i, j int) bool { return h[i].cost < h[j].cost }",
+      "func (h MinHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }",
+      "func (h *MinHeap) Push(x interface{}) { *h = append(*h, x.(State)) }",
+      "func (h *MinHeap) Pop() interface{} { a := *h; x := a[len(a)-1]; *h = a[:len(a)-1]; return x }",
+      "func dijkstra(graph [][]Edge, source int) []int64 {",
+      "\t// Nonnegative weights; finite path sums below inf.",
+      "\tconst inf int64 = 1 << 62",
+      "\tdist := make([]int64, len(graph)); for i := range dist { dist[i] = inf }; dist[source] = 0",
+      "\th := &MinHeap{{0, source}}",
+      "\tfor h.Len() > 0 {",
+      "\t\tstate := heap.Pop(h).(State); u, cost := state.vertex, state.cost",
+      "\t\tif cost != dist[u] { continue }",
+      "\t\tfor _, e := range graph[u] {",
+      "\t\t\tif e.weight < inf-cost && cost+e.weight < dist[e.to] {",
+      "\t\t\t\tdist[e.to] = cost+e.weight; heap.Push(h, State{dist[e.to], e.to})",
+      "\t\t\t}",
+      "\t\t}",
+      "\t}",
+      "\treturn dist",
+      "}",
+      "$0"
+    ],
+    "description": "Heap shortest paths with nonnegative weights"
+  },
+  "Topological Sort": {
+    "prefix": "topo",
+    "body": [
+      "func topologicalSort(graph [][]int) []int {",
+      "\tindegree := make([]int, len(graph))",
+      "\tfor _, edges := range graph { for _, v := range edges { indegree[v]++ } }",
+      "\torder := []int{}",
+      "\tfor i, degree := range indegree { if degree == 0 { order = append(order, i) } }",
+      "\tfor head := 0; head < len(order); head++ {",
+      "\t\tfor _, v := range graph[order[head]] { indegree[v]--; if indegree[v] == 0 { order = append(order, v) } }",
+      "\t}",
+      "\tif len(order) != len(graph) { return nil }; return order",
+      "}",
+      "$0"
+    ],
+    "description": "Kahn ordering with cycle detection"
+  },
+  "Zero One Bfs": {
+    "prefix": "bfs01",
+    "body": [
+      "// Add import \"container/list\" to the import block.",
+      "type BinaryEdge struct { to, weight int }",
+      "type BinaryState struct { vertex, cost int }",
+      "func zeroOneBFS(graph [][]BinaryEdge, source int) []int {",
+      "\tdist := make([]int, len(graph)); for i := range dist { dist[i] = int(^uint(0)>>1) }; dist[source] = 0",
+      "\tq := list.New(); q.PushBack(BinaryState{source, 0})",
+      "\tfor q.Len() > 0 {",
+      "\t\tfront := q.Front(); state := front.Value.(BinaryState); q.Remove(front)",
+      "\t\tif state.cost != dist[state.vertex] { continue }",
+      "\t\tfor _, e := range graph[state.vertex] {",
+      "\t\t\t// Weights must be zero or one.",
+      "\t\t\tif state.cost+e.weight < dist[e.to] {",
+      "\t\t\t\tdist[e.to] = state.cost+e.weight",
+      "\t\t\t\tnext := BinaryState{e.to, dist[e.to]}",
+      "\t\t\t\tif e.weight == 0 { q.PushFront(next) } else { q.PushBack(next) }",
+      "\t\t\t}",
+      "\t\t}",
+      "\t}",
+      "\treturn dist",
+      "}",
+      "$0"
+    ],
+    "description": "Deque shortest paths with binary edge weights"
+  },
+  "Floyd Warshall": {
+    "prefix": "floyd",
+    "body": [
+      "func floydWarshall(dist [][]int64) {",
+      "\t// Use inf for missing edges, zero diagonal, finite sums within +/-inf.",
+      "\tconst inf int64 = 1 << 60",
+      "\tfor k := range dist { for i := range dist { for j := range dist {",
+      "\t\tif dist[i][k] < inf && dist[k][j] < inf && dist[i][k]+dist[k][j] < dist[i][j] {",
+      "\t\t\tdist[i][j] = dist[i][k]+dist[k][j]",
+      "\t\t}",
+      "\t} } }",
+      "}",
+      "$0"
+    ],
+    "description": "All pairs shortest paths without negative cycles"
+  },
+  "Grid Bfs": {
+    "prefix": "gridbfs",
+    "body": [
+      "func gridBFS(grid []string, sx, sy int) [][]int {",
+      "\tn, m := len(grid), len(grid[0])",
+      "\tdist := make([][]int, n)",
+      "\tfor i := range dist { dist[i] = make([]int, m); for j := range dist[i] { dist[i][j] = -1 } }",
+      "\tif grid[sx][sy] == '#' { return dist }",
+      "\tdirections := [][2]int{{1,0},{-1,0},{0,1},{0,-1}}",
+      "\tqueue := [][2]int{{sx,sy}}; dist[sx][sy] = 0",
+      "\tfor head := 0; head < len(queue); head++ {",
+      "\t\tx,y := queue[head][0],queue[head][1]",
+      "\t\tfor _, d := range directions {",
+      "\t\t\tnx,ny := x+d[0],y+d[1]",
+      "\t\t\tif nx >= 0 && nx < n && ny >= 0 && ny < m && grid[nx][ny] != '#' && dist[nx][ny] == -1 {",
+      "\t\t\t\tdist[nx][ny] = dist[x][y]+1; queue = append(queue,[2]int{nx,ny})",
+      "\t\t\t}",
+      "\t\t}",
+      "\t}",
+      "\treturn dist",
+      "}",
+      "$0"
+    ],
+    "description": "Four direction shortest paths avoiding walls"
+  },
+  "Binary Search And Bounds": {
+    "prefix": [
+      "bs",
+      "bounds"
+    ],
+    "body": [
+      "func firstTrue(lo, hi int, check func(int) bool) int {",
+      "\t// Search [lo, hi), returning hi if no answer exists.",
+      "\tfor lo < hi { mid := lo+(hi-lo)/2; if check(mid) { hi = mid } else { lo = mid+1 } }",
+      "\treturn lo",
+      "}",
+      "func lowerBound(a []int, x int) int { return firstTrue(0,len(a),func(i int) bool { return a[i] >= x }) }",
+      "func upperBound(a []int, x int) int { return firstTrue(0,len(a),func(i int) bool { return a[i] > x }) }",
+      "$0"
+    ],
+    "description": "Monotone search and bounds on sorted slices"
+  },
+  "Prefix Sums And Tables": {
+    "prefix": [
+      "pref",
+      "pref2",
+      "dp2"
+    ],
+    "body": [
+      "func prefixSums(a []int64) []int64 {",
+      "\tpref := make([]int64,len(a)+1)",
+      "\tfor i,v := range a { pref[i+1] = pref[i]+v }; return pref",
+      "}",
+      "func prefixGrid(a [][]int64) [][]int64 {",
+      "\tn,m := len(a),0; if n > 0 { m = len(a[0]) }",
+      "\tpref := make([][]int64,n+1); for i := range pref { pref[i] = make([]int64,m+1) }",
+      "\tfor i := 0; i < n; i++ { for j := 0; j < m; j++ {",
+      "\t\tpref[i+1][j+1] = a[i][j]+pref[i][j+1]+pref[i+1][j]-pref[i][j]",
+      "\t} }; return pref",
+      "}",
+      "func dpTable(n,m int) [][]int64 {",
+      "\tdp := make([][]int64,n); for i := range dp { dp[i] = make([]int64,m) }; return dp",
+      "}",
+      "$0"
+    ],
+    "description": "Padded prefix sums and independent DP rows"
+  },
+  "Two Pointers And Window": {
+    "prefix": [
+      "twop",
+      "window"
+    ],
+    "body": [
+      "func hasPairSum(a []int, target int64) bool {",
+      "\t// Sorted input; sums must fit int64.",
+      "\tleft,right := 0,len(a)-1",
+      "\tfor left < right {",
+      "\t\tsum := int64(a[left])+int64(a[right]); if sum == target { return true }",
+      "\t\tif sum < target { left++ } else { right-- }",
+      "\t}; return false",
+      "}",
+      "func longestBoundedSum(a []int, limit int64) int {",
+      "\t// Nonnegative values and limit.",
+      "\tleft,best := 0,0; var sum int64",
+      "\tfor right,value := range a {",
+      "\t\tsum += int64(value)",
+      "\t\tfor sum > limit { sum -= int64(a[left]); left++ }",
+      "\t\tif right-left+1 > best { best = right-left+1 }",
+      "\t}; return best",
+      "}",
+      "$0"
+    ],
+    "description": "Sorted pair sum and nonnegative sum window"
+  },
+  "Rolling Hash": {
+    "prefix": "hash",
+    "body": [
+      "type RollingHash struct { power,pref []int64 }",
+      "const hashMod int64 = 1000000007",
+      "func newRollingHash(s string) *RollingHash {",
+      "\tconst base int64 = 911382323",
+      "\th := &RollingHash{make([]int64,len(s)+1),make([]int64,len(s)+1)}; h.power[0] = 1",
+      "\tfor i := 0; i < len(s); i++ { h.power[i+1] = h.power[i]*base%hashMod; h.pref[i+1] = (h.pref[i]*base+int64(s[i])+1)%hashMod }",
+      "\treturn h",
+      "}",
+      "func (h *RollingHash) Query(left,right int) int64 { return (h.pref[right]-h.pref[left]*h.power[right-left]%hashMod+hashMod)%hashMod }",
+      "$0"
+    ],
+    "description": "Half open substring hash with collision risk"
+  },
+  "Contest Utilities": {
+    "prefix": [
+      "util",
+      "debug",
+      "inf",
+      "dirs",
+      "bits",
+      "yes",
+      "no"
+    ],
+    "body": [
+      "const INF int64 = 1 << 62",
+      "var directions = [][2]int{{1,0},{-1,0},{0,1},{0,-1}}",
+      "func debug(values ...interface{}) { fmt.Fprintln(os.Stderr, values...) }",
+      "func yes(ok bool) { if ok { fmt.Fprintln(out,\"YES\") } else { fmt.Fprintln(out,\"NO\") } }",
+      "func popcount(x uint64) int { count := 0; for x != 0 { x &= x-1; count++ }; return count }",
+      "func lowbit(x uint64) uint64 { return x & -x }",
+      "$0"
+    ],
+    "description": "Constants, verdicts, directions, bits and stderr"
+  },
+  "Wrap Tests": {
+    "prefix": "tests",
+    "body": [
+      "for t := readInt(); t > 0; t-- {",
+      "\t$TM_SELECTED_TEXT",
+      "\t$0",
+      "}"
+    ],
+    "description": "Wrap selected code in a multi test loop"
+  },
+  "While Loop": {
+    "prefix": "while",
+    "body": [
+      "for ${1:false} {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Loop while a condition holds"
+  },
+  "String Matching": {
+    "prefix": [
+      "kmp",
+      "zfunc"
+    ],
+    "body": [
+      "func prefixFunction(s string) []int {",
+      "\tpi := make([]int,len(s))",
+      "\tfor i := 1; i < len(s); i++ {",
+      "\t\tj := pi[i-1]; for j > 0 && s[i] != s[j] { j = pi[j-1] }",
+      "\t\tif s[i] == s[j] { j++ }; pi[i] = j",
+      "\t}; return pi",
+      "}",
+      "",
+      "func zFunction(s string) []int {",
+      "\tz := make([]int,len(s)); left,right := 0,0",
+      "\tfor i := 1; i < len(s); i++ {",
+      "\t\tif i < right { z[i] = z[i-left]; if z[i] > right-i { z[i] = right-i } }",
+      "\t\tfor i+z[i] < len(s) && s[z[i]] == s[i+z[i]] { z[i]++ }",
+      "\t\tif i+z[i] > right { left,right = i,i+z[i] }",
+      "\t}; return z",
+      "}",
+      "$0"
+    ],
+    "description": "KMP and Z prefix matching in linear time"
+  }
+}

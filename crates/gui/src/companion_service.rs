@@ -1,5 +1,5 @@
 //! Headless CPH listener; persists imports before launching the native window.
-use std::{process::{Child, Command, Stdio}, time::{Duration, Instant}};
+use std::{process::{Child, Stdio}, time::{Duration, Instant}};
 use anyhow::Result;
 use futures::StreamExt;
 use practice::companion::{self, inbox};
@@ -8,10 +8,10 @@ pub fn ensure_started() -> Result<()> {
     if inbox::alive("receiver") { return Ok(()); }
     #[cfg(target_os = "linux")]
     if dirs::home_dir().is_some_and(|home| home.join(".config/systemd/user/leet-companion.service").exists() && std::env::var_os("XDG_CONFIG_HOME").is_none_or(|root| std::path::Path::new(&root) == home.join(".config"))) {
-        let result = Command::new("systemctl").args(["--user", "start", "leet-companion.service"]).output()?;
+        let result = practice::background_process::command("systemctl").args(["--user", "start", "leet-companion.service"]).output()?;
         if result.status.success() { return Ok(()); }
     }
-    Command::new(std::env::current_exe()?).arg("--companion-service").stdin(Stdio::null()).stdout(Stdio::null()).spawn()?;
+    practice::background_process::command(std::env::current_exe()?).arg("--companion-service").stdin(Stdio::null()).stdout(Stdio::null()).spawn()?;
     Ok(())
 }
 pub fn run() -> Result<()> {
@@ -40,18 +40,18 @@ pub fn run() -> Result<()> {
             if receivers.ports.is_empty() && !warned {
                 inbox::warning("CPH unavailable: all eligible default ports are occupied. Leet will keep retrying.")?;
                 if !inbox::window_running() {
-                    let _ = Command::new("notify-send").args(["--app-name=leet", "CPH unavailable", "All eligible default ports are occupied. Leet will keep retrying."]).status();
+                    let _ = practice::background_process::command("notify-send").args(["--app-name=leet", "CPH unavailable", "All eligible default ports are occupied. Leet will keep retrying."]).status();
                 }
                 warned = true;
             } else if !receivers.ports.is_empty() { warned = false; }
             if let Some(process) = &mut child { if process.try_wait()?.is_some() { child = None; } }
             let pending = !inbox::pending()?.is_empty();
             if pending && inbox::window_running() && !inbox::alive("window") && !upgrade_warned {
-                let _ = Command::new("notify-send").args(["--app-name=leet", "Restart Leet to receive imports", "This window uses an older build. Your CPH import is saved; restart into the installed update."]).status();
+                let _ = practice::background_process::command("notify-send").args(["--app-name=leet", "Restart Leet to receive imports", "This window uses an older build. Your CPH import is saved; restart into the installed update."]).status();
                 upgrade_warned = true;
             }
             if pending && !inbox::window_running() && child.is_none() && last_launch.is_none_or(|time: Instant| time.elapsed() >= Duration::from_secs(5)) {
-                let mut command = Command::new(std::env::current_exe()?);
+                let mut command = practice::background_process::command(std::env::current_exe()?);
                 #[cfg(target_os = "linux")]
                 if std::env::var_os("WAYLAND_DISPLAY").is_none() {
                     if let Some(runtime) = std::env::var_os("XDG_RUNTIME_DIR") {

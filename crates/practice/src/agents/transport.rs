@@ -60,7 +60,7 @@ impl Drop for Process {
     fn drop(&mut self) {
         self.input.take();
         #[cfg(unix)] { let _ = Command::new("kill").args(["-KILL", "--", &format!("-{}", self.child.id())]).stdout(Stdio::null()).stderr(Stdio::null()).status(); }
-        #[cfg(windows)] { let _ = Command::new("taskkill").args(["/PID", &self.child.id().to_string(), "/T", "/F"]).stdout(Stdio::null()).stderr(Stdio::null()).status(); }
+        #[cfg(windows)] { let _ = crate::background_process::command("taskkill").args(["/PID", &self.child.id().to_string(), "/T", "/F"]).stdout(Stdio::null()).stderr(Stdio::null()).status(); }
         let _ = self.child.kill(); let _ = self.child.wait();
         for reader in self.readers.drain(..) { let _ = reader.join(); }
     }

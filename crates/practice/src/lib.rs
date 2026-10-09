@@ -16,6 +16,7 @@ pub mod prompts;
 pub mod roadmap;
 pub mod runner;
 pub mod search;
+pub mod snippets;
 pub mod workspace;
 pub mod neetcode;
 
@@ -40,6 +41,6 @@ pub mod toolchain;
 
 pub mod viz;
 
-mod background_process;
+pub mod background_process;
 
 pub mod tool_setup;
