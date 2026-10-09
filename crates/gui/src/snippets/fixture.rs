@@ -102,7 +102,7 @@ pub(crate) fn native(cx:&mut HeadlessAppContext,output:&Path,pixels:bool)->Resul
         let doc=serde_json::to_string(&item.documentation)?;
         ensure!(doc.contains("Input ·")&&doc.contains("Output ·")&&doc.contains("Example ·"),"Algorithm usage guide missing");
         let bounds=window.find("source-completions").bounds();
-        ensure!(bounds.size.width<px(750.)&&bounds.size.height<px(300.),"Completion menu is too large");
+        ensure!(bounds.size.width<=pane.read(cx).state.read(cx).input_bounds().size.width&&bounds.size.height<px(300.),"Completion menu exceeds the editor bounds");
         Ok(())
     })??;
     if pixels{cx.capture_screenshot(handle)?.save(output.join("snippet-bfs-help.png"))?;}

@@ -30,6 +30,7 @@
 - Show each command once in search, with its current keybindings beside it.
 - Merge snippets into the compact IntelliSense menu below the cursor, with highlighted previews.
 - Identify completion kinds with small icons.
+- Give completion previews more room and fade their clipped edge smoothly.
 - Show bundled snippet inputs, outputs, and short examples in the preview.
 - Explain snippet expansion and placeholders in the skippable onboarding step.
 - Suppress Windows console popups from background tools, updates, Companion, and local execution.

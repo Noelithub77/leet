@@ -66,14 +66,17 @@ pub(super) fn render(pane: &EditorPane, window: &mut Window, cx: &mut Context<Ed
     let input = editor.input_bounds();
     let pos = editor.scroll_offset() + cursor.origin - input.origin;
     let width = px(340.).min(input.size.width.max(px(160.)));
-    let left = pos.x.max(px(0.)).min((input.size.width - width).max(px(0.)));
+    let preview_width = px(480.).min((input.size.width - px(8.)).max(px(160.)));
     let height = px(26. * menu.content.items.len().min(8) as f32 + 8.);
     let below = pos.y + line_height + px(4.);
     let available_height = input.size.height.min((window.viewport_size().height - input.origin.y).max(px(0.)));
-    let side = left + width + px(320.) + px(8.) <= input.size.width;
+    let side = width + preview_width + px(16.) <= input.size.width;
     let selected = menu.content.items.get(menu.selected)?;
     let documentation = selected.documentation.as_ref().map(|doc| match doc { Documentation::String(text) => text.clone(), Documentation::MarkupContent(markup) => markup.value.clone() });
-    let popup_height = if menu.preview.is_some() || documentation.is_some() { if side { height.max(px(180.)) } else { height + px(184.) } } else { height };
+    let has_preview = menu.preview.is_some() || documentation.is_some();
+    let popup_width = if !has_preview { width } else if side { width + preview_width + px(16.) } else { width.max(preview_width) };
+    let left = pos.x.max(px(0.)).min((input.size.width - popup_width).max(px(0.)));
+    let popup_height = if has_preview { if side { height.max(px(240.)) } else { height + px(244.) } } else { height };
     let top = if below + popup_height > available_height { (pos.y - popup_height - px(4.)).max(px(0.)) } else { below };
     let preview: Option<AnyElement> = if let Some((code, highlighter)) = &menu.preview {
         Some(div().font_family(theme.mono_font_family.clone()).text_xs()
@@ -104,8 +107,11 @@ pub(super) fn render(pane: &EditorPane, window: &mut Window, cx: &mut Context<Ed
     Some(deferred(div().id("source-completions").test_support().absolute().left(left).top(top).flex().gap_1().items_start()
         .when(!side, |popup| popup.flex_col())
         .child(div().p_1().bg(theme.popover).border_1().border_color(theme.border).rounded_md().shadow_md().child(list))
-        .when_some(preview, |popup, preview| popup.child(div().id("source-completion-preview").overflow_y_scroll()
-            .w(if side { px(320.) } else { width }).max_h(px(180.)).p_2().text_xs().bg(theme.popover).border_1().border_color(theme.border).rounded_md().shadow_md().child(preview)))
+        .when_some(preview, |popup, preview| popup.child(div().id("source-completion-preview").relative().overflow_hidden()
+            .w(preview_width).bg(theme.popover).border_1().border_color(theme.border).rounded_md().shadow_md()
+            .child(div().id("source-completion-preview-scroll").overflow_y_scroll().max_h(px(240.)).p_2().pb_8().text_xs().child(preview))
+            .child(div().absolute().left(px(1.)).right(px(1.)).bottom(px(1.)).h_8().rounded_b_md()
+                .bg(linear_gradient(180., linear_color_stop(theme.popover.opacity(0.), 0.), linear_color_stop(theme.popover, 1.))))))
         .on_mouse_down_out(cx.listener(|pane, _, window, cx| pane.close_completions(window, cx)))
     ).into_any_element())
 }
