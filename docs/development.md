@@ -26,7 +26,7 @@ in their originating tab. Switching back to Home keeps every problem intact.
 Hover the house icon for its tooltip. Ctrl+H opens Home (Ctrl+. also works); its tooltip shows the current shortcut. Ctrl+Tab and Ctrl+Shift+Tab cycle forward and backward through problem tabs, skipping Home. Typing on Home opens universal search with the typed text. Ctrl+W closes the problem tab after saving;
 Home stays pinned. Up/down and Enter navigate the focused recent list.
 
-Every panel has one toggle, and a spring animation shows or hides it. Drag the boundary above Results to resize its height; the app remembers it. Constraints remains accessible below the scrolling statement; opening it closes Description and Examples.
+Every panel has one toggle, and a spring animation shows or hides it. Drag the boundary above Results to resize its height; the app remembers it. Description, Examples, and Constraints expand independently and remember their open state across questions and app restarts. Short cards fit their content; long cards share the remaining height and scroll independently while every header stays accessible.
 
 | Area | Toggle | Contents |
 | --- | --- | --- |

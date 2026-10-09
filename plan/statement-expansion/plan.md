@@ -3,4 +3,4 @@
 - Complete: independent expansion, scroll ownership, and compact content layout.
 - Complete: production-view fixtures for simultaneous opening, natural short content, long content, keyboard routing, and persistence across views/reopened storage.
 - Complete: headless pixels in four size/theme/zoom configurations, private OmaBox clicks and keyboard input, and repository checks (189 tests passed; 15 optional tests ignored).
-- Remaining: focused commit and local deployment.
+- Complete: implementation committed as `0827b0c`; local release deployment succeeded, and installed `leet` and `1337` both resolve to that revision.
