@@ -27,6 +27,7 @@ impl Pending {
 }
 
 pub(super) struct Completions {
+    pub predictions: RefCell<Option<Rc<crate::copilot::Predictions>>>,
     pub catalog: RefCell<Catalog>,
     pub upstream: RefCell<Option<Rc<dyn CompletionProvider>>>,
     pub pending: Rc<RefCell<Option<Pending>>>,
@@ -34,12 +35,16 @@ pub(super) struct Completions {
 }
 impl Completions {
     pub fn new(language: Language) -> Self {
-        Self { catalog: RefCell::new(Catalog { library: vec![], language, path: None, workspace: None, selected: String::new(), selection: 0..0 }), upstream: RefCell::new(None), pending: Rc::default(), generation: Rc::default() }
+        Self { predictions: RefCell::new(None), catalog: RefCell::new(Catalog { library: vec![], language, path: None, workspace: None, selected: String::new(), selection: 0..0 }), upstream: RefCell::new(None), pending: Rc::default(), generation: Rc::default() }
     }
 }
 
 impl CompletionProvider for Completions {
     fn inline_completion(&self, text: &Rope, offset: usize, trigger: lsp_types::InlineCompletionContext, window: &mut Window, cx: &mut App) -> Task<Result<lsp_types::InlineCompletionResponse>> {
+        if let Some(predictions) = self.predictions.borrow().as_ref() {
+            if !predictions.alt.get() { return Task::ready(Ok(lsp_types::InlineCompletionResponse::Array(vec![]))); }
+            return predictions.fetch(text.to_string(), offset, cx);
+        }
         self.upstream.borrow().as_ref().map_or_else(
             || Task::ready(Ok(lsp_types::InlineCompletionResponse::Array(vec![]))),
             |provider| provider.inline_completion(text, offset, trigger, window, cx),
@@ -47,6 +52,7 @@ impl CompletionProvider for Completions {
     }
 
     fn inline_completion_debounce(&self) -> std::time::Duration {
+        if self.predictions.borrow().is_some() { return std::time::Duration::from_millis(150); }
         self.upstream.borrow().as_ref().map_or(std::time::Duration::from_millis(300), |provider| provider.inline_completion_debounce())
     }
 
@@ -144,6 +150,7 @@ impl CompletionProvider for Completions {
     }
 
     fn is_completion_trigger(&self, offset: usize, new_text: &str, cx: &mut App) -> bool {
+        if self.predictions.borrow().as_ref().is_some_and(|predictions| predictions.alt.get()) { return false; }
         new_text.chars().last().is_some_and(|ch| ch.is_alphanumeric() || ch == '_'
             || self.catalog.borrow().library.iter().flat_map(|s| &s.prefixes).any(|prefix| prefix.starts_with(ch)))
             || self.upstream.borrow().as_ref().is_some_and(|p| p.is_completion_trigger(offset, new_text, cx))

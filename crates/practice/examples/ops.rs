@@ -19,7 +19,7 @@ fn execute()->Result<()> {
     let args:Vec<_>=std::env::args().skip(1).collect();
     let command=args.first().map(String::as_str).unwrap_or("--help");
     if matches!(command,"--help"|"-h"|"help"){
-        println!("./ops <check|build|local:deploy|companion|agents|snapshot|cache:fetch|contests:refresh|workspace:move|release:package|trace|gui:test|toolchain:setup|snippets> [--json]\n\ncompanion     Login browser-import listener; use ./ops companion --help.\n\nagents        Detect local agents; --catalog lists live models, --smoke runs read-only JSON probes.\nsnippets      Inspect or change local snippets; use ./ops snippets --help.\ncheck         Rust workspace tests.\nbuild         Release desktop build.\nlocal:deploy  Build/install leet and 1337 commands, desktop entry/icon; verify version and links.\nsnapshot      Public-only SQLite refresh; use ./ops snapshot --help.\ncache:fetch   Cache one Codeforces statement: --slug cf:CONTEST:INDEX.\ncontests:refresh  Refresh both providers; optional --contest ID or --leetcode-contest SLUG.\nworkspace:move Move solutions and Git history: --path /absolute/path; preserve a compatibility link.\nrelease:package  Package a native CI build; use ./ops release:package --help.\ngui:test      Isolated GPUI interaction, PNG and optional video checks; use ./ops gui:test --help.\ntrace         Record one case; use ./ops trace --help.\n\nLocal environment. Preserves settings, credentials, cache, and Solutions. Running windows offer restart.");return Ok(());
+        println!("./ops <check|build|local:deploy|companion|agents|snapshot|cache:fetch|contests:refresh|workspace:move|release:package|trace|gui:test|toolchain:setup|snippets|copilot> [--json]\n\ncompanion     Login browser-import listener; use ./ops companion --help.\n\nagents        Detect local agents; --catalog lists live models, --smoke runs read-only JSON probes.\ncopilot       Optional native completion server; use ./ops copilot --help.\n\nsnippets      Inspect or change local snippets; use ./ops snippets --help.\ncheck         Rust workspace tests.\nbuild         Release desktop build.\nlocal:deploy  Build/install leet and 1337 commands, desktop entry/icon; verify version and links.\nsnapshot      Public-only SQLite refresh; use ./ops snapshot --help.\ncache:fetch   Cache one Codeforces statement: --slug cf:CONTEST:INDEX.\ncontests:refresh  Refresh both providers; optional --contest ID or --leetcode-contest SLUG.\nworkspace:move Move solutions and Git history: --path /absolute/path; preserve a compatibility link.\nrelease:package  Package a native CI build; use ./ops release:package --help.\ngui:test      Isolated GPUI interaction, PNG and optional video checks; use ./ops gui:test --help.\ntrace         Record one case; use ./ops trace --help.\n\nLocal environment. Preserves settings, credentials, cache, and Solutions. Running windows offer restart.");return Ok(());
     }
     if command == "companion" {
         let status = Command::new("cargo").args(["run", "--quiet", "-p", "practice", "--example", "companion_service", "--"]).args(&args[1..]).status()?;
@@ -27,6 +27,7 @@ fn execute()->Result<()> {
         return Ok(());
     }
     if command == "snippets" { return practice::snippets::cli::cli(&args[1..]); }
+    if command == "copilot" { return practice::copilot::install::cli(&args[1..]); }
     if command == "gui:test" { return super::gui_tests::run(&args[1..]); }
     if command == "trace" { return trace(&args[1..]); }
     if command == "agents" {
@@ -148,7 +149,8 @@ fn execute()->Result<()> {
             let revision=String::from_utf8(revision.stdout)?.trim().to_owned();
             let stamp=SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
             let installed=builds.join(format!("leet-{stamp}-{revision}"));
-            std::fs::copy("target/release/leet",&installed)?;
+            let target=std::env::var_os("CARGO_TARGET_DIR").map(PathBuf::from).unwrap_or_else(||PathBuf::from("target"));
+            std::fs::copy(target.join("release/leet"),&installed)?;
             for name in ["leet", "1337"] { link(&installed, &bin.join(name))?; }
             stages.push(json!({"name":"install_binary_and_links","duration_seconds":stage.elapsed().as_secs_f64()}));
             let stage=Instant::now();
@@ -249,6 +251,10 @@ fn prune(dir:&Path,current:&Path)->Result<()> {
 
 #[cfg(unix)]
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some("copilot") {
+        if let Err(error) = practice::copilot::install::cli(&std::env::args().skip(2).collect::<Vec<_>>()) { eprintln!("{error:#}"); std::process::exit(1); }
+        return;
+    }
     if std::env::args().nth(1).as_deref() == Some("toolchain:setup") {
         if let Err(error) = practice::tool_setup::cli(&std::env::args().skip(2).collect::<Vec<_>>()) { eprintln!("{error:#}"); std::process::exit(1); }
     } else { unix::main(); }
@@ -256,6 +262,10 @@ fn main() {
 
 #[cfg(not(unix))]
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some("copilot") {
+        if let Err(error) = practice::copilot::install::cli(&std::env::args().skip(2).collect::<Vec<_>>()) { eprintln!("{error:#}"); std::process::exit(1); }
+        return;
+    }
     if std::env::args().nth(1).as_deref() == Some("toolchain:setup") {
         if let Err(error) = practice::tool_setup::cli(&std::env::args().skip(2).collect::<Vec<_>>()) { eprintln!("{error:#}"); std::process::exit(1); }
         return;

@@ -30,6 +30,8 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             workspace.update(cx, |workspace, _| workspace.tool_install.fixture = true);
             let setup = cx.new(|cx| Setup {
                 focus: cx.focus_handle(), workspace: workspace.downgrade(), step: 0,
+                copilot: workspace.read(cx).copilot.clone(),
+                _copilot_subscription: cx.observe(&workspace.read(cx).copilot.clone(), |_, _, cx| cx.notify()),
                 language: Language::Cpp, source: Source::NeetCode, python: config.python.clone(),
                 snippet_found: Vec::new(), snippet_scanning: false, snippet_status: String::new(),
                 handle: cx.new(|cx| InputState::new(window, cx)), busy: false, error: None,
@@ -62,6 +64,16 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             ensure!(window.find("setup-snippet-guide").visible(), "Snippet onboarding explanation is hidden");
             window.click("setup-continue", cx);
             ensure!(setup.read(cx).step == 2, "Snippet onboarding could not be skipped");
+            window.render_frame(cx);
+            ensure!(window.find("copilot-setup").visible(), "Copilot setup step is hidden");
+            ensure!(!workspace.read(cx).config.copilot_enabled, "Copilot must remain optional");
+            Ok(())
+        })??;
+        if pixels && name == "optional-server" { cx.capture_screenshot(handle)?.save(output.join("onboarding-copilot.png"))?; }
+        cx.update_window(handle, |_, window, cx| -> Result<()> {
+            window.click("setup-continue", cx);
+            ensure!(setup.read(cx).step == 3, "Copilot onboarding could not be skipped");
+            ensure!(!workspace.read(cx).copilot.read(cx).busy, "Skipping Copilot started authentication");
             fixture.update(cx, |fixture, cx| { fixture.setup = None; cx.notify(); });
             Ok(())
         })??;

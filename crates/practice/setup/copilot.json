@@ -1,0 +1,32 @@
+{
+  "linux-x64": {
+    "version": "1.552.0",
+    "url": "https://registry.npmjs.org/@github/copilot-language-server-linux-x64/-/copilot-language-server-linux-x64-1.552.0.tgz",
+    "digest": "sha512:0cdb4831738a821ea6da8b0238ba60a93ad31c2dc7eca897e40e82a7ece84ee51aec8d80999bb8c41d5a584b6f0e6de34bfce78c32b7d7f82f3f632c20fca04c"
+  },
+  "linux-arm64": {
+    "version": "1.552.0",
+    "url": "https://registry.npmjs.org/@github/copilot-language-server-linux-arm64/-/copilot-language-server-linux-arm64-1.552.0.tgz",
+    "digest": "sha512:e46de69aab752aebe69e3f796fea2fc77451682be89383a6fa13b6eb8056feef53f6e1532c7eeeb133a40d84710e7902117913fe100a58dbe1f2c0b61855935f"
+  },
+  "darwin-x64": {
+    "version": "1.552.0",
+    "url": "https://registry.npmjs.org/@github/copilot-language-server-darwin-x64/-/copilot-language-server-darwin-x64-1.552.0.tgz",
+    "digest": "sha512:d2199ac53614dbdd697ff49eed27354a944e45ddc569d0930ebf341e1e08c675c0be3b1d39b7f5a06b2d8744c803a3e57af4eae9372b5f938b8187461ba6740f"
+  },
+  "darwin-arm64": {
+    "version": "1.552.0",
+    "url": "https://registry.npmjs.org/@github/copilot-language-server-darwin-arm64/-/copilot-language-server-darwin-arm64-1.552.0.tgz",
+    "digest": "sha512:ebe8544c7311b66c2ad3db69d6f724222839ee6c984be3a2859db18b7491bb8d7f4d2111bfe5fd6f48c80e22aadb42f087dca7c5490393b70b912c9542535a14"
+  },
+  "win32-x64": {
+    "version": "1.552.0",
+    "url": "https://registry.npmjs.org/@github/copilot-language-server-win32-x64/-/copilot-language-server-win32-x64-1.552.0.tgz",
+    "digest": "sha512:c27f29dc6689f5e1d667b1dc59d23a7cf6208c84531786ab91b998955bc9d9839b54bb281cac51a99291dad04c87922af6912595b7c141b1549aefa741bf8ab3"
+  },
+  "win32-arm64": {
+    "version": "1.552.0",
+    "url": "https://registry.npmjs.org/@github/copilot-language-server-win32-arm64/-/copilot-language-server-win32-arm64-1.552.0.tgz",
+    "digest": "sha512:fb90d3a0f07127f7b037ad47dc1e655f47b0117f1fce159015169063c071ffd085708e0b127b4012b1179a18d575beec39c8a80968c92d0dfdec4a3c0ff671ec"
+  }
+}

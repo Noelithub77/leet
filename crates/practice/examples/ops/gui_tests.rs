@@ -52,7 +52,8 @@ pub fn run(args: &[String]) -> Result<()> {
     let build_log = output.join("build.log");
     let build = Command::new("cargo").args(["build", "-p", "gui", "--features", "gui-test"]).stdout(fs::File::create(&build_log)?).stderr(fs::OpenOptions::new().append(true).open(&build_log)?).status()?;
     ensure!(build.success(), "GUI fixture build failed; see {}", build_log.display());
-    let binary = std::env::current_dir()?.join("target/debug/leet");
+    let target = std::env::var_os("CARGO_TARGET_DIR").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("target"));
+    let binary = std::env::current_dir()?.join(target).join("debug/leet");
     ensure!(binary.is_file(), "Missing GUI fixture binary: {}", binary.display());
     let mut command = if backend == "cage" {
         let mut command = Command::new("cage"); command.arg("--").arg(&binary); command

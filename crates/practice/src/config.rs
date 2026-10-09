@@ -38,6 +38,8 @@ pub struct Config {
     pub zoom: f32,
     pub keybindings: BTreeMap<String, String>,
     pub snippets: crate::snippets::Settings,
+    /// Opt-in AI predictions are revealed only while Alt is held.
+    pub copilot_enabled: bool,
 }
 
 impl Default for Config {
@@ -62,6 +64,7 @@ impl Default for Config {
             zoom: 1.0,
             keybindings: BTreeMap::new(),
             snippets: Default::default(),
+            copilot_enabled: false,
         }
     }
 }
@@ -204,6 +207,8 @@ mod tests {
         assert_eq!(config.workspace, home().join("leet"));
         assert_eq!(config.font_family, "Liberation Sans");
         assert!(!config.show_tags);
+        assert!(!config.copilot_enabled);
+        config.copilot_enabled = true;
         config.show_tags = true;
         config.ai_web = true;
         config.theme = "Ayu Dark".into();
@@ -217,6 +222,7 @@ mod tests {
         config.remember(Selection { agent: AgentKind::Codex, model: "gpt-6-luna".into(), effort: Some("low".into()), fast: true });
         config.save_to(&path).unwrap();
         let saved = Config::load_from(&path).unwrap();
+        assert!(saved.copilot_enabled);
         assert_eq!(saved.theme, "Ayu Dark");
         assert!(saved.show_tags);
         assert!(saved.ai_web);

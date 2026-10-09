@@ -23,6 +23,7 @@ pub mod neetcode;
 pub mod stdin_runner;
 
 pub mod lsp;
+pub mod copilot;
 
 pub mod description;
 pub mod rich_text;

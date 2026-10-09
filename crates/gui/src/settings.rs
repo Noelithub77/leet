@@ -23,6 +23,7 @@ pub enum Setting {
     ResetSettings,
     Language,
     LanguageServer,
+    Copilot,
     Codeforces,
     LeetCode,
     NeetCode,
@@ -52,11 +53,12 @@ pub enum Kind {
 }
 
 impl Setting {
-    pub const ALL: [Setting; 23] = [
+    pub const ALL: [Setting; 24] = [
         Setting::Onboarding,
         Setting::ResetSettings,
         Setting::Language,
         Setting::LanguageServer,
+        Setting::Copilot,
         Setting::Codeforces,
         Setting::LeetCode,
         Setting::NeetCode,
@@ -85,6 +87,7 @@ impl Setting {
             Setting::ResetSettings => "Reset app settings",
             Setting::Language => "Preferred language",
             Setting::LanguageServer => "Restart language server",
+            Setting::Copilot => "Copilot completions",
             Setting::Codeforces => "Codeforces handle",
             Setting::LeetCode => "LeetCode account",
             Setting::NeetCode => "NeetCode account",
@@ -116,6 +119,7 @@ impl Setting {
             Setting::ResetSettings => "reset defaults preferences fresh start onboarding",
             Setting::Language => "language python cpp c++ go c java preferred",
             Setting::LanguageServer => "lsp intellisense completion diagnostics hover definitions restart",
+            Setting::Copilot => "github copilot completions predictions tab alt sign in zen subtle",
             Setting::Codeforces => "codeforces handle account sign in",
             Setting::LeetCode | Setting::NeetCode => "login session account sign in sync",
             Setting::Theme => "color appearance dark light vesper",
@@ -142,7 +146,7 @@ impl Setting {
             Setting::AiFast => Kind::Toggle,
             Setting::AiModel | Setting::Install(_) | Setting::PlatformGroup(_) => Kind::Action,
             Setting::Python | Setting::ExternalEditor | Setting::Workspace | Setting::Keybinding(_) => Kind::Text,
-            Setting::Onboarding | Setting::ResetSettings | Setting::LanguageServer | Setting::Codeforces | Setting::OpenFile | Setting::Font | Setting::Keybindings | Setting::LeetCode | Setting::NeetCode => Kind::Action,
+            Setting::Onboarding | Setting::ResetSettings | Setting::LanguageServer | Setting::Copilot | Setting::Codeforces | Setting::OpenFile | Setting::Font | Setting::Keybindings | Setting::LeetCode | Setting::NeetCode => Kind::Action,
         }
     }
 
@@ -152,6 +156,7 @@ impl Setting {
             Setting::Onboarding | Setting::ResetSettings | Setting::PlatformGroup(_) => String::new(),
             Setting::Language => c.preferred_language.label().into(),
             Setting::LanguageServer => ws.intelligence.label(ws.session.as_ref().map_or(c.preferred_language, |session| session.language)),
+            Setting::Copilot => ws.copilot.read(cx).label(),
             Setting::Codeforces => if c.codeforces_handle.is_empty() { "Not set".into() } else { c.codeforces_handle.clone() },
             Setting::LeetCode => ws.account_names[0].clone(),
             Setting::NeetCode => ws.account_names[1].clone(),
@@ -176,6 +181,7 @@ impl Setting {
     fn note(self) -> Option<&'static str> {
         match self {
             Setting::Workspace => Some("Applies after restart"),
+            Setting::Copilot => Some("Hold Alt to preview · Tab or Alt+L to accept"),
 
             _ => None,
         }
@@ -193,7 +199,7 @@ impl SettingsTab {
     fn settings(self) -> &'static [Setting] {
         match self {
             Self::General => &[Setting::List, Setting::Workspace, Setting::Onboarding, Setting::OpenFile, Setting::ResetSettings],
-            Self::Editor => &[Setting::Language, Setting::Python, Setting::ExternalEditor, Setting::TestTimeout, Setting::LanguageServer],
+            Self::Editor => &[Setting::Language, Setting::Python, Setting::ExternalEditor, Setting::TestTimeout, Setting::LanguageServer, Setting::Copilot],
             Self::Appearance => &[Setting::Theme, Setting::Font],
             Self::Platform => &[Setting::LeetCode, Setting::NeetCode, Setting::Codeforces],
             Self::Ai => &[Setting::AiAgent, Setting::AiModel, Setting::AiReasoning, Setting::AiFast, Setting::WebChat, Setting::Install(AgentKind::OpenCode), Setting::Install(AgentKind::Antigravity)],
@@ -434,6 +440,9 @@ impl Workspace {
                 cx.notify();
             }
             Kind::Action if setting == Setting::LanguageServer => self.restart_language_server(window, cx),
+            Kind::Action if setting == Setting::Copilot => self.copilot.update(cx, |connection, cx| {
+                if connection.enabled() || connection.busy { connection.disable(cx); } else { connection.connect(self.config.workspace.clone(), true, window, cx); }
+            }),
             Kind::Action if setting == Setting::Onboarding => self.begin_onboarding(false, window, cx),
             Kind::Action if setting == Setting::ResetSettings => crate::dialogs::open_reset_settings(window, cx),
             Kind::Action if setting == Setting::Codeforces => self.begin_onboarding(true, window, cx),
@@ -537,6 +546,7 @@ impl Workspace {
                         let editing = self.settings.editing.as_ref().filter(|(s, _)| *s == setting);
                         let value = setting.value(self, cx);
                         let control = match (editing, setting.kind()) {
+                            (None, _) if setting == Setting::Copilot => crate::copilot::controls(&self.copilot, self.config.workspace.clone(), cx),
                             (None, _) if matches!(setting, Setting::PlatformGroup(_)) => {
                                 gpui_kit::component::Icon::new(if self.settings.platform_open[platform_index(setting).unwrap()] {
                                     gpui_kit::assets::IconName::ChevronDown

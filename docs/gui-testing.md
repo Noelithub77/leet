@@ -87,6 +87,15 @@ The current command selects the node automatically and has no `--gpu` flag.
 Do not change the live compositor to resolve a fixture failure. OmaBox does not prove physical input,
 real monitors, native system services, or performance on another GPU.
 
+Copilot fixtures use the production source editor with deterministic predictions,
+without downloading a server, reading credentials, or making network requests.
+They dispatch real modifier and keyboard events to verify hidden predictions,
+Alt-held previews, release dismissal, Tab acceptance, Escape, and stale-document
+rejection. `copilot-alt-preview.png` and `copilot-hidden.png` separate rendered
+evidence from assertions. Onboarding fixtures verify that Copilot can be skipped
+without starting authentication. Live GitHub sign-in and subscription-backed
+predictions require separate verification after browser authorization.
+
 Run `./ops check --json` after source changes. Local deployment uses
 `./ops local:deploy --json`; it installs the ordinary release binary without
 the `gui-test` feature. Running windows may offer a restart, which remains a

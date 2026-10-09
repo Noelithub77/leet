@@ -168,6 +168,7 @@ pub struct Workspace {
     pub editor: Entity<EditorState>,
     pub editor_subscription: Option<Subscription>,
     pub editor_pane: Entity<EditorPane>,
+    pub copilot: Entity<crate::copilot::Connection>,
     pub statement: Entity<Statement>,
     pub omni: Omnibar,
     pub settings: SettingsState,
@@ -197,6 +198,7 @@ impl Workspace {
         let mut this = Self::from_storage(config, db, accounts.clone(), window, cx);
         this.snippet_dir = practice::snippets::store::dir();
         this.reload_snippets(cx);
+        if this.config.copilot_enabled { this.copilot.update(cx, |connection, cx| connection.connect(this.config.workspace.clone(), false, window, cx)); }
         this.assist.update(cx, |assist, cx| assist.detect(cx));
         let workspace = this.config.workspace.clone();
         cx.background_spawn(async move {
@@ -249,6 +251,13 @@ impl Workspace {
         let assist = cx.new(|cx| crate::assist::Assist::new(weak.clone(), db.clone(), window, cx));
         let ai_chip = cx.new(|cx| crate::ai::Chip::new(weak.clone(), assist.clone(), cx));
         let debugger = cx.new(|cx| crate::debug_view::Debugger::new(weak, assist.clone(), cx));
+        let copilot = cx.new(|_| crate::copilot::Connection::new(config.copilot_enabled));
+        let copilot_sub = cx.subscribe_in(&copilot, window, |this, _, event: &crate::copilot::Enabled, window, cx| {
+            this.config.copilot_enabled = event.0;
+            this.save_config(window, cx);
+            cx.notify();
+        });
+        let copilot_observe = cx.observe(&copilot, |_, _, cx| cx.notify());
         let mut this = Self {
             snippet_dir: config.workspace.join(".fixture-snippets"),
             snippet_editor: None,
@@ -292,6 +301,7 @@ impl Workspace {
             tabs: vec![],
             active_tab: None,
             editor_pane: cx.new(|cx| EditorPane::new(editor.clone(), config.preferred_language, window, cx)),
+            copilot: copilot.clone(),
             editor,
             editor_subscription: Some(editor_sub),
             statement: cx.new(|_| Statement::default()),
@@ -311,9 +321,10 @@ impl Workspace {
             flash_seq: 0,
             save_task: Task::ready(()),
             _tasks: vec![],
-            _subscriptions: vec![omni_sub],
+            _subscriptions: vec![omni_sub, copilot_sub, copilot_observe],
         };
         this.home.sidebar = true;
+        this.editor_pane.update(cx, |pane, cx| pane.connect_predictions(copilot, window, cx));
         this.restore_layout();
         this.rebuild_library();
         this

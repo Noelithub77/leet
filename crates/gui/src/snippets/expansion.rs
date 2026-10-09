@@ -1,6 +1,7 @@
 //! Source-editor expansion, placeholder navigation, and native completions.
 use gpui_kit::*;
 use gpui_kit::component::input::{Editor, EditorState, InputEvent, CompletionProvider};
+use gpui_kit::base::input::{EditorMode, InputModeKind};
 use gpui_kit::component::{ActiveTheme as _, Sizable as _, h_flex};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::prelude::FluentBuilder as _;
@@ -32,6 +33,7 @@ pub struct EditorPane {
     pub(super) menu: Option<super::menu::Menu>,
     changing: bool,
     epoch: u64,
+    pub(crate) predictions: Option<Rc<crate::copilot::Predictions>>,
     _subscriptions: Vec<Subscription>,
 }
 impl EditorPane {
@@ -49,8 +51,13 @@ impl EditorPane {
         let changes = cx.subscribe_in(&state, window, |this, editor, event, window, cx| {
             if !matches!(event, InputEvent::Change) || this.changing { return; }
             let text = editor.read(cx).value().to_string();
+            if let Some(predictions) = &this.predictions { predictions.invalidate(); }
             this.menu = None;
             let selection = editor.read(cx).selected_range();
+            if let Some(predictions) = &this.predictions {
+                predictions.configure(this.path.clone(), this.language);
+                predictions.warm(text.clone(), editor.read(cx).cursor(), cx);
+            }
             if let Some(session) = &mut this.session {
                 match session.changed(&text) {
                     Some(edits) => {
@@ -69,7 +76,59 @@ impl EditorPane {
             }
             cx.notify();
         });
-        Self { state, language, library: practice::snippets::builtin(), tab_expand: true, path: None, workspace: None, session: None, completions, menu: None, changing: false, epoch: 0, _subscriptions: vec![observe, changes] }
+        Self { state, language, library: practice::snippets::builtin(), tab_expand: true, path: None, workspace: None, session: None, completions, menu: None, changing: false, epoch: 0, predictions: None, _subscriptions: vec![observe, changes] }
+    }
+
+    pub(crate) fn connect_predictions(&mut self, connection: Entity<crate::copilot::Connection>, window: &mut Window, cx: &mut Context<Self>) {
+        let predictions = crate::copilot::Predictions::new(connection.clone(), self.language);
+        *self.completions.predictions.borrow_mut() = Some(predictions.clone());
+        self.predictions = Some(predictions);
+        self._subscriptions.push(cx.observe(&connection, |this, connection, cx| {
+            if !connection.read(cx).enabled() {
+                this.hide_prediction(cx);
+                if let Some(predictions) = &this.predictions { predictions.invalidate(); }
+            }
+            cx.notify();
+        }));
+        let focus = self.state.read(cx).focus_handle(cx);
+        self._subscriptions.push(cx.on_focus_out(&focus, window, |this, _, _, cx| this.hide_prediction(cx)));
+        self._subscriptions.push(cx.observe_window_activation(window, |this, window, cx| {
+            if !window.is_window_active() { this.hide_prediction(cx); }
+        }));
+    }
+    fn hide_prediction(&mut self, cx: &mut Context<Self>) {
+        if let Some(predictions) = &self.predictions { predictions.alt.set(false); }
+        self.state.update(cx, |editor, cx| EditorMode::clear_inline_completion(editor, cx));
+        cx.notify();
+    }
+    fn prediction_modifiers(&mut self, event: &ModifiersChangedEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let alt = event.modifiers.alt && !event.modifiers.control && !event.modifiers.platform && self.state.read(cx).focus_handle(cx).is_focused(window);
+        let Some(predictions) = &self.predictions else { return; };
+        if predictions.alt.replace(alt) == alt { return; }
+        if !alt { self.hide_prediction(cx); return; }
+        predictions.cancel_warm();
+        predictions.configure(self.path.clone(), self.language);
+        self.menu = None;
+        self.state.update(cx, |editor, cx| {
+            editor.dismiss_completion_overlay(cx);
+            let offset = editor.cursor();
+            EditorMode::on_text_typed(editor, &(offset..offset), "", window, cx);
+        });
+        cx.notify();
+    }
+    fn accept_prediction(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        if !EditorMode::has_inline_completion(self.state.read(cx)) { return false; }
+        let Some(predictions) = &self.predictions else { return false; };
+        let editor = self.state.read(cx);
+        let Some(suggestion) = predictions.current(editor.value().as_str(), editor.cursor(), cx) else { return false; };
+        predictions.accepted(suggestion.clone(), cx);
+        self.state.update(cx, |editor, cx| {
+            EditorMode::clear_inline_completion(editor, cx);
+            editor.set_selected_range(suggestion.range(), cx);
+            editor.replace(suggestion.text(), window, cx);
+        });
+        self.menu = None;
+        cx.notify(); true
     }
 
     fn prefix(&self, cx: &App) -> Range<usize> {
@@ -164,6 +223,7 @@ impl EditorPane {
         cx.notify();
     }
     fn sync_completions(&mut self, cx: &mut App) {
+        if let Some(predictions) = &self.predictions { predictions.configure(self.path.clone(), self.language); }
         let mut catalog = self.completions.catalog.borrow_mut();
         if catalog.library != self.library { catalog.library = self.library.clone(); }
         catalog.language = self.language;
@@ -206,6 +266,16 @@ impl Render for EditorPane {
         self.state.update(cx,|e,cx|e.clear_diagnostic_popover(cx));
         let choices = active.map(|s| s.stops[s.active].choices.clone()).unwrap_or_default();
         div().id("snippet-source").test_support().relative().size_full().key_context(if self.menu.is_some() { "SnippetPicker" } else if expandable { "SnippetSource" } else { "SourceEditor" })
+            .on_modifiers_changed(cx.listener(Self::prediction_modifiers))
+            .capture_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                if event.keystroke.key == "escape" && (EditorMode::has_inline_completion(this.state.read(cx)) || this.predictions.as_ref().is_some_and(|predictions| predictions.alt.get())) {
+                    this.hide_prediction(cx);
+                    if let Some(predictions) = &this.predictions { predictions.invalidate(); }
+                    cx.stop_propagation();
+                } else if !event.keystroke.modifiers.control && !event.keystroke.modifiers.platform && !event.keystroke.modifiers.shift
+                    && (event.keystroke.key == "tab" || event.keystroke.key == "l" && event.keystroke.modifiers.alt)
+                    && this.accept_prediction(window, cx) { cx.stop_propagation(); }
+            }))
             .on_action(cx.listener(|this,_:&crate::actions::InsertSnippet,w,cx|this.open_completions(w,cx)))
             .on_action(cx.listener(|this,_:&NextStop,w,cx| this.navigate(false,w,cx)))
             .on_action(cx.listener(|this,_:&PreviousStop,w,cx| this.navigate(true,w,cx)))

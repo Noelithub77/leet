@@ -175,6 +175,34 @@ Web mode can be selected explicitly even with installed agents. Actions open Cha
 
 OpenCode free-model availability depends on its upstream service; a model appearing in the catalog does not guarantee that it accepts requests through ACP. Gemini and Cursor require their own CLI authentication. Fast mode also depends on account eligibility.
 
+## Copilot completions
+
+Onboarding includes an optional Copilot step. Settings → Editor → Copilot completions
+connects or turns off predictions later. Connect downloads the pinned native GitHub
+Copilot Language Server into Leet's private tools directory, verifies its upstream
+SHA-512 digest, and starts GitHub's browser device flow. The server stores its own
+credentials; Leet does not copy credentials from Zed or store tokens in `config.toml`.
+
+Predictions are fetched after typing and stay hidden until Alt is held. Releasing
+Alt hides them immediately; Escape dismisses them. Tab accepts a visible prediction.
+Alt+L also accepts, for desktops that reserve Alt+Tab for window switching. Snippet
+and language-server completion menus retain their existing keyboard behavior.
+This integration accepts insertion predictions; next-edit rewrites are not enabled.
+
+The status-bar Copilot button opens its Editor setting. Hover shows connection
+status and quota snapshots supplied by `copilot/quotaChange`: plan, completion,
+chat, and premium usage when available. Unknown usage stays explicitly unavailable;
+Leet does not infer account limits or query private GitHub endpoints.
+
+`./ops copilot --install --json` installs the server without starting authentication.
+`./ops copilot --probe --json` initializes it against an empty temporary workspace,
+without requesting predictions or signing in. `--directory /absolute/path` isolates
+installation and probe data. Supported native packages cover Linux, macOS, and
+Windows on x64 and arm64; pinned URLs and digests live in
+`crates/practice/setup/copilot.json`. Runtime application code remains Rust and
+does not require npm or Node. Server credentials and subscription eligibility are
+owned by GitHub; enabling completions sends the open document to Copilot.
+
 ## Debug mode
 
 Debug (`ctrl+backtick`, `alt+b`, or the header switch) records every test case with a deterministic tracer, then plays it back like a video: the code shows the current line and a heat gutter, and the state canvas draws locals as arrays with index pointers, grids, trees, linked lists, stacks, queues, heaps, maps, sets, and graphs (`practice::debugger::structures`). Native renderers live in `crates/gui/src/gen-ui/`, with one file per structure (for example `array.rs`, `tree.rs`, and `graph.rs`), shared styles in `style.rs`, drawing helpers in `drawing.rs`, and playback controls in `player.rs`; their UI-independent scene schema lives in `practice::viz`. Python uses `sys.settrace` and hides generated comprehension frames while retaining user-defined helpers and lambdas. C++ compiles a generated LeetCode driver with `g++ -O0 -g` and steps it under gdb's Python API, so it needs `g++` and `gdb` with Python. Recordings stop at 4,000 steps. **Explain** sends the real trace to the agent, which marks the first wrong step on the seek bar. Codeforces and CodeChef stdin programs (including CPH samples) use the same native player in Python and C++. Python records top-level code and `__main__` with text/binary stdin; C++ compiles the program’s own `main()` with debug symbols. Each sample is one recording, even when its input contains multiple internal test cases. Stdout is compared by whitespace-separated tokens. Buffered C++ output appears when the program flushes it; use `std::flush` when you want intermediate output in the timeline. Other languages use the AI Dry run action. Recordings use a captured copy of the editor source, so later file edits cannot change their states.

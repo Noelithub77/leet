@@ -30,6 +30,8 @@ pub struct Setup {
     source: Source,
     python: String,
     handle: Entity<InputState>,
+    copilot: Entity<crate::copilot::Connection>,
+    _copilot_subscription: Subscription,
     snippet_found: Vec<practice::snippets::import::Found>,
     snippet_scanning: bool,
     snippet_status: String,
@@ -47,9 +49,11 @@ impl Workspace {
         self.suspend_language_servers(cx);
         let workspace = cx.weak_entity();
         let config = self.config.clone();
+        let copilot = self.copilot.clone();
         if !accounts { self.setup_tools(config.preferred_language, false, window, cx); }
         let setup = cx.new(|cx| Setup {
-            focus: cx.focus_handle(), workspace, step: if accounts { 2 } else { 0 },
+            _copilot_subscription: cx.observe(&copilot, |_, _, cx| cx.notify()),
+            focus: cx.focus_handle(), workspace, step: if accounts { 3 } else { 0 }, copilot,
             language: config.preferred_language, source: config.source,
             python: config.python.clone(),
             handle: cx.new(|cx| InputState::new(window, cx).placeholder("Codeforces handle").default_value(config.codeforces_handle)),
@@ -138,7 +142,8 @@ impl Setup {
             cx.notify();
             return;
         }
-        if self.step == 1 { self.step=2; self.handle.update(cx,|handle,cx|handle.focus(window,cx));cx.notify();return; }
+        if self.step == 1 { self.step=2; self.focus.focus(window,cx);cx.notify();return; }
+        if self.step == 2 { self.step=3; self.handle.update(cx,|handle,cx|handle.focus(window,cx));cx.notify();return; }
         let handle = self.handle.read(cx).value().trim().to_owned();
         if self.source == Source::Codeforces && handle.is_empty() {
             self.error = Some("Enter your Codeforces handle.".into());
@@ -199,8 +204,8 @@ impl Render for Setup {
             .on_action(cx.listener(|this, _: &SetupJava, window, cx| this.choose_language(Language::Java, window, cx)))
             .child(v_flex().w(px(600.)).max_w_full().p_6().gap_5().rounded_lg().border_1().border_color(theme.border).bg(theme.sidebar)
                 .child(h_flex().justify_between().items_center()
-                    .child(div().text_2xl().font_weight(FontWeight::SEMIBOLD).child(match current_step { 0=>"Set up leet",1=>"Your snippets",_=>"Connect your accounts" }))
-                    .child(div().text_xs().text_color(theme.muted_foreground).child(format!("{} / 3", current_step + 1))))
+                    .child(div().text_2xl().font_weight(FontWeight::SEMIBOLD).child(match current_step { 0=>"Set up leet",1=>"Your snippets",2=>"Quiet code suggestions",_=>"Connect your accounts" }))
+                    .child(div().text_xs().text_color(theme.muted_foreground).child(format!("{} / 4", current_step + 1))))
                 .when(current_step == 0, |view| view
                     .child(v_flex().gap_3().child(div().text_color(theme.muted_foreground).child("Preferred language"))
                         .child(h_flex().gap_3().children(Language::ALL.into_iter().enumerate().map(|(index, language)| {
@@ -244,6 +249,11 @@ impl Render for Setup {
                     .child(div().text_xs().text_color(theme.muted_foreground).child(self.snippet_status.clone()))
                     .child(div().text_xs().text_color(theme.muted_foreground).child("Edit anytime · Ctrl+Shift+S")))
                 .when(current_step == 2, |view| view
+                    .child(div().text_sm().child("Use your GitHub Copilot account. Optional."))
+                    .child(h_flex().gap_2().text_sm().child(crate::view::key("alt")).child("Hold to preview")
+                        .child(crate::view::key("tab")).child("Accept").child(crate::view::key("escape")).child("Dismiss"))
+                    .child(crate::copilot::controls(&self.copilot, self.workspace.upgrade().map(|ws| ws.read(cx).config.workspace.clone()).unwrap_or_default(), cx)))
+                .when(current_step == 3, |view| view
                     .child(v_flex().gap_3().children([Account::LeetCode, Account::NeetCode].into_iter().map(|account| {
                         let workspace = self.workspace.clone();
                         let status = accounts[account.index()].clone();
@@ -261,9 +271,9 @@ impl Render for Setup {
                         .accessibility_label("Previous setup step").tooltip("Back")
                         .on_click(cx.listener(|this, _, window, cx| { this.step = this.step.saturating_sub(1); if this.step==0 { this.check_requirements(window, cx); } this.focus.focus(window, cx); cx.notify(); })))
                     .child(Button::new("setup-continue").primary().disabled(self.busy)
-                        .label(if self.busy { "Checking…" } else if current_step == 0 { "Continue" } else if current_step == 1 { "Continue / skip" } else { "Start practicing" })
+                        .label(if self.busy { "Checking…" } else if current_step == 0 { "Continue" } else if current_step == 1 { "Continue / skip" } else if current_step == 2 { if self.copilot.read(cx).enabled() { "Continue" } else { "Skip" } } else { "Start practicing" })
                         .tooltip("Continue · Ctrl+Enter").on_click(cx.listener(|this, _, window, cx| this.advance(window, cx)))))
-                .child(div().text_xs().text_color(theme.muted_foreground).child(if current_step == 0 { "Ctrl+1…5 language · Ctrl+Enter continue" } else if current_step == 1 { "Imports are copies; your original snippets stay in your editor." } else { "Connect accounts for judging and progress sync." })))
+                .child(div().text_xs().text_color(theme.muted_foreground).child(if current_step == 0 { "Ctrl+1…5 language · Ctrl+Enter continue" } else if current_step == 1 { "Imports are copies; your original snippets stay in your editor." } else if current_step == 2 { "You can connect later in Settings → Editor." } else { "Connect accounts for judging and progress sync." })))
     }
 }
 
