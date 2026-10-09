@@ -9,7 +9,7 @@ fn fixture(window: &mut gpui_kit::Window, cx: &mut App) -> Entity<Statement> {
     let statement = cx.new(|_| Statement {
         slug: "statement-fixture".into(), title: "Two Sum".into(),
         blocks: vec![
-            Block::Markdown("Given an array of integers `nums` and an integer `target`, return the indices of the two numbers that add up to `target`.\n\n".repeat(35)),
+            Block::Markdown("Given an array of integers `nums` and an integer `target`, return the indices of the two numbers that add up to `target`.\n\n".repeat(70)),
             Block::Example { title: "Example 1".into(), parts: vec![
                 Part::Field { label: "Input".into(), value: "nums = [2, 7, 11, 15], target = 9".into() },
                 Part::Field { label: "Output".into(), value: "[0, 1]".into() },
@@ -45,12 +45,22 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         let db_path = output.join(format!("statement-{name}.sqlite"));
         let db = Arc::new(practice::db::Db::open_unseeded(&db_path)?);
         cx.update(|cx| statement.update(cx, |view, _| view.db = Some(db.clone())));
+        cx.update_window(handle, |_, window, cx| window.render_frame(cx))?;
+        cx.run_until_parked();
         cx.update_window(handle, |_, window, cx| -> Result<()> {
             window.render_frame(cx); headers(window)?;
             ensure!(cx.global::<Sections>().0 == [true, true, false], "First load did not expand Description and Examples");
             ensure!(db.statement_sections()? == [true, true, false], "Fresh storage has incorrect card defaults");
             window.click(("statement-section", 1usize), cx);
             ensure!(cx.global::<Sections>().0 == [true, false, false], "Examples did not collapse independently");
+            window.scroll(("statement-section", 0usize), gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-10.))), cx);
+            ensure!(statement.read(cx).section_scroll[0].offset().y <= px(-40.), "Description wheel speed was not increased: offset {:?}, viewport {:?}, max {:?}", statement.read(cx).section_scroll[0].offset(), statement.read(cx).section_scroll[0].bounds(), statement.read(cx).section_scroll[0].max_offset());
+            window.scroll(("statement-section", 0usize), gpui_kit::ScrollDelta::Pixels(point(px(0.), px(600.))), cx);
+            let viewport = statement.read(cx).section_scroll[0].bounds();
+            let examples_offset = statement.read(cx).section_scroll[1].offset();
+            window.drag(point(viewport.right() - px(8.), viewport.top() + px(10.)), point(viewport.right() - px(8.), viewport.bottom() - px(10.)), cx);
+            ensure!(statement.read(cx).section_scroll[0].offset().y < px(0.), "Description scrollbar thumb did not drag");
+            ensure!(statement.read(cx).section_scroll[1].offset() == examples_offset, "Description scrollbar moved Examples");
             window.scroll(("statement-section", 0usize), gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-600.))), cx);
             ensure!(statement.read(cx).section_scroll[0].offset().y < px(0.), "Description did not scroll");
             headers(window)?;
@@ -67,7 +77,8 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             ensure!(statement.read(cx).section_scroll[1].offset().y < px(0.), "Examples did not scroll");
             ensure!(statement.read(cx).section_scroll[0].offset() == description_offset, "Examples moved Description's scroll position");
             window.click(("statement-section", 0usize), cx);
-            ensure!(statement.read(cx).section_scroll[0].offset() == description_offset, "Reopening Description lost its scroll position");
+            let description_scroll = &statement.read(cx).section_scroll[0];
+            ensure!(description_scroll.offset().y == description_offset.y.max(-description_scroll.max_offset().y), "Reopening Description lost its scroll position: {:?} from {:?}, max {:?}", description_scroll.offset(), description_offset, description_scroll.max_offset());
             window.press("pagedown", cx);
             ensure!(statement.read(cx).section_scroll[0].offset().y < px(0.), "PageDown did not scroll the open card");
             headers(window)?;
@@ -105,13 +116,15 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             cx.capture_screenshot(handle)?.save(output.join(format!("statement-{name}.png")))?;
         }
         cx.update_window(handle, |_, window, cx| -> Result<()> {
-            statement.update(cx, |view, cx| { view.blocks[0] = Block::Markdown("Return two matching indices.".into()); cx.notify(); });
+            statement.update(cx, |view, cx| { view.blocks[0] = Block::Markdown("Return two matching indices.".into()); view.section_scroll[0].set_offset(point(px(0.), px(0.))); cx.notify(); });
             window.click(("statement-section", 1usize), cx);
             window.click(("statement-section", 2usize), cx);
+            statement.update(cx, |view, cx| view.focus(window, cx));
             window.render_frame(cx); headers(window)?;
             let description = window.find(("statement-section", 0usize)).bounds();
             let examples = window.find(("statement-section", 1usize)).bounds();
             ensure!(examples.top() - description.bottom() < gpui_kit::rems(8.).to_pixels(window.rem_size()), "Short Description retained a large empty body");
+            ensure!(statement.read(cx).section_scroll[0].max_offset().y == px(0.), "Short Description incorrectly needs a scrollbar");
             Ok(())
         })??;
         if pixels {
@@ -122,7 +135,7 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         cx.run_until_parked();
     }
     cx.update(|cx| { crate::theme::apply("Vesper", cx); crate::theme::set_zoom(1., cx); });
-    Ok(json!({"fixture":"statement-cards","passed":true,"checks":["long description scroll","visible headers at regular and compact sizes","independent expansion and scrolling","shared persisted flags","natural short content","PageDown","Tab/Space card activation","all collapsed"],"pixels":pixels}))
+    Ok(json!({"fixture":"statement-cards","passed":true,"checks":["long description scroll","visible headers at regular and compact sizes","independent expansion and scrolling","faster wheel scrolling","scrollbar thumb dragging","shared persisted flags","natural short content without overflow","PageDown","Tab/Space card activation","all collapsed"],"pixels":pixels}))
 }
 
 pub(super) fn explore(output: PathBuf) -> Result<()> {

@@ -4,6 +4,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::text::TextViewStyle;
+use gpui_kit::component::scroll::{Scrollbar, ScrollbarMode};
 use gpui_kit::component::{ActiveTheme as _, Selectable as _, Sizable as _, WindowExt as _, FocusableExt as _, Icon, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
@@ -99,17 +100,17 @@ impl Statement {
     fn section_card(&self, section: usize, label: &'static str, cx: &mut Context<Self>) -> Stateful<Div> {
         let theme = cx.theme();
         let open = cx.global::<Sections>().0[section];
-        v_flex().id(("statement-card", section)).w_full().h_full().min_w_0().min_h_0().rounded_lg()
+        v_flex().id(("statement-card", section)).relative().w_full().h_full().min_w_0().min_h_0().rounded_lg()
             .border_1().border_color(crate::theme::statement_accent(section, cx).opacity(if open { 0.36 } else { 0.26 }))
             .bg(theme.muted.opacity(if open { 0.18 } else { 0.08 }))
             .on_scroll_wheel(cx.listener(move |this, event: &ScrollWheelEvent, window, cx| {
                 if !cx.global::<Sections>().0[section] { return; }
                 this.scroll_section = section;
-                this.scroll_by(f32::from(event.delta.pixel_delta(window.line_height()).y) * 2.5, cx);
+                this.scroll_by(f32::from(event.delta.pixel_delta(window.line_height()).y) * 4., cx);
                 cx.stop_propagation();
             }))
-            .on_action(cx.listener(move |this, _: &crate::actions::Up, _, cx| { this.scroll_section = section; this.scroll_by(90., cx); }))
-            .on_action(cx.listener(move |this, _: &crate::actions::Down, _, cx| { this.scroll_section = section; this.scroll_by(-90., cx); }))
+            .on_action(cx.listener(move |this, _: &crate::actions::Up, _, cx| { this.scroll_section = section; this.scroll_by(140., cx); }))
+            .on_action(cx.listener(move |this, _: &crate::actions::Down, _, cx| { this.scroll_section = section; this.scroll_by(-140., cx); }))
             .on_action(cx.listener(move |this, _: &PageUp, _, cx| { this.scroll_section = section; this.scroll_by(520., cx); }))
             .on_action(cx.listener(move |this, _: &PageDown, _, cx| { this.scroll_section = section; this.scroll_by(-520., cx); }))
             .child(self.section_button(section, label, cx))
@@ -174,15 +175,21 @@ impl Statement {
     fn render_sections(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let sections = cx.global::<Sections>().0;
         let hint_section = sections.iter().position(|open| *open);
+        let description_length = self.blocks.iter().filter_map(|block| match block { Block::Markdown(text) => Some(text.chars().count()), _ => None }).sum();
         let cards = ["Description", "Examples", "Constraints"].into_iter().enumerate().filter_map(|(section, label)| {
                 let exists = self.blocks.iter().any(|block| match block {
                     Block::Markdown(_) => section == 0, Block::Example { .. } => section == 1, Block::Constraints(_) => section == 2,
                 });
                 exists.then(|| self.section_card(section, label, cx)
-                    .when(sections[section], |view| view.child(
-                        div().id(("statement-content", section)).flex_initial().min_h_0().overflow_y_scroll().track_scroll(&self.section_scroll[section])
-                            .child(v_flex().text_sm().px_3().pb_3().pt_2().gap_4().child(self.render_blocks(section, cx))
-                                .when(hint_section == Some(section), |view| view.child(self.render_hints(cx)))))).into_any_element())
+                    .when(sections[section], |view| view
+                            .child(div().id(("statement-content", section)).flex_initial().min_h_0().overflow_y_scroll().track_scroll(&self.section_scroll[section])
+                                .child(v_flex().flex_shrink_0().text_sm().when(section == 0, |view| view.text_size(rems(description_font_size(description_length) / 16.))).pl_3().pr_4().pb_3().pt_2().gap_4().child(self.render_blocks(section, cx))
+                                    .when(hint_section == Some(section), |view| view.child(self.render_hints(cx)))))
+                            .child(div().absolute().top(rems(2.25)).bottom_0().left_0().right_0().child(Scrollbar::vertical(&self.section_scroll[section]).id(("statement-scrollbar", section)).mode(ScrollbarMode::Always).viewport_from_layout()
+                                .styles(|styles| styles
+                                    .thumb(|style| style.bg(crate::theme::statement_accent(section, cx).opacity(0.55)))
+                                    .thumb_hover(|style| style.bg(crate::theme::statement_accent(section, cx).opacity(0.8)))
+                                    .thumb_active(|style| style.bg(crate::theme::statement_accent(section, cx))))))).into_any_element())
             }).collect();
         v_flex().flex_1().min_h_0().child(SectionStack::new(cards, hint_section.is_some()))
             .when(hint_section.is_none(), |view| view.child(div().id("statement-content").flex_1().min_h_0().overflow_y_scroll().track_scroll(&self.scroll).child(self.render_hints(cx))))
@@ -247,11 +254,11 @@ impl Render for Statement {
         let focus = self.focus.get_or_insert_with(|| cx.focus_handle()).clone();
         let body = v_flex().id("statement").key_context("Statement").track_focus(&focus).size_full().min_h_0()
             .on_scroll_wheel(cx.listener(|this, event: &ScrollWheelEvent, window, cx| {
-                this.scroll_by(f32::from(event.delta.pixel_delta(window.line_height()).y) * 2.5, cx);
+                this.scroll_by(f32::from(event.delta.pixel_delta(window.line_height()).y) * 4., cx);
                 cx.stop_propagation();
             }))
-            .on_action(cx.listener(|this, _: &crate::actions::Up, _, cx| this.scroll_by(90., cx)))
-            .on_action(cx.listener(|this, _: &crate::actions::Down, _, cx| this.scroll_by(-90., cx)))
+            .on_action(cx.listener(|this, _: &crate::actions::Up, _, cx| this.scroll_by(140., cx)))
+            .on_action(cx.listener(|this, _: &crate::actions::Down, _, cx| this.scroll_by(-140., cx)))
             .on_action(cx.listener(|this, _: &PageUp, _, cx| this.scroll_by(520., cx)))
             .on_action(cx.listener(|this, _: &PageDown, _, cx| this.scroll_by(-520., cx)));
         if self.slug.is_empty() { return body.child(div().text_color(theme.muted_foreground).child("Open a problem from the roadmap or search.")); }
@@ -293,9 +300,22 @@ fn toggle_section(mut sections: [bool; 3], section: usize) -> [bool; 3] {
     sections
 }
 
+fn description_font_size(length: usize) -> f32 {
+    // Scale only statement prose, with a readable floor that still follows app zoom.
+    14. - 2. * (length.saturating_sub(600) as f32 / 2400.).clamp(0., 1.)
+}
+
 #[cfg(test)]
 mod section_tests {
-    use super::toggle_section;
+    use super::{description_font_size, toggle_section};
+
+    #[test]
+    fn description_font_shrinks_gradually_with_a_readable_floor() {
+        assert_eq!(description_font_size(100), 14.);
+        assert_eq!(description_font_size(1800), 13.);
+        assert_eq!(description_font_size(3000), 12.);
+        assert_eq!(description_font_size(100000), 12.);
+    }
 
     #[test]
     fn sections_toggle_independently() {
