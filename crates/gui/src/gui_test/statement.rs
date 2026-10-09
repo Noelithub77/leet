@@ -111,6 +111,14 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         })??;
         let restored = practice::db::Db::open_unseeded(&db_path)?.statement_sections()?;
         ensure!(restored == [true; 3], "Reopening storage did not restore all expanded flags");
+        cx.update_window(handle, |_, window, cx| -> Result<()> {
+            statement.update(cx, |view, cx| { view.hints = vec!["Keep track of values already visited.".into(), "Use the target to find the missing value.".into()]; cx.notify(); });
+            window.render_frame(cx);
+            let hint = window.find("cycle-hint").bounds();
+            let question = window.find("statement-question").bounds();
+            ensure!(hint.top() >= question.top() && hint.bottom() <= question.bottom(), "Hint consumes a separate toolbar row");
+            headers(window)
+        })??;
         if pixels {
             cx.run_until_parked();
             cx.capture_screenshot(handle)?.save(output.join(format!("statement-{name}.png")))?;

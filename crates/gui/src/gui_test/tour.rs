@@ -159,6 +159,44 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool, v
     cx.run_until_parked();
     cx.update_window(handle, |_, window, cx| -> Result<()> {
         window.render_frame(cx);
+        workspace.update(cx, |view, cx| {
+            let hints = vec!["Keep track of visited values.".to_string(), "Look up the missing value.".to_string()];
+            view.session.as_mut().unwrap().question.as_mut().unwrap().hints = hints.clone();
+            view.statement.update(cx, |statement, cx| { statement.hints = hints.into_iter().map(Into::into).collect(); statement.hints_shown = 0; statement.reference_open = false; cx.notify(); });
+            view.description = true;
+            view.center = Center::Editor;
+            view.zen = false;
+            view.config.keybindings.insert("RevealHint".into(), "ctrl-alt-shift-h".into());
+            crate::actions::reload_keys(&view.config, cx);
+            cx.notify();
+        });
+        Ok(())
+    })??;
+    cx.advance_clock(Duration::from_millis(400));
+    cx.run_until_parked();
+    std::thread::sleep(Duration::from_millis(400));
+    for (button, expected) in [("cycle-hint", 1), ("hide-hints", 0), ("cycle-hint", 1), ("cycle-hint", 2), ("cycle-hint", 0)] {
+        cx.update_window(handle, |_, window, cx| window.click(button, cx))?;
+        cx.run_until_parked();
+        cx.update(|cx| -> Result<()> {
+            ensure!(workspace.read(cx).statement.read(cx).hints_shown == expected, "Compact {button} did not show {expected} hints");
+            Ok(())
+        })?;
+    }
+    cx.update_window(handle, |_, window, cx| -> Result<()> {
+        window.press("ctrl-alt-shift-h", cx);
+        ensure!(workspace.read(cx).statement.read(cx).hints_shown == 1, "Hint shortcut stopped working");
+        window.hover("cycle-hint", cx);
+        Ok(())
+    })??;
+    cx.advance_clock(Duration::from_millis(700));
+    cx.run_until_parked();
+    if pixels {
+        std::thread::sleep(Duration::from_millis(700));
+        cx.update_window(handle, |_, window, cx| window.render_frame(cx))?;
+        cx.capture_screenshot(handle)?.save(output.join("hint-tooltip.png"))?;
+    }
+    cx.update_window(handle, |_, window, cx| -> Result<()> {
         window.press("ctrl-p", cx);
         ensure!(workspace.read(cx).omni.open, "Full search did not open after finishing the tour");
         Ok(())

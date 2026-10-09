@@ -13,6 +13,7 @@
 - Start with Description and Examples expanded before any card preferences are saved.
 - Show pastel scrollbars only on overflowing statement cards, with faster scrolling.
 - Scale long descriptions down to readable text without shrinking other controls.
+- Keep Hint compact in the problem toolbar, with its shortcut shown only on hover.
 
 - Replay Python and C++ Codeforces and CodeChef programs in Debug, including CPH samples.
 
