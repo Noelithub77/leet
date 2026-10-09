@@ -25,11 +25,16 @@ export async function probe(path) {
   const [num, den] = stream.avg_frame_rate.split('/').map(Number);
   return { width: stream.width, height: stream.height, fps: num / den, duration: Number(data.format.duration) };
 }
-export async function cadence(path) {
+export async function cadence(path, fps) {
   // Default mpdecimate discards subtle UI motion; keep small pointer/seek-bar changes.
   const { stderr } = await run('ffmpeg', ['-hide_banner', '-i', path, '-vf', 'mpdecimate=hi=64:lo=32:frac=0.001,showinfo', '-an', '-f', 'null', '-']);
   const times = [...stderr.matchAll(/pts_time:([\d.]+)/g)].map(match => Number(match[1]));
   const deltas = times.slice(1).map((time, i) => (time - times[i]) * 1000);
   const near120 = deltas.filter(delta => delta > 7 && delta < 10);
-  return { filter: 'mpdecimate=hi=64:lo=32:frac=0.001', uniqueFrames: times.length, intervalsNear120Hz: near120.length, minimumUniqueIntervalMs: deltas.length ? Math.min(...deltas) : null, intervalNear120HzMedianMs: near120.length ? near120.sort((a, b) => a - b)[Math.floor(near120.length / 2)] : null };
+  const measured = { filter: 'mpdecimate=hi=64:lo=32:frac=0.001', uniqueFrames: times.length, intervalsNear120Hz: near120.length, minimumUniqueIntervalMs: deltas.length ? Math.min(...deltas) : null, intervalNear120HzMedianMs: near120.length ? near120.sort((a, b) => a - b)[Math.floor(near120.length / 2)] : null };
+  if (fps) {
+    const nearTarget = deltas.filter(delta => Math.abs(delta - 1000 / fps) < 2).sort((a, b) => a - b);
+    return { ...measured, targetFps: fps, intervalsNearTargetHz: nearTarget.length, intervalNearTargetHzMedianMs: nearTarget.length ? nearTarget[Math.floor(nearTarget.length / 2)] : null, maximumUniqueIntervalMs: deltas.length ? Math.max(...deltas) : null };
+  }
+  return measured;
 }
