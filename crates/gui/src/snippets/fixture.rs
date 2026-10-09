@@ -103,6 +103,7 @@ pub(crate) fn native(cx:&mut HeadlessAppContext,output:&Path,pixels:bool)->Resul
         ensure!(doc.contains("Input ·")&&doc.contains("Output ·")&&doc.contains("Example ·"),"Algorithm usage guide missing");
         let bounds=window.find("source-completions").bounds();
         ensure!(bounds.size.width<=pane.read(cx).state.read(cx).input_bounds().size.width&&bounds.size.height<px(300.),"Completion menu exceeds the editor bounds");
+        ensure!(window.find("completion-preview-fade").bounds().size.width>px(300.),"Preview fade has no width");
         Ok(())
     })??;
     if pixels{cx.capture_screenshot(handle)?.save(output.join("snippet-bfs-help.png"))?;}
@@ -171,5 +172,58 @@ pub(crate) fn native(cx:&mut HeadlessAppContext,output:&Path,pixels:bool)->Resul
         cx.update_window(handle,|_,window,_|window.remove_window())?;cx.run_until_parked();
     }
     cx.update(|cx|{crate::theme::apply("Vesper",cx);crate::theme::set_zoom(1.,cx);});
-    Ok(serde_json::json!({"fixture":"snippets","passed":true,"pixels":pixels,"checks":["prefix Tab expansion","typing mirrors","Tab and Shift+Tab","native cursor completions and Escape","merged language-server suggestions","Enter and Tab accept linked snippet placeholders","manual creation and save","drag cursor drop","compact light and zoom layouts","AI panel without agent startup","staged review edit, Apply and Undo"]}))
+    workspace_tab(cx,output,pixels)?;
+    Ok(serde_json::json!({"fixture":"snippets","passed":true,"pixels":pixels,"checks":["prefix Tab expansion","typing mirrors","Tab and Shift+Tab","native cursor completions and Escape","merged language-server suggestions","Enter and Tab accept linked snippet placeholders","manual creation and save","drag cursor drop","compact light and zoom layouts","AI panel without agent startup","staged review edit, Apply and Undo","workspace tab and Explorer","field titles","Ctrl+W close and invalid-save guard"]}))
+}
+
+fn workspace_tab(cx:&mut HeadlessAppContext,output:&Path,pixels:bool)->Result<()> {
+    use crate::workspace::{Center,Workspace};
+    let config=Config{onboarding_completed:true,workspace:output.join("session/tab-solutions"),..Config::default()};
+    let db=Arc::new(Db::open(&output.join("session/snippet-tab.sqlite"))?);
+    cx.update(|cx|{
+        let bindings=cx.key_bindings().borrow().bindings().cloned().collect();
+        cx.set_global(crate::actions::ComponentBindings(bindings));
+        crate::actions::reload_keys(&config,cx);
+    });
+    let(handle,workspace)=cx.update(|cx|gpui_kit::open_window(WindowOptions{window_bounds:Some(WindowBounds::Windowed(Bounds{origin:point(px(0.),px(0.)),size:size(px(1280.),px(800.))})),show:false,focus:false,..Default::default()},cx,|window,cx|cx.new(|cx|Workspace::from_storage(config,db,[None,None],window,cx))))?;
+    let handle=handle.into();cx.run_until_parked();
+    cx.update_window(handle,|_,window,cx|{workspace.update(cx,|view,cx|view.focus_nav(crate::workspace::Focus::Home,window,cx));window.render_frame(cx);window.press("ctrl-shift-s",cx);})?;cx.run_until_parked();
+    cx.update_window(handle,|_,window,cx|->Result<()>{
+        window.render_frame(cx);
+        ensure!(workspace.read(cx).center==Center::Snippets,"Snippet shortcut did not open the editor");
+        ensure!(window.find("snippets-tab").visible(),"Snippet workspace tab missing");
+        ensure!(workspace.read(cx).left,"Explorer hidden in snippet tab");
+        for id in ["snippet-name-label","snippet-prefix-label","snippet-description-label"] {ensure!(window.find(id).visible(),"Snippet field title missing: {id}");}
+        window.click("toggle-left-panel",cx);
+        Ok(())
+    })??;cx.run_until_parked();
+    cx.update_window(handle,|_,window,cx|->Result<()>{
+        ensure!(!workspace.read(cx).left,"Explorer did not hide");
+        window.render_frame(cx);window.click("toggle-left-panel",cx);Ok(())
+    })??;cx.run_until_parked();
+    cx.update_window(handle,|_,_,cx|->Result<()>{
+        ensure!(workspace.read(cx).left&&workspace.read(cx).center==Center::Snippets,"Explorer toggle left snippet tab");Ok(())
+    })??;
+    cx.update_window(handle,|_,window,cx|window.render_frame(cx))?;
+    if pixels{cx.capture_screenshot(handle)?.save(output.join("snippet-workspace-tab.png"))?;}
+    cx.update_window(handle,|_,window,cx|window.hover("snippet-prefix-label",cx))?;
+    cx.advance_clock(std::time::Duration::from_millis(700));cx.run_until_parked();
+    cx.update_window(handle,|_,window,cx|window.render_frame(cx))?;
+    if pixels{cx.capture_screenshot(handle)?.save(output.join("snippet-prefix-help.png"))?;}
+    cx.update_window(handle,|_,window,cx|{window.press("ctrl-h",cx);})?;cx.run_until_parked();
+    cx.update_window(handle,|_,window,cx|->Result<()>{
+        window.render_frame(cx);ensure!(workspace.read(cx).center==Center::Home&&workspace.read(cx).snippet_editor.is_some(),"Switching tabs closed snippets");
+        window.click("snippets-tab",cx);Ok(())
+    })??;cx.run_until_parked();
+    cx.update_window(handle,|_,window,cx|->Result<()>{
+        ensure!(workspace.read(cx).center==Center::Snippets,"Snippet tab click failed");
+        let editor=workspace.read(cx).snippet_editor.clone().unwrap();
+        editor.read(cx).source.clone().update(cx,|source,cx|{source.set_value("${1:unfinished",window,cx);source.focus(window,cx);});
+        window.press("ctrl-w",cx);
+        ensure!(workspace.read(cx).snippet_editor.is_some(),"Closing discarded invalid edits");
+        editor.read(cx).source.clone().update(cx,|source,cx|source.set_value("$0",window,cx));
+        window.press("ctrl-w",cx);
+        ensure!(workspace.read(cx).snippet_editor.is_none()&&workspace.read(cx).center==Center::Home,"Ctrl+W did not close snippets");
+        window.remove_window();Ok(())
+    })??;cx.run_until_parked();Ok(())
 }

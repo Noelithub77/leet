@@ -104,7 +104,7 @@ macro_rules! cmd {
 /// Global commands. Keys follow the user's VS Code bindings (modifiers only, no bare letters).
 pub const COMMANDS: &[Command] = &[
     cmd!("Show Home", "ctrl-h|ctrl-.", ShowHome),
-    cmd!("Close problem tab", "ctrl-w", CloseProblem),
+    cmd!("Close tab", "ctrl-w", CloseProblem),
     cmd!("Close all problem tabs", "ctrl-shift-w", CloseAllProblems),
     cmd!("Reopen closed problem tab", "ctrl-shift-t", ReopenProblem),
     cmd!("Next tab", "ctrl-tab", CycleTabs),

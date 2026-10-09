@@ -110,8 +110,8 @@ pub(super) fn render(pane: &EditorPane, window: &mut Window, cx: &mut Context<Ed
         .when_some(preview, |popup, preview| popup.child(div().id("source-completion-preview").relative().overflow_hidden()
             .w(preview_width).bg(theme.popover).border_1().border_color(theme.border).rounded_md().shadow_md()
             .child(div().id("source-completion-preview-scroll").overflow_y_scroll().max_h(px(240.)).p_2().pb_8().text_xs().child(preview))
-            .child(div().absolute().left(px(1.)).right(px(1.)).bottom(px(1.)).h_8().rounded_b_md()
-                .bg(linear_gradient(180., linear_color_stop(theme.popover.opacity(0.), 0.), linear_color_stop(theme.popover, 1.))))))
+            .child(deferred(div().id("completion-preview-fade").test_support().absolute().w_full().left_0().bottom_0().h_8().rounded_b_md()
+                .bg(linear_gradient(180., linear_color_stop(theme.popover.opacity(0.), 0.), linear_color_stop(theme.popover, 1.)))))))
         .on_mouse_down_out(cx.listener(|pane, _, window, cx| pane.close_completions(window, cx)))
     ).into_any_element())
 }

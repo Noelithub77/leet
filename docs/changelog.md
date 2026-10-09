@@ -32,6 +32,8 @@
 - Identify completion kinds with small icons.
 - Give completion previews more room and fade their clipped edge smoothly.
 - Create snippets for the selected language without an all-languages toggle.
+- Edit snippets in a workspace tab with Explorer access and Ctrl+W closing.
+- Label snippet fields and explain placeholders in titled help tooltips.
 - Show bundled snippet inputs, outputs, and short examples in the preview.
 - Explain snippet expansion and placeholders in the skippable onboarding step.
 - Suppress Windows console popups from background tools, updates, Companion, and local execution.

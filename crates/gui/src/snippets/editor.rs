@@ -61,6 +61,14 @@ impl Workspace {
         if let Some(editor)=&self.snippet_editor { editor.update(cx,|e,cx|e.search.update(cx,|s,cx|s.focus(window,cx))); }
         cx.notify();
     }
+    pub fn close_snippet_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(editor) = self.snippet_editor.clone() {
+            if !editor.update(cx, |editor, cx| editor.save(window, cx)) { return; }
+        }
+        self.snippet_editor = None;
+        if self.center == Center::Snippets { self.back_to_editor(window, cx); }
+        cx.notify();
+    }
 }
 impl SnippetEditor {
     pub fn new(workspace: WeakEntity<Workspace>, dir:PathBuf, settings:snippets::Settings, language:Language, window:&mut Window,cx:&mut Context<Self>)->Self {
@@ -178,14 +186,14 @@ impl Render for SnippetEditor {
         let validation=body::validate(self.source.read(cx).value().as_str()).err();
         v_flex().id("snippet-editor").test_support().size_full().key_context("SnippetEditor").p_4().gap_3()
             .on_action(cx.listener(|this,_:&SaveSnippet,w,cx|{this.save(w,cx);}))
-            .child(h_flex().gap_3().child(div().text_xl().flex_1().child("Snippet editor"))
-                .child(Button::new("snippets-back").ghost().small().icon(IconName::ArrowLeft).tooltip("Back to practice").on_click(cx.listener(|this,_,w,cx|{if this.save(w,cx){let ws=this.workspace.clone();w.defer(cx,move|w,cx|{let _=ws.update(cx,|ws,cx|ws.back_to_editor(w,cx));});}})))
+            .child(h_flex().gap_3().child(div().text_sm().font_weight(FontWeight::SEMIBOLD).flex_1().child("Snippet details"))
                 .child(Button::new("snippet-ai").ghost().small().icon(IconName::Sparkles).tooltip("Create or edit with AI").on_click(cx.listener(|this,_,_,cx|{this.ai.open=!this.ai.open;cx.notify();}))))
             .child(h_flex().gap_1().children(Language::ALL.into_iter().map(|language|{
                 crate::theme::selected_choice(Button::new(SharedString::from(format!("snippet-language-{}",language.id()))).ghost().small(),self.language==language,cx).icon(Icon::default().path(format!("languages/{}.svg",language.id())).small()).label(language.label()).on_click(cx.listener(move|this,_,w,cx|{if this.save(w,cx){this.language=language;this.original=None;this.selected=None;this.refresh(w,cx);}}))
             })))
             .child(h_flex().flex_1().min_h_0().items_stretch().gap_3()
                 .child(v_flex().w(px(if window.viewport_size().width < px(900.) {170.}else{230.})).min_h_0().gap_2()
+                    .child(div().text_xs().text_color(theme.muted_foreground).child("Library"))
                     .child(h_flex().gap_1().child(div().flex_1().child(Input::new(&self.search).small()))
                         .child(Button::new("new-snippet").ghost().small().icon(IconName::Plus).tooltip("New snippet").on_click(cx.listener(|this,_,w,cx|this.create(w,cx)))))
                     .child(uniform_list("snippet-library",items.len(),cx.processor(move|this,range:std::ops::Range<usize>,_,cx|{
@@ -196,19 +204,27 @@ impl Render for SnippetEditor {
                     .child(Button::new("import-snippets").outline().small().icon(IconName::Download).label(if self.scanning{"Scanning…"}else{"Import / rescan"}).disabled(self.scanning).tooltip("Copy snippets from VS Code, Neovim and Sublime Text").on_click(cx.listener(|this,_,w,cx|this.import(w,cx))))
                     .child(Button::new("snippet-builtins").ghost().small().label(if self.settings.builtin{"Practice library ✓"}else{"Practice library"}).on_click(cx.listener(|this,_,w,cx|{this.settings.builtin=!this.settings.builtin;this.settings.hidden.clear();this.persist_settings(w,cx);this.refresh(w,cx);}))))
                 .child(v_flex().flex_1().min_w_0().min_h_0().gap_2()
-                    .child(h_flex().gap_2().child(div().flex_1().child(Input::new(&self.name).small())).child(div().flex_1().child(Input::new(&self.prefixes).small()))
+                    .child(h_flex().gap_2().items_end()
+                        .child(v_flex().flex_1().min_w_0().gap_1().child(div().id("snippet-name-label").test_support().text_xs().text_color(theme.muted_foreground).child("Name")
+                            .tooltip(|window,cx|crate::view::help_tooltip("Name", "A descriptive name shown in the library and autocomplete.", window, cx))).child(Input::new(&self.name).small()))
+                        .child(v_flex().flex_1().min_w_0().gap_1().child(div().id("snippet-prefix-label").test_support().text_xs().text_color(theme.muted_foreground).child("Prefixes")
+                            .tooltip(|window,cx|crate::view::help_tooltip("Prefixes", "Type a prefix and press Tab to insert. Separate aliases with commas, such as bfs, breadthfirst.", window, cx))).child(Input::new(&self.prefixes).small()))
                         .child(Button::new("save-snippet").primary().small().icon(IconName::Check).tooltip("Save · Ctrl+Enter").disabled(!self.dirty(cx)).on_click(cx.listener(|this,_,w,cx|{this.save(w,cx);})))
                         .child(Button::new("remove-snippet").ghost().small().icon(IconName::Trash).tooltip("Remove snippet").on_click(cx.listener(|this,_,w,cx|this.remove(w,cx)))))
-                    .child(Input::new(&self.description).small())
-                    .child(h_flex().gap_2().child(Button::new("snippet-template").ghost().small().label(if self.template{"File template ✓"}else{"File template"}).on_click(cx.listener(|this,_,_,cx|{this.template=!this.template;cx.notify();})))
+                    .child(v_flex().gap_1().child(div().id("snippet-description-label").test_support().text_xs().text_color(theme.muted_foreground).child("Description")
+                        .tooltip(|window,cx|crate::view::help_tooltip("Description", "One short line explaining what the snippet does. Shown beside its code preview in autocomplete.", window, cx))).child(Input::new(&self.description).small()))
+                    .child(h_flex().gap_2().child(Button::new("snippet-template").ghost().small().label(if self.template{"File template ✓"}else{"File template"}).tooltip("Use this snippet as starter code for a new solution. Mark it as a template, then choose Use for new stdin solutions.").on_click(cx.listener(|this,_,_,cx|{this.template=!this.template;cx.notify();})))
                         .when(self.template,|row|row.child(Button::new("snippet-default-template").ghost().small().icon(IconName::File).tooltip("Use for new stdin solutions").on_click(cx.listener(|this,_,w,cx|{if this.save(w,cx){let name=this.name.read(cx).value().to_string();this.settings.templates.insert(this.language.id().into(),name);this.persist_settings(w,cx);}})))))
                     .child(h_flex().gap_2().children([(format!("${{{next}:value}}"),"Stop"),("$0".into(),"Cursor"),(format!("${{{next}|YES,NO|}}"),"Choice")].into_iter().map(|(syntax,label)|{
-                        let drag=StopChip(syntax.clone());div().id(SharedString::from(format!("drag-{label}"))).test_support().on_drag(drag,|chip,_,_,cx|cx.new(|_|chip.clone())).child(Button::new(SharedString::from(format!("insert-{label}"))).outline().small().label(label).tooltip(format!("Insert or drag {syntax} into the body")).on_click(cx.listener(move|this,_,w,cx|this.insert_chip(syntax.clone(),None,w,cx))))
+                        let help=match label { "Stop"=>"Click or drag to add an editable placeholder. Tab moves to the next stop; repeated stop numbers mirror your edits.", "Cursor"=>"Click or drag to set the final cursor position after all placeholders are filled. Use one $0 in the body.", _=>"Click or drag to add a placeholder with options. Choose a value after insertion, then press Tab to continue." };
+                        let drag=StopChip(syntax.clone());div().id(SharedString::from(format!("drag-{label}"))).test_support()
+                            .tooltip(move|window,cx|crate::view::help_tooltip(label,help,window,cx))
+                            .on_drag(drag,|chip,_,_,cx|cx.new(|_|chip.clone())).child(Button::new(SharedString::from(format!("insert-{label}"))).outline().small().label(label).on_click(cx.listener(move|this,_,w,cx|this.insert_chip(syntax.clone(),None,w,cx))))
                     })))
                     .child(h_flex().flex_1().min_h_0().items_stretch().gap_3()
-                        .child(v_flex().flex_1().min_w_0().gap_1().child(div().text_xs().text_color(theme.muted_foreground).child("Body"))
+                        .child(v_flex().flex_1().min_w_0().gap_1().child(div().id("snippet-body-label").text_xs().text_color(theme.muted_foreground).child("Snippet code").tooltip(|window,cx|crate::view::help_tooltip("Snippet code", "Write code with ${1:placeholder} for editable stops, repeated $1 for linked values, and $0 for the final cursor.", window, cx)))
                             .child(div().id("snippet-body-drop").test_support().flex_1().min_h_0().on_drop(cx.listener(|this,chip:&StopChip,w,cx|this.insert_chip(chip.0.clone(),Some(w.mouse_position()),w,cx))).child(Editor::new(&self.source).h_full())))
-                        .when(!self.ai.open || window.viewport_size().width >= px(1000.), |row|row.child(v_flex().flex_1().min_w_0().gap_1().child(div().text_xs().text_color(theme.muted_foreground).child("Preview"))
+                        .when(!self.ai.open || window.viewport_size().width >= px(1000.), |row|row.child(v_flex().flex_1().min_w_0().gap_1().child(div().id("snippet-preview-label").text_xs().text_color(theme.muted_foreground).child("Expanded preview").tooltip(|window,cx|crate::view::help_tooltip("Expanded preview", "See the inserted code with placeholder defaults filled in. Click a numbered stop below to locate it in the preview.", window, cx)))
                             .child(div().flex_1().min_h_0().child(Editor::new(&self.preview).readonly(true).h_full()))
                             .child(h_flex().gap_1().children(expansion.stops.into_iter().map(|stop|{
                                 let range=stop.range();Button::new(("preview-stop",stop.index as usize)).ghost().xsmall().label(if stop.index==0{"Cursor".into()}else{format!("{}",stop.index)}).tooltip("Highlight in preview").on_click(cx.listener(move|this,_,_,cx|this.preview.update(cx,|e,cx|e.set_selected_range(range.clone(),cx))))

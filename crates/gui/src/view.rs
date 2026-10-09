@@ -18,6 +18,14 @@ use crate::workspace::{Center, Focus, Judge, Row, Workspace};
 
 const BOTTOM_H: f32 = 230.;
 
+pub fn help_tooltip(title: &'static str, help: &'static str, window: &mut Window, cx: &mut App) -> AnyView {
+    gpui_kit::component::tooltip::Tooltip::element(move |_, cx| {
+        v_flex().max_w(px(300.)).gap_1()
+            .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(title))
+            .child(div().text_xs().text_color(cx.theme().muted_foreground).child(help))
+    }).p_2().build(window, cx)
+}
+
 fn panel_spring() -> Spring {
     Spring::new(Duration::from_millis(320))
 }
@@ -76,7 +84,7 @@ impl Render for Workspace {
         // Roadmap and settings take the whole window; panels slide away for them.
         let panels = !self.zen && self.center == Center::Editor;
         let z = self.config.zoom;
-        let show_left = !self.zen && ((self.center == Center::Editor && self.left) || (self.center == Center::Home && self.home.sidebar));
+        let show_left = !self.zen && ((matches!(self.center, Center::Editor | Center::Snippets) && self.left) || (self.center == Center::Home && self.home.sidebar));
         let show_description = panels && self.description;
         let show_ai = panels && self.right;
         let bottom_max = ((window.viewport_size().height.as_f32() - 80.) * 0.75).max(120.);

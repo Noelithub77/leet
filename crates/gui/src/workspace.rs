@@ -525,7 +525,9 @@ impl Workspace {
         self.explorer_topic = TOPICS.iter().position(|entry| entry.name == topic).unwrap_or(0);
         self.rebuild_rows(); self.sidebar_sel = 0;
         self.left = true; self.home.sidebar = true; self.zen = false; self.history_mode = false;
-        if self.session.is_none() { self.center = Center::Home; } else { self.center = Center::Editor; }
+        if self.center != Center::Snippets {
+            if self.session.is_none() { self.center = Center::Home; } else { self.center = Center::Editor; }
+        }
         self.focus_nav(Focus::Explorer, window, cx);
     }
 

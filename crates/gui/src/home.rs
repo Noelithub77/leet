@@ -98,9 +98,11 @@ impl Workspace {
     }
 
     pub fn cycle_tab(&mut self, delta: isize, window: &mut Window, cx: &mut Context<Self>) {
-        let current = if self.center == Center::Home { None } else { self.active_tab };
-        if let Some(next) = next_problem_tab(current, self.tabs.len(), delta) {
-            self.select_tab(next, window, cx);
+        let current = match self.center { Center::Home => None, Center::Snippets => Some(self.tabs.len()), _ => self.active_tab };
+        let count = self.tabs.len() + usize::from(self.snippet_editor.is_some());
+        if let Some(next) = next_problem_tab(current, count, delta) {
+            if next == self.tabs.len() { self.open_snippet_editor(window, cx); }
+            else { self.select_tab(next, window, cx); }
         }
     }
 
@@ -288,10 +290,10 @@ impl Workspace {
     }
 
     pub fn render_tabs(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let selected = match self.center { Center::Home => 0, Center::Editor => self.active_tab.map_or(0, |i| i + 1), _ => usize::MAX };
+        let selected = match self.center { Center::Home => 0, Center::Editor => self.active_tab.map_or(0, |i| i + 1), Center::Snippets => self.tabs.len() + 1, _ => usize::MAX };
         let theme = cx.theme().clone();
         let make_tab = |index| Tab::new(("workspace-tab", index)).selected(selected == index)
-            .set_position(index + 1, self.tabs.len() + 1).h_10().px_2p5().gap_2().rounded(px(12.)).flex_shrink_0()
+            .set_position(index + 1, self.tabs.len() + 1 + usize::from(self.snippet_editor.is_some())).h_10().px_2p5().gap_2().rounded(px(12.)).flex_shrink_0()
             .text_sm().text_color(theme.tab_foreground).cursor_pointer()
             .styles(|styles| styles.selected(|style| style.bg(theme.tab_active).text_color(rgb(0xffffff))))
             .hover(|tab| tab.bg(if selected == index { theme.tab_active } else { theme.secondary }));
@@ -323,8 +325,16 @@ impl Workspace {
                     })))
                 .on_click(cx.listener(move |this, _, window, cx| this.select_tab(index, window, cx))));
         }
+        if self.snippet_editor.is_some() {
+            tabs = tabs.child(make_tab(self.tabs.len() + 1).id("snippets-tab").accessibility_label("Snippets")
+                .child(Icon::new(IconName::Code).small().text_color(theme.primary)).child("Snippets")
+                .child(Button::new("close-snippets-tab").ghost().xsmall().icon(IconName::X).accessibility_label("Close snippets")
+                    .tooltip_with_action("Close snippets", &actions::CloseProblem, Some(actions::WORKSPACE))
+                    .on_click(cx.listener(|this, _, window, cx| { cx.stop_propagation(); this.close_snippet_editor(window, cx); })))
+                .on_click(cx.listener(|this, _, window, cx| this.open_snippet_editor(window, cx))));
+        }
         let panels = !self.zen && self.center == Center::Editor;
-        let left = !self.zen && ((self.center == Center::Editor && self.left) || (self.center == Center::Home && self.home.sidebar));
+        let left = !self.zen && ((matches!(self.center, Center::Editor | Center::Snippets) && self.left) || (self.center == Center::Home && self.home.sidebar));
         let toggles: [(&str, IconName, &str, bool, Box<dyn Action>); 4] = [
             ("toggle-left-panel", IconName::PanelLeft, "Toggle explorer", left, Box::new(actions::ToggleLeft)),
             ("toggle-description-panel", IconName::FileText, "Toggle description", panels && self.description, Box::new(actions::ToggleDescription)),

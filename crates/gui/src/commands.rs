@@ -30,7 +30,8 @@ impl Workspace {
             .on_action(cx.listener(|this, _: &ReopenProblem, window, cx| this.reopen_problem(window, cx)))
             .on_action(cx.listener(|this, _: &PreviousTab, window, cx| this.cycle_tab(-1, window, cx)))
             .on_action(cx.listener(|this, _: &CloseProblem, window, cx| {
-                if this.center == Center::Editor { this.close_problem(window, cx); }
+                if this.center == Center::Snippets { this.close_snippet_editor(window, cx); }
+                else if this.center == Center::Editor { this.close_problem(window, cx); }
             }))
             .on_action(cx.listener(|this, _: &ToggleLeft, window, cx| {
                 this.practice_tour_step(cx);
@@ -44,6 +45,8 @@ impl Workspace {
                 this.zen = false;
                 if this.left {
                     this.focus_nav(if this.config.source == practice::language::Source::NeetCode { Focus::Explorer } else { Focus::Sidebar }, window, cx);
+                } else if this.center == Center::Snippets {
+                    this.open_snippet_editor(window, cx);
                 } else {
                     this.focus_editor(window, cx);
                 }
