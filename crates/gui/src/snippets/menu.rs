@@ -113,6 +113,7 @@ pub(super) fn render(pane: &EditorPane, window: &mut Window, cx: &mut Context<Ed
         .child(div().p_1().bg(theme.popover).border_1().border_color(theme.border).rounded_md().shadow_md().child(list)
             .when_some(crate::copilot::preview_hint(pane, window, cx), |menu, hint| menu.child(hint)))
         .when_some(preview, |popup, preview| popup.child(div().id("source-completion-preview").test_support().relative().overflow_hidden()
+            .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
             .w(preview_width).bg(theme.popover).border_1().border_color(theme.border).rounded_md().shadow_md()
             .child(div().id("source-completion-preview-scroll").overflow_y_scroll().max_h(px(240.)).p_2().pb_8().text_xs().child(preview))
             .child(deferred(div().id("completion-preview-fade").test_support().absolute().w_full().left_0().bottom_0().h_8().rounded_b_md()

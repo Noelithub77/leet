@@ -145,9 +145,13 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         let bounds = window.find("copilot-full-preview").bounds();
         ensure!(bounds.top() >= px(0.) && bounds.bottom() <= window.viewport_size().height, "Long preview escaped the window");
         let before = window.find("copilot-preview-code").bounds().top();
+        let editor_scroll = pane.read(cx).state.read(cx).scroll_offset();
         window.scroll("copilot-full-preview", ScrollDelta::Lines(point(0., -12.)), cx);
         window.render_frame(cx);
         ensure!(window.find("copilot-preview-code").bounds().top() < before, "Long preview did not scroll");
+        ensure!(pane.read(cx).state.read(cx).scroll_offset() == editor_scroll, "Preview wheel input scrolled the source editor");
+        let after = window.find("copilot-preview-popover").bounds();
+        ensure!(after.top() >= px(0.) && after.bottom() <= window.viewport_size().height, "Scrolled preview escaped the window");
         Ok(())
     })??;
     if pixels { cx.capture_screenshot(handle)?.save(output.join("copilot-full-preview-scrolled.png"))?; }

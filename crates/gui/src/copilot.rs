@@ -223,7 +223,7 @@ pub(crate) fn preview_overlay(pane: &crate::snippets::expansion::EditorPane, win
     let left = position.x.max(px(0.)).min((input.size.width - width).max(px(0.)));
     let below = position.y + line_height + px(4.);
     let height = if expanded { px(240.).min(input.size.height) } else { px(30.) };
-    let top = if below + height > input.size.height { (position.y - height - px(4.)).max(px(0.)) } else { below };
+    let top = if below + height > input.size.height { (position.y - height - px(4.)).max(px(0.)) } else { below.max(px(0.)) };
     let theme = cx.theme();
     let preview = predictions.preview.borrow();
     let code = if expanded {
@@ -232,8 +232,9 @@ pub(crate) fn preview_overlay(pane: &crate::snippets::expansion::EditorPane, win
             .child(div().id("copilot-preview-code").test_support()
                 .child(StyledText::new(code.clone()).with_highlights(highlighter.styles(&(0..code.len()), theme.highlight_theme.as_ref())))))
     } else { None };
-    Some(deferred(div().absolute().left(left).top(top).rounded_md().bg(theme.popover)
-        .when(expanded, |view| view.w(width).border_1().border_color(theme.border).shadow_md())
+    Some(deferred(div().id("copilot-preview-popover").test_support().absolute().left(left).top(top).rounded_md().bg(theme.popover)
+        .when(expanded, |view| view.w(width).border_1().border_color(theme.border).shadow_md()
+            .on_scroll_wheel(|_, _, cx| cx.stop_propagation()))
         .child(hint).children(code)).into_any_element())
 }
 fn inline(suggestion: &Suggestion) -> lsp_types::InlineCompletionResponse {
