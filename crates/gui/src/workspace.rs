@@ -125,6 +125,8 @@ pub use crate::snippets::expansion::EditorPane;
 
 pub struct Workspace {
     pub snippet_dir: PathBuf,
+    pub(crate) snippet_epoch: u64,
+    pub(crate) snippet_library: std::rc::Rc<practice::snippets::search::Library>,
     pub snippet_editor: Option<Entity<crate::snippets::SnippetEditor>>,
     pub companion_task: Option<Task<()>>,
     pub intelligence: crate::language_server::Intelligence,
@@ -198,6 +200,8 @@ impl Workspace {
         let mut this = Self::from_storage(config, db, accounts.clone(), window, cx);
         this.snippet_dir = practice::snippets::store::dir();
         this.reload_snippets(cx);
+        let language_servers = this.start_language_servers(window, cx);
+        this._tasks.push(language_servers);
         if this.config.copilot_enabled { this.copilot.update(cx, |connection, cx| connection.connect(this.config.workspace.clone(), false, window, cx)); }
         this.assist.update(cx, |assist, cx| assist.detect(cx));
         let workspace = this.config.workspace.clone();
@@ -212,6 +216,7 @@ impl Workspace {
         this.load_catalog(window, cx);
         if accounts[1].is_some() { this.refresh_neetcode(window, cx); }
         this._tasks.push(this.watch_disk(window, cx));
+        this._tasks.push(this.watch_snippets(cx));
         let watcher = crate::update::watch(&mut this, window, cx);
         this._tasks.push(watcher);
         this._tasks.push(crate::update::check(window, cx));
@@ -258,7 +263,10 @@ impl Workspace {
             cx.notify();
         });
         let copilot_observe = cx.observe(&copilot, |_, _, cx| cx.notify());
+        let snippet_library = std::rc::Rc::new(practice::snippets::search::Library::new(practice::snippets::store::effective(&[], &practice::snippets::builtin(), &config.snippets)));
         let mut this = Self {
+            snippet_epoch: 0,
+            snippet_library: snippet_library.clone(),
             snippet_dir: config.workspace.join(".fixture-snippets"),
             snippet_editor: None,
             companion_task: None,
@@ -300,7 +308,7 @@ impl Workspace {
             session: None,
             tabs: vec![],
             active_tab: None,
-            editor_pane: cx.new(|cx| EditorPane::new(editor.clone(), config.preferred_language, window, cx)),
+            editor_pane: cx.new(|cx| EditorPane::new(editor.clone(), config.preferred_language, snippet_library, window, cx)),
             copilot: copilot.clone(),
             editor,
             editor_subscription: Some(editor_sub),

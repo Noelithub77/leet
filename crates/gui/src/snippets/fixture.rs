@@ -22,11 +22,12 @@ pub(crate) fn native(cx:&mut HeadlessAppContext,output:&Path,pixels:bool)->Resul
     cx.update(|cx|{super::bind_keys(cx);crate::snippets::expansion::bind_keys(cx);cx.bind_keys([KeyBinding::new("ctrl-j",crate::actions::InsertSnippet,None)]);});
     let(handle,pane)=cx.update(|cx|gpui_kit::open_window(WindowOptions{window_bounds:Some(WindowBounds::Windowed(Bounds{origin:point(px(0.),px(0.)),size:size(px(1000.),px(700.))})),show:false,focus:false,..Default::default()},cx,|window,cx|cx.new(|cx|{
         let state=cx.new(|cx|EditorState::new(window,cx).language("python"));
-        let mut pane=crate::snippets::expansion::EditorPane::new(state.clone(),Language::Python,window,cx);
+        let mut pane=crate::snippets::expansion::EditorPane::new(state.clone(),Language::Python,std::rc::Rc::new(practice::snippets::search::Library::new(vec![])),window,cx);
         state.update(cx,|editor,_|editor.lsp_mut().completion_provider=Some(std::rc::Rc::new(FixtureCompletions)));
-        pane.library=vec![Snippet{name:"Fixture loop".into(),prefixes:vec!["loop".into(),"!loop".into()],body:"for ${1:i} in ${2:range(n)}:\n\tprint($1)\n$0".into(),description:"A fixture".into(),scope:Some(Language::Python),template:false,origin:Origin::User}];
-        pane.library.push(Snippet{name:"Wrap selection".into(),prefixes:vec!["wrap".into()],body:"${TM_SELECTED_TEXT}\n$0".into(),description:"Keep selected code".into(),scope:Some(Language::Python),template:false,origin:Origin::User});
-        pane.library.push(practice::snippets::builtin().into_iter().find(|s|s.scope==Some(Language::Python)&&s.prefix()=="bfs").unwrap());
+        let mut library=vec![Snippet{name:"Fixture loop".into(),prefixes:vec!["loop".into(),"!loop".into()],body:"for ${1:i} in ${2:range(n)}:\n\tprint($1)\n$0".into(),description:"A fixture".into(),scope:Some(Language::Python),template:false,origin:Origin::User}];
+        library.push(Snippet{name:"Wrap selection".into(),prefixes:vec!["wrap".into()],body:"${TM_SELECTED_TEXT}\n$0".into(),description:"Keep selected code".into(),scope:Some(Language::Python),template:false,origin:Origin::User});
+        library.push(practice::snippets::builtin().into_iter().find(|s|s.scope==Some(Language::Python)&&s.prefix()=="bfs").unwrap());
+        pane.library=std::rc::Rc::new(practice::snippets::search::Library::new(library));
         state.update(cx,|e,cx|e.focus(window,cx));pane
     })))?;
     let handle=handle.into();cx.run_until_parked();
@@ -174,7 +175,8 @@ pub(crate) fn native(cx:&mut HeadlessAppContext,output:&Path,pixels:bool)->Resul
     }
     cx.update(|cx|{crate::theme::apply("Vesper",cx);crate::theme::set_zoom(1.,cx);});
     workspace_tab(cx,output,pixels)?;
-    Ok(serde_json::json!({"fixture":"snippets","passed":true,"pixels":pixels,"checks":["prefix Tab expansion","typing mirrors","Tab and Shift+Tab","native cursor completions and Escape","merged language-server suggestions","Enter and Tab accept linked snippet placeholders","manual creation and save","drag cursor drop","compact light and zoom layouts","AI panel without agent startup","staged review edit, Apply and Undo","workspace tab and Explorer","field titles","Ctrl+W close and invalid-save guard"]}))
+    delayed_autocomplete(cx)?;
+    Ok(serde_json::json!({"fixture":"snippets","passed":true,"pixels":pixels,"checks":["prefix Tab expansion","typing mirrors","Tab and Shift+Tab","native cursor completions and Escape","merged language-server suggestions","Enter and Tab accept linked snippet placeholders","manual creation and save","drag cursor drop","compact light and zoom layouts","AI panel without agent startup","staged review edit, Apply and Undo","workspace tab and Explorer","field titles","Ctrl+W close and invalid-save guard","immediate local fuzzy results with delayed LSP","late merge preserves selection","Escape cancels late LSP","safe cached server results while extending and deleting a word","external snippet hot reload and invalid-file recovery"]}))
 }
 
 fn workspace_tab(cx:&mut HeadlessAppContext,output:&Path,pixels:bool)->Result<()> {
@@ -225,6 +227,101 @@ fn workspace_tab(cx:&mut HeadlessAppContext,output:&Path,pixels:bool)->Result<()
         editor.read(cx).source.clone().update(cx,|source,cx|source.set_value("$0",window,cx));
         window.press("ctrl-w",cx);
         ensure!(workspace.read(cx).snippet_editor.is_none()&&workspace.read(cx).center==Center::Home,"Ctrl+W did not close snippets");
-        window.remove_window();Ok(())
-    })??;cx.run_until_parked();Ok(())
+        Ok(())
+    })??;cx.run_until_parked();
+    let (directory, watcher)=cx.update(|cx|workspace.update(cx,|ws,cx|(ws.snippet_dir.clone(),ws.watch_snippets(cx))));
+    cx.run_until_parked();
+    let mut user=store::load(&directory).snippets;
+    user.push(Snippet{name:"Hot reload fixture".into(),prefixes:vec!["hotfixture".into()],body:"${1:fresh}$0".into(),description:"Live external edit".into(),scope:Some(Language::Python),template:false,origin:Origin::User});
+    store::save(&directory,&user)?;
+    cx.advance_clock(std::time::Duration::from_millis(850));cx.run_until_parked();
+    cx.update_window(handle,|_,_,cx|->Result<()>{
+        ensure!(workspace.read(cx).editor_pane.read(cx).library.iter().any(|snippet|snippet.prefix()=="hotfixture"),"External snippet edit did not refresh the retained index");Ok(())
+    })??;
+    std::fs::write(directory.join("python.json"),"invalid temporary edit")?;
+    cx.advance_clock(std::time::Duration::from_millis(850));cx.run_until_parked();
+    cx.update_window(handle,|_,_,cx|->Result<()>{
+        ensure!(workspace.read(cx).editor_pane.read(cx).library.iter().any(|snippet|snippet.prefix()=="hotfixture"),"Invalid library erased the last usable index");Ok(())
+    })??;
+    user.last_mut().unwrap().prefixes=vec!["hotfixed".into()];
+    store::save(&directory,&user)?;
+    cx.advance_clock(std::time::Duration::from_millis(850));cx.run_until_parked();
+    cx.update_window(handle,|_,_,cx|->Result<()>{
+        ensure!(workspace.read(cx).editor_pane.read(cx).library.iter().any(|snippet|snippet.prefix()=="hotfixed"),"Repaired library did not replace the retained index");Ok(())
+    })??;
+    drop(watcher);
+    cx.update_window(handle,|_,window,_|window.remove_window())?;cx.run_until_parked();Ok(())
+}
+
+struct DelayedCompletions;
+impl CompletionProvider for DelayedCompletions {
+    fn is_completion_trigger(&self, _: usize, _: &str, _: &mut App) -> bool { true }
+    fn completions(&self, _: &ropey::Rope, _: usize, _: lsp_types::CompletionContext, _: &mut Window, cx: &mut App) -> Task<anyhow::Result<lsp_types::CompletionResponse>> {
+        cx.spawn(async move |cx| {
+            cx.background_executor().timer(std::time::Duration::from_millis(500)).await;
+            Ok(lsp_types::CompletionResponse::Array(vec![
+                lsp_types::CompletionItem { label: "delayed_variable".into(), ..Default::default() },
+                lsp_types::CompletionItem { label: "reachable".into(),kind:Some(lsp_types::CompletionItemKind::VARIABLE), ..Default::default() }
+            ]))
+        })
+    }
+}
+fn delayed_autocomplete(cx: &mut HeadlessAppContext) -> Result<()> {
+    let (handle, pane) = cx.update(|cx| gpui_kit::open_window(WindowOptions { show:false, focus:false, ..Default::default() }, cx, |window,cx| cx.new(|cx| {
+        let state = cx.new(|cx| EditorState::new(window,cx).language("python"));
+        let library = std::rc::Rc::new(practice::snippets::search::Library::new(practice::snippets::builtin()));
+        let pane = crate::snippets::expansion::EditorPane::new(state.clone(),Language::Python,library,window,cx);
+        state.update(cx, |editor,cx| { editor.lsp_mut().completion_provider=Some(std::rc::Rc::new(DelayedCompletions)); editor.focus(window,cx); });
+        pane
+    })))?;
+    let handle=handle.into(); cx.run_until_parked();
+    for query in ["brfs", "reachable"] {
+        cx.update_window(handle, |_,window,cx| {
+            window.render_frame(cx);
+            pane.read(cx).state.clone().update(cx, |editor,cx| { editor.set_value("",window,cx); editor.focus(window,cx); });
+            window.input(query,cx);
+        })?;
+        cx.run_until_parked();
+        cx.update_window(handle, |_,window,cx| -> Result<()> {
+            window.render_frame(cx);
+            let menu=pane.read(cx).menu.as_ref().ok_or_else(||anyhow::anyhow!("Local results waited for LSP: {query}"))?;
+            let expected=if query=="brfs" {"bfs"} else {"dfs"};
+            ensure!(menu.content.items.iter().any(|item|item.label==expected),"Fuzzy name/description missing: {query}");
+            ensure!(!menu.content.items.iter().any(|item|item.label=="delayed_variable"),"Delayed fixture returned before its timer");
+            window.press("down",cx);
+            Ok(())
+        })??;
+        let selected=cx.update(|cx| { let menu=pane.read(cx).menu.as_ref().unwrap(); menu.content.items[menu.selected].clone() });
+        cx.advance_clock(std::time::Duration::from_millis(550)); cx.run_until_parked();
+        cx.update_window(handle, |_,_,cx| -> Result<()> {
+            let menu=pane.read(cx).menu.as_ref().ok_or_else(||anyhow::anyhow!("Late merge hid menu"))?;
+            ensure!(menu.content.items.iter().any(|item|item.label=="delayed_variable"),"Late LSP was never merged");
+            ensure!(menu.content.items[menu.selected]==selected,"Late merge changed keyboard selection");
+            if query=="reachable" { ensure!(menu.content.items[0].label=="reachable","Exact symbol ranked behind a weak snippet description match"); }
+            Ok(())
+        })??;
+    }
+    cx.update_window(handle, |_,window,cx| {
+        pane.read(cx).state.clone().update(cx, |editor,cx| { editor.set_value("",window,cx); editor.focus(window,cx); });
+        window.input("delayed",cx);
+    })?; cx.run_until_parked();
+    cx.advance_clock(std::time::Duration::from_millis(550)); cx.run_until_parked();
+    cx.update_window(handle, |_,window,cx| { window.input("_vx",cx); })?; cx.run_until_parked();
+    cx.update_window(handle, |_,window,cx| { window.render_frame(cx); window.press("backspace",cx); })?; cx.run_until_parked();
+    cx.update_window(handle, |_,window,cx| -> Result<()> {
+        window.render_frame(cx);
+        let menu=pane.read(cx).menu.as_ref().ok_or_else(||anyhow::anyhow!("Cached server rows waited for another request"))?;
+        ensure!(menu.content.items.iter().any(|item|item.label=="delayed_variable"),"Cached server result missing");
+        window.press("enter",cx); Ok(())
+    })??; cx.run_until_parked();
+    cx.update_window(handle, |_,_,cx| -> Result<()> {
+        ensure!(pane.read(cx).state.read(cx).value().as_str()=="delayed_variable","Cached acceptance duplicated the word"); Ok(())
+    })??;
+    cx.update_window(handle, |_,window,cx| { window.input("x",cx); })?; cx.run_until_parked();
+    cx.update_window(handle, |_,window,cx| { window.render_frame(cx); window.press("escape",cx); })?;
+    cx.advance_clock(std::time::Duration::from_millis(550)); cx.run_until_parked();
+    cx.update_window(handle, |_,window,cx| -> Result<()> {
+        ensure!(pane.read(cx).menu.is_none(),"Escaped menu reopened after late LSP");
+        window.remove_window(); Ok(())
+    })??; cx.run_until_parked(); Ok(())
 }

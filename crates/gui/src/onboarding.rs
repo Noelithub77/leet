@@ -46,7 +46,6 @@ pub struct Setup {
 impl Workspace {
     pub fn begin_onboarding(&mut self, accounts: bool, window: &mut Window, cx: &mut Context<Self>) {
         self.save_now(cx);
-        self.suspend_language_servers(cx);
         let workspace = cx.weak_entity();
         let config = self.config.clone();
         let copilot = self.copilot.clone();
@@ -174,6 +173,7 @@ impl Setup {
                             ws.onboarding = None;
                             ws.rebuild_rows();
                             ws.omni.stale = true;
+                            ws.warm_language_server(language, window, cx);
                             ws.show_home(window, cx);
                             ws.start_default_tour(window, cx);
                             if source == Source::Codeforces { ws.refresh_codeforces(false, window, cx); }

@@ -16,10 +16,11 @@ pub(super) struct Menu {
     pub selected: usize,
     pub scroll: UniformListScrollHandle,
     preview: Option<(String, SyntaxHighlighter)>,
+    preview_key: Option<(Language, String)>,
 }
 impl Menu {
     pub fn new(content: CompletionMenuState, offset: usize) -> Self {
-        Self { content, offset, selected: 0, scroll: UniformListScrollHandle::new(), preview: None }
+        Self { content, offset, selected: 0, scroll: UniformListScrollHandle::new(), preview: None, preview_key: None }
     }
     pub fn step(&mut self, delta: isize) {
         let len = self.content.items.len();
@@ -28,7 +29,7 @@ impl Menu {
             self.scroll.scroll_to_item(self.selected, ScrollStrategy::Nearest);
         }
     }
-    pub fn prepare(&mut self, language: Language) {
+    pub fn prepare(&mut self, language: Language, library: &practice::snippets::search::Library) {
         let code = self.content.items.get(self.selected).filter(|item| item.kind == Some(CompletionItemKind::SNIPPET))
             .and_then(|item| match &item.text_edit {
                 Some(CompletionTextEdit::Edit(edit)) => Some(edit.new_text.clone()),
@@ -36,12 +37,16 @@ impl Menu {
                 None => item.insert_text.clone(),
             });
         if let Some(code) = code {
+            if self.preview_key.as_ref().is_some_and(|(old_language, old)| *old_language == language && old == &code) { return; }
+            self.preview_key = Some((language, code.clone()));
+            let code = library.preview(&self.content.items[self.selected].label, &code, language)
+                .map(str::to_owned).unwrap_or_else(|| practice::snippets::body::preview(&code).text);
             if self.preview.as_ref().is_none_or(|(old, _)| old != &code) {
                 let mut highlighter = SyntaxHighlighter::new(language.id());
                 highlighter.update(None, &ropey::Rope::from_str(&code), None);
                 self.preview = Some((code, highlighter));
             }
-        } else { self.preview = None; }
+        } else { self.preview = None; self.preview_key = None; }
     }
 }
 
@@ -80,7 +85,7 @@ pub(super) fn render(pane: &EditorPane, window: &mut Window, cx: &mut Context<Ed
     let top = if below + popup_height > available_height { (pos.y - popup_height - px(4.)).max(px(0.)) } else { below };
     let preview: Option<AnyElement> = if let Some((code, highlighter)) = &menu.preview {
         Some(div().font_family(theme.mono_font_family.clone()).text_xs()
-            .when_some(documentation.as_ref().and_then(|doc| doc.split_once("```").map(|(header, _)| header.trim().to_owned())).filter(|header| !header.is_empty()), |view, header|
+            .when_some(documentation.as_ref().and_then(|doc| Some(doc.split_once("```").map_or(doc.as_str(), |(header, _)| header).trim().to_owned())).filter(|header| !header.is_empty()), |view, header|
                 view.child(div().mb_2().text_color(theme.muted_foreground).child(header)))
             .child(StyledText::new(code.clone()).with_highlights(highlighter.styles(&(0..code.len()), theme.highlight_theme.as_ref()))).into_any_element())
     } else {

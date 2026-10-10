@@ -19,7 +19,8 @@ pub struct SnippetEditor {
     pub(super) workspace: WeakEntity<Workspace>,
     pub(super) dir: PathBuf,
     pub(super) user: Vec<Snippet>,
-    library: Vec<Snippet>,
+    library: std::rc::Rc<snippets::search::Library>,
+    searcher: practice::search::Searcher,
     settings: snippets::Settings,
     pub(super) language: Language,
     selected: Option<String>,
@@ -44,11 +45,45 @@ impl Workspace {
         Some(snippet.body.clone())
     }
     pub fn reload_snippets(&mut self, cx: &mut Context<Self>) {
-        let loaded = store::load(&self.snippet_dir);
-        let library = store::effective(&loaded.snippets, &snippets::builtin(), &self.config.snippets);
+        let initial_load = self.snippet_epoch == 0;
+        self.snippet_epoch = self.snippet_epoch.wrapping_add(1);
+        let epoch = self.snippet_epoch;
+        let directory = self.snippet_dir.clone(); let settings = self.config.snippets.clone();
+        cx.spawn(async move |this, cx| {
+            let library = cx.background_spawn(async move {
+                let loaded = store::load(&directory);
+                if !initial_load && !loaded.errors.is_empty() { return None; }
+                Some(snippets::search::Library::new(store::effective(&loaded.snippets, &snippets::builtin(), &settings)))
+            }).await;
+            if let Some(library) = library {
+                let _ = this.update(cx, |ws, cx| {
+                    if ws.snippet_epoch != epoch { return; }
+                    ws.snippet_library = std::rc::Rc::new(library);
+                    ws.apply_snippet_library(cx);
+                });
+            }
+        }).detach();
+    }
+    pub(crate) fn watch_snippets(&self, cx: &mut Context<Self>) -> Task<()> {
+        let directory = self.snippet_dir.clone();
+        cx.spawn(async move |this, cx| {
+            let mut revision = cx.background_spawn({ let directory=directory.clone(); async move { store::revision(&directory) } }).await;
+            loop {
+                cx.background_executor().timer(std::time::Duration::from_millis(800)).await;
+                let current = cx.background_spawn({ let directory=directory.clone(); async move { store::revision(&directory) } }).await;
+                if current != revision {
+                    revision = current;
+                    if this.update(cx, |ws,cx| ws.reload_snippets(cx)).is_err() { break; }
+                } else if this.upgrade().is_none() { break; }
+            }
+        })
+    }
+    pub(crate) fn apply_snippet_library(&mut self, cx: &mut Context<Self>) {
+        let library = self.snippet_library.clone();
         let tab_expand = self.config.snippets.tab_expand;
         let directory=self.config.workspace.clone();
         self.editor_pane.update(cx, |pane,cx| {pane.library=library;pane.tab_expand=tab_expand;pane.workspace=Some(directory);cx.notify();});
+        self.update_tab_snippets(cx);
     }
     pub fn open_snippet_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.save_now(cx);
@@ -82,14 +117,14 @@ impl SnippetEditor {
         let mut subscriptions=vec![changed];
         for input in [&name,&prefixes,&description,&search] {subscriptions.push(cx.subscribe(input,|_,_,_:&InputEvent,cx|cx.notify()));}
         let ai=super::ai::State::new(window,cx);
-        let mut this=Self{workspace,dir,user:Vec::new(),library:Vec::new(),settings,language,selected:None,original:None,name,prefixes,description,search,source,preview,template:false,error:None,status:String::new(),scanning:false,ai,_subscriptions:subscriptions};
+        let mut this=Self{workspace,dir,user:Vec::new(),library:std::rc::Rc::new(snippets::search::Library::new(vec![])),searcher:practice::search::Searcher::default(),settings,language,selected:None,original:None,name,prefixes,description,search,source,preview,template:false,error:None,status:String::new(),scanning:false,ai,_subscriptions:subscriptions};
         this.refresh(window,cx);this
     }
     pub(super) fn refresh(&mut self, window:&mut Window,cx:&mut Context<Self>) {
         let loaded=store::load(&self.dir);
         self.error=loaded.errors.first().map(|(p,e)|format!("{}: {e}",p.display()));
         self.user=loaded.snippets;
-        self.library=store::effective(&self.user,&snippets::builtin(),&self.settings);
+        self.library=std::rc::Rc::new(snippets::search::Library::new(store::effective(&self.user,&snippets::builtin(),&self.settings)));
         if self.original.is_none() {if let Some(s)=self.library.iter().find(|s|s.applies_to(self.language)).cloned(){self.load(s,window,cx);}}
         cx.notify();
     }
@@ -125,7 +160,7 @@ impl SnippetEditor {
         let mut user=self.user.clone();user.retain(|s|Some(&s.key())!=self.selected.as_ref());user.push(draft.clone());
         if let Err(e)=store::commit(&self.dir,&self.user,&user){self.error=Some(e.to_string());cx.notify();return false;}
         self.user=user;self.original=Some(draft.clone());self.selected=Some(draft.key());self.error=None;self.status="Saved".into();
-        self.library=store::effective(&self.user,&snippets::builtin(),&self.settings);self.notify_workspace(window,cx);cx.notify();true
+        self.library=std::rc::Rc::new(snippets::search::Library::new(store::effective(&self.user,&snippets::builtin(),&self.settings)));self.notify_workspace(window,cx);cx.notify();true
     }
     pub(super) fn notify_workspace(&self,window:&mut Window,cx:&mut Context<Self>){
         let workspace=self.workspace.clone();window.defer(cx,move|_,cx|{let _=workspace.update(cx,|ws,cx|ws.reload_snippets(cx));});
@@ -181,7 +216,7 @@ impl SnippetEditor {
 impl Render for SnippetEditor {
     fn render(&mut self,window:&mut Window,cx:&mut Context<Self>)->impl IntoElement {
         let theme=cx.theme().clone();let query=self.search.read(cx).value().to_lowercase();
-        let items:Vec<_>=self.library.iter().filter(|s|s.applies_to(self.language)&&format!("{} {} {}",s.name,s.prefixes.join(" "),s.description).to_lowercase().contains(&query)).cloned().collect();
+        let items:Vec<_>=self.library.rank(&mut self.searcher,&query,self.language,self.library.len()).into_iter().map(|row|self.library.row(row).0.clone()).collect();
         let expansion=body::preview(self.source.read(cx).value().as_str());let next=expansion.stops.iter().map(|s|s.index).max().unwrap_or(0).saturating_add(1);
         let validation=body::validate(self.source.read(cx).value().as_str()).err();
         v_flex().id("snippet-editor").test_support().size_full().key_context("SnippetEditor").p_4().gap_3()

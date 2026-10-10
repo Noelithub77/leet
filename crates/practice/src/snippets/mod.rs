@@ -9,6 +9,7 @@ mod builtin;
 pub mod import;
 pub mod store;
 pub mod session;
+pub mod search;
 pub mod cli;
 
 pub use builtin::builtin;

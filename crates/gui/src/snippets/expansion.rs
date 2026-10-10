@@ -5,7 +5,7 @@ use gpui_kit::base::input::{EditorMode, InputModeKind};
 use gpui_kit::component::{ActiveTheme as _, Sizable as _, h_flex};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::prelude::FluentBuilder as _;
-use practice::{language::Language, snippets::{Snippet, body, session::Session}};
+use practice::{language::Language, snippets::{Snippet, body, session::Session, search::Library}};
 use std::{ops::Range, rc::Rc, time::Duration};
 
 gpui_kit::actions!(snippet_expansion, [NextStop, PreviousStop, CancelSnippet, PickerUp, PickerDown, InsertPicked]);
@@ -24,26 +24,33 @@ pub fn bind_keys(cx: &mut App) {
 pub struct EditorPane {
     pub state: Entity<EditorState>,
     pub language: Language,
-    pub library: Vec<Snippet>,
+    pub library: Rc<Library>,
     pub tab_expand: bool,
     pub path: Option<std::path::PathBuf>,
     pub workspace: Option<std::path::PathBuf>,
     session: Option<Session>,
-    completions: Rc<super::completion::Completions>,
+    pub(super) completions: Rc<super::completion::Completions>,
     pub(super) menu: Option<super::menu::Menu>,
     changing: bool,
     epoch: u64,
     pub(crate) predictions: Option<Rc<crate::copilot::Predictions>>,
+    language_document: Option<std::sync::Arc<practice::lsp::Document>>,
+    detail_task: Task<()>,
     _subscriptions: Vec<Subscription>,
 }
 impl EditorPane {
-    pub fn new(state: Entity<EditorState>, language: Language, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let completions = Rc::new(super::completion::Completions::new(language));
+    pub fn new(state: Entity<EditorState>, language: Language, library: Rc<Library>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let completions = Rc::new(super::completion::Completions::new(language, cx.weak_entity(), library.clone()));
         state.update(cx, |editor, _| editor.lsp_mut().completion_provider = Some(completions.clone()));
         let observe = cx.observe(&state, |this, editor, cx| {
             let content = editor.read(cx).completion_menu_state();
             if content.open {
-                this.menu = Some(super::menu::Menu::new(content.clone(), editor.read(cx).cursor()));
+                let mut content = content.clone();
+                if let Some((source, offset, items)) = this.completions.published.borrow().as_ref() {
+                    if editor.read(cx).cursor() == *offset && editor.read(cx).value().as_str() == source { content.items.clone_from(items); }
+                }
+                this.set_menu(content.clone(), editor.read(cx).cursor());
+                this.resolve_detail(cx);
                 editor.update(cx, |editor, cx| editor.dismiss_completion_overlay(cx));
             }
             cx.notify();
@@ -53,6 +60,7 @@ impl EditorPane {
             let text = editor.read(cx).value().to_string();
             if let Some(predictions) = &this.predictions { predictions.invalidate(); }
             this.menu = None;
+            this.detail_task = Task::ready(());
             let selection = editor.read(cx).selected_range();
             if let Some(predictions) = &this.predictions {
                 predictions.configure(this.path.clone(), this.language);
@@ -76,7 +84,13 @@ impl EditorPane {
             }
             cx.notify();
         });
-        Self { state, language, library: practice::snippets::builtin(), tab_expand: true, path: None, workspace: None, session: None, completions, menu: None, changing: false, epoch: 0, predictions: None, _subscriptions: vec![observe, changes] }
+        Self { state, language, library, tab_expand: true, path: None, workspace: None, session: None, completions, menu: None, changing: false, epoch: 0, predictions: None, language_document: None, detail_task: Task::ready(()), _subscriptions: vec![observe, changes] }
+    }
+
+    pub(crate) fn connect_language_document(&mut self, language: Language, document: std::sync::Arc<practice::lsp::Document>, cx: &mut Context<Self>) {
+        self.language = language;
+        self.language_document = Some(document);
+        self.sync_completions(cx);
     }
 
     pub(crate) fn connect_predictions(&mut self, connection: Entity<crate::copilot::Connection>, window: &mut Window, cx: &mut Context<Self>) {
@@ -108,6 +122,8 @@ impl EditorPane {
         if !alt { self.hide_prediction(cx); return; }
         predictions.cancel_warm();
         predictions.configure(self.path.clone(), self.language);
+        self.completions.cancel();
+        self.detail_task = Task::ready(());
         self.menu = None;
         self.state.update(cx, |editor, cx| {
             editor.dismiss_completion_overlay(cx);
@@ -147,12 +163,17 @@ impl EditorPane {
         self.library.iter().filter(|s| s.applies_to(self.language) && s.prefixes.iter().any(|p| p == &text[range.clone()])).cloned().collect()
     }
     pub fn insert(&mut self, snippet: &Snippet, range: Range<usize>, window: &mut Window, cx: &mut Context<Self>) {
+        self.insert_body(&snippet.body, range, window, cx);
+    }
+    fn insert_body(&mut self, snippet_body: &str, range: Range<usize>, window: &mut Window, cx: &mut Context<Self>) {
+        self.completions.cancel();
+        self.menu = None;
         let text = self.state.read(cx).value().to_string();
         if range.end > text.len() { return; }
         let line_start = text[..range.start].rfind('\n').map_or(0, |i| i+1);
         let line = text[line_start..].split('\n').next().unwrap_or_default();
         let context = body::Context { path: self.path.clone(), workspace: self.workspace.clone(), selected: self.state.read(cx).selected_value().to_string(), clipboard: cx.read_from_clipboard().and_then(|c| c.text()).unwrap_or_default(), language: Some(self.language), line: line.into(), line_index: text[..line_start].bytes().filter(|b| *b == b'\n').count(), word: text[range.clone()].into(), indent: line.chars().take_while(|c| c.is_whitespace()).collect(), unit: "    ".into(), ..Default::default() };
-        let expansion = body::expand(&snippet.body, &context);
+        let expansion = body::expand(snippet_body, &context);
         if expansion.truncated { return; }
         self.changing = true;
         self.state.update(cx, |e, cx| { e.dismiss_lsp_overlays(cx); e.set_selected_range(range.clone(), cx); e.replace(expansion.text.clone(), window, cx); e.focus(window, cx); });
@@ -209,33 +230,85 @@ impl EditorPane {
         let Some(item) = menu.content.items.get(menu.selected) else { return; };
         if self.state.read(cx).cursor() != menu.offset { return; }
         let expansion = self.completions.pending.borrow_mut().take().and_then(|pending| pending.accepted(item, self.state.read(cx).value().as_str()));
-        self.changing = true;
-        self.state.update(cx, |editor, cx| editor.insert_completion(item, menu.content.trigger_start_offset.unwrap_or(menu.offset)..menu.offset, window, cx));
-        if let Some((offset, expansion)) = expansion {
-            self.activate(expansion, offset, self.state.read(cx).value().to_string(), cx);
+        self.completions.cancel();
+        if item.kind == Some(lsp_types::CompletionItemKind::SNIPPET) && expansion.is_none() { cx.notify(); return; }
+        if let Some((range, snippet_body)) = expansion {
+            self.insert_body(&snippet_body, range, window, cx);
+        } else {
+            self.changing = true;
+            self.state.update(cx, |editor, cx| editor.insert_completion(item, menu.content.trigger_start_offset.unwrap_or(menu.offset)..menu.offset, window, cx));
         }
         self.changing = false;
         cx.notify();
     }
     pub(super) fn close_completions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.completions.cancel();
+        self.detail_task = Task::ready(());
         self.menu = None;
         self.state.update(cx, |editor, cx| { editor.dismiss_lsp_overlays(cx); editor.focus(window, cx); });
+        cx.notify();
+    }
+    fn set_menu(&mut self, content: gpui_kit::base::input::CompletionMenuState, offset: usize) {
+        if let Some(menu) = self.menu.as_mut().filter(|menu| menu.offset == offset) {
+            let selected = menu.content.items.get(menu.selected);
+            let selected_index = selected.and_then(|item| content.items.iter().position(|candidate| candidate.label == item.label && candidate.kind == item.kind && candidate.insert_text == item.insert_text)).unwrap_or(0);
+            menu.content = content;
+            menu.selected = selected_index;
+        } else { self.menu = Some(super::menu::Menu::new(content, offset)); }
+    }
+    fn resolve_detail(&mut self, cx: &mut Context<Self>) {
+        self.detail_task = Task::ready(());
+        let Some(menu) = &self.menu else { return; };
+        let Some(item) = menu.content.items.get(menu.selected).filter(|item| item.kind != Some(lsp_types::CompletionItemKind::SNIPPET) && item.documentation.is_none()).cloned() else { return; };
+        let Some(document) = self.language_document.clone().filter(|document| document.server.supports_completion_resolve()) else { return; };
+        let text = self.state.read(cx).value().to_string(); let offset = menu.offset;
+        self.detail_task = cx.spawn(async move |this, cx| {
+            let original = item.clone();
+            let result = cx.background_spawn(async move {
+                let wire: lsp_wire::CompletionItem = serde_json::from_value(serde_json::to_value(item)?)?;
+                let item = document.server.request::<lsp_wire::request::ResolveCompletionItem>(wire).await?;
+                let item: lsp_types::CompletionItem = serde_json::from_value(serde_json::to_value(item)?)?;
+                anyhow::Ok(item)
+            }).await;
+            if let Ok(resolved) = result {
+                let _ = this.update(cx, |pane,cx| {
+                    if pane.state.read(cx).value().as_str() != text || pane.state.read(cx).cursor() != offset { return; }
+                    if let Some(menu) = &mut pane.menu {
+                        if let Some(item) = menu.content.items.get_mut(menu.selected).filter(|item| **item == original) {
+                            pane.completions.cache_documentation(&original, &resolved);
+                            item.documentation = resolved.documentation;
+                            item.detail = resolved.detail;
+                            cx.notify();
+                        }
+                    }
+                });
+            }
+        });
+    }
+    pub(super) fn merge_completions(&mut self, start: usize, query: &str, items: Vec<lsp_types::CompletionItem>, cx: &mut Context<Self>) {
+        if items.is_empty() { return; }
+        let offset = self.state.read(cx).cursor();
+        let mut content = self.menu.as_ref().map(|menu| menu.content.clone()).unwrap_or_default();
+        content.items = items;
+        content.open = true;
+        content.trigger_start_offset = Some(start);
+        content.query = query.into();
+        self.set_menu(content, offset);
+        self.resolve_detail(cx);
         cx.notify();
     }
     fn sync_completions(&mut self, cx: &mut App) {
         if let Some(predictions) = &self.predictions { predictions.configure(self.path.clone(), self.language); }
         let mut catalog = self.completions.catalog.borrow_mut();
-        if catalog.library != self.library { catalog.library = self.library.clone(); }
+        if !Rc::ptr_eq(&catalog.library, &self.library) || catalog.language != self.language { self.completions.cancel(); self.menu = None; catalog.library = self.library.clone(); }
         catalog.language = self.language;
-        catalog.path.clone_from(&self.path);
-        catalog.workspace.clone_from(&self.workspace);
-        catalog.selected = self.state.read(cx).selected_value().to_string();
         catalog.selection = self.state.read(cx).selected_range();
         drop(catalog);
         let provider: Rc<dyn CompletionProvider> = self.completions.clone();
         let current = self.state.read(cx).lsp().completion_provider.clone();
         if current.as_ref().is_none_or(|current| !Rc::ptr_eq(current, &provider)) {
-            *self.completions.upstream.borrow_mut() = current;
+            if current.is_none() { self.language_document = None; }
+            self.completions.set_upstream(current);
             self.state.update(cx, |editor, _| editor.lsp_mut().completion_provider = Some(provider));
         }
     }
@@ -246,7 +319,7 @@ impl Render for EditorPane {
         self.language = Language::ALL.into_iter().find(|l| l.id()==self.state.read(cx).language_name().as_str()).unwrap_or(self.language);
         self.sync_completions(cx);
         if self.menu.as_ref().is_some_and(|menu| menu.offset != self.state.read(cx).cursor()) { self.menu = None; }
-        if let Some(menu) = &mut self.menu { menu.prepare(self.language); }
+        if let Some(menu) = &mut self.menu { menu.prepare(self.language, &self.library); }
         let theme = cx.theme().clone();
         let selection = self.state.read(cx).selected_range();
         let active = self.session.as_ref().filter(|s| { let r=s.range(); selection.start>=r.start && selection.end<=r.end });
@@ -272,16 +345,31 @@ impl Render for EditorPane {
                     this.hide_prediction(cx);
                     if let Some(predictions) = &this.predictions { predictions.invalidate(); }
                     cx.stop_propagation();
+                } else if event.keystroke.key == "escape" && (this.menu.is_some() || this.completions.is_pending()) {
+                    if this.menu.is_none() { this.session = None; }
+                    this.close_completions(window, cx);
+                    cx.stop_propagation();
                 } else if !event.keystroke.modifiers.control && !event.keystroke.modifiers.platform && !event.keystroke.modifiers.shift
                     && (event.keystroke.key == "tab" || event.keystroke.key == "l" && event.keystroke.modifiers.alt)
                     && this.accept_prediction(window, cx) { cx.stop_propagation(); }
+                else if this.menu.is_some() && !event.keystroke.modifiers.control && !event.keystroke.modifiers.platform && !event.keystroke.modifiers.shift && !event.keystroke.modifiers.alt {
+                    match event.keystroke.key.as_str() {
+                        "up" | "down" => {
+                            if let Some(menu) = &mut this.menu { menu.step(if event.keystroke.key == "up" { -1 } else { 1 }); }
+                            this.resolve_detail(cx); cx.notify(); cx.stop_propagation();
+                        }
+                        "enter" => { this.accept_completion(window,cx); cx.stop_propagation(); }
+                        "tab" if this.session.is_none() => { this.accept_completion(window,cx); cx.stop_propagation(); }
+                        _ => {}
+                    }
+                }
             }))
             .on_action(cx.listener(|this,_:&crate::actions::InsertSnippet,w,cx|this.open_completions(w,cx)))
             .on_action(cx.listener(|this,_:&NextStop,w,cx| this.navigate(false,w,cx)))
             .on_action(cx.listener(|this,_:&PreviousStop,w,cx| this.navigate(true,w,cx)))
             .on_action(cx.listener(|this,_:&CancelSnippet,w,cx| { if this.menu.is_none() { this.session=None; } this.close_completions(w,cx); }))
-            .on_action(cx.listener(|this,_:&PickerDown,_,cx| { if let Some(menu) = &mut this.menu { menu.step(1); } cx.notify(); }))
-            .on_action(cx.listener(|this,_:&PickerUp,_,cx| { if let Some(menu) = &mut this.menu { menu.step(-1); } cx.notify(); }))
+            .on_action(cx.listener(|this,_:&PickerDown,_,cx| { if let Some(menu) = &mut this.menu { menu.step(1); } this.resolve_detail(cx); cx.notify(); }))
+            .on_action(cx.listener(|this,_:&PickerUp,_,cx| { if let Some(menu) = &mut this.menu { menu.step(-1); } this.resolve_detail(cx); cx.notify(); }))
             .on_action(cx.listener(|this,_:&InsertPicked,w,cx| this.accept_completion(w,cx)))
             .on_action(cx.listener(|this,_:&crate::language_server::Complete,w,cx| this.open_completions(w,cx)))
             .on_mouse_move(cx.listener(|this,_,_,cx|{this.state.update(cx,|e,cx|e.clear_diagnostic_popover(cx));cx.notify();}))

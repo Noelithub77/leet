@@ -26,10 +26,10 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         show: false, focus: false, ..Default::default()
     }, cx, |window, cx| cx.new(|cx| {
         let state = cx.new(|cx| EditorState::new(window, cx).language("python").line_number(true));
-        let mut pane = crate::snippets::expansion::EditorPane::new(state.clone(), Language::Python, window, cx);
+        let mut pane = crate::snippets::expansion::EditorPane::new(state.clone(), Language::Python, std::rc::Rc::new(practice::snippets::search::Library::new(vec![])), window, cx);
         let connection = cx.new(|_| Connection::new(true));
         pane.connect_predictions(connection, window, cx);
-        pane.library.clear();
+
         let item = serde_json::from_value(serde_json::json!({"insertText":"nt(1)\n"})).unwrap();
         *pane.predictions.as_ref().unwrap().fixture.borrow_mut() = Suggestion::from_item("pri", 3, item);
         state.update(cx, |editor, cx| editor.focus(window, cx));

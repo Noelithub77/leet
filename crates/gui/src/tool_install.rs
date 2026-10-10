@@ -88,6 +88,7 @@ impl Workspace {
                 let installed = installed && !self.tool_install.fixture;
                 if installed {
                     self.suspend_language_servers(cx);
+                    self.warm_language_server(self.config.preferred_language, window, cx);
                     if self.center == Center::Editor { self.attach_language_server(window, cx); }
                     if self.debug_mode { self.debugger.update(cx, |debugger, cx| debugger.tools_installed(cx)); }
                     if let Some(setup) = self.onboarding.clone() { setup.update(cx, |setup, cx| setup.tools_installed(window, cx)); }

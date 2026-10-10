@@ -112,6 +112,11 @@ fn scope_file(dir: &Path, scope: Option<Language>) -> PathBuf {
     dir.join(format!("{}.json", scope.map_or("all", Language::id)))
 }
 
+/// Cheap change detection for the six managed library files, without parsing bodies.
+pub fn revision(dir: &Path) -> Vec<Option<(std::time::SystemTime, u64)>> {
+    scopes().map(|scope| fs::metadata(scope_file(dir, scope)).ok().and_then(|m| Some((m.modified().ok()?, m.len())))).collect()
+}
+
 pub fn load(dir: &Path) -> Loaded {
     let mut loaded = Loaded { snippets: Vec::new(), errors: Vec::new() };
     for scope in scopes() {

@@ -12,6 +12,8 @@ use crate::workspace::{Center, Workspace};
 #[derive(Default)]
 pub struct Intelligence {
     active: Option<Language>,
+    warming: HashSet<Language>,
+    epoch: u64,
     pending: HashSet<EntityId>,
     servers: HashMap<Language, Arc<Server>>,
     documents: HashMap<EntityId, Weak<Document>>,
@@ -21,6 +23,7 @@ pub struct Intelligence {
 impl Intelligence {
     pub fn label(&self, language: Language) -> String {
         if self.errors.contains_key(&language) { return format!("{} · LSP unavailable", language.label()); }
+        if self.warming.contains(&language) { return format!("{} · starting LSP", language.label()); }
         match self.servers.get(&language).map(|server| server.status()) {
             Some(Status::Ready) => format!("{} · IntelliSense", language.label()),
             Some(Status::Starting) => format!("{} · starting LSP", language.label()),
@@ -45,20 +48,14 @@ impl CompletionProvider for Provider {
             doc.sync(text.clone())?;
             let params = wire::CompletionParams { text_document_position: doc.position(&text, offset), context: Some(wire::CompletionContext { trigger_kind: wire::CompletionTriggerKind::INVOKED, trigger_character: None }), work_done_progress_params: Default::default(), partial_result_params: Default::default() };
             let response = doc.server.request::<request::Completion>(params).await?;
-            let mut items = match response.unwrap_or(wire::CompletionResponse::Array(vec![])) {
-                wire::CompletionResponse::Array(items) => items,
-                wire::CompletionResponse::List(list) => list.items,
+            let (mut items, incomplete) = match response.unwrap_or(wire::CompletionResponse::Array(vec![])) {
+                wire::CompletionResponse::Array(items) => (items, false),
+                wire::CompletionResponse::List(list) => (list.items, list.is_incomplete),
             };
             let start = text[..offset].char_indices().rev().find(|(_, ch)| !ch.is_alphanumeric() && *ch != '_').map_or(0, |(index, ch)| index + ch.len_utf8());
             let prefix = text[start..offset].to_lowercase();
-            items.sort_by(|left, right| (!left.label.to_lowercase().starts_with(&prefix), left.sort_text.as_deref().unwrap_or(&left.label)).cmp(&(!right.label.to_lowercase().starts_with(&prefix), right.sort_text.as_deref().unwrap_or(&right.label))));
-            let resolves = items.iter().enumerate().take(32).filter(|(_, item)| doc.server.supports_completion_resolve() && item.documentation.is_none()).map(|(index, item)| {
-                let server = doc.server.clone(); let item = item.clone();
-                async move { (index, server.request::<request::ResolveCompletionItem>(item).await) }
-            }).collect::<Vec<_>>();
-            let resolved = futures::stream::iter(resolves).buffer_unordered(6).collect::<Vec<_>>().await;
-            for (index, result) in resolved { if let Ok(item) = result { items[index] = item; } }
-            convert(wire::CompletionResponse::Array(items))
+            items.sort_by_cached_key(|item| (!item.label.to_lowercase().starts_with(&prefix), item.sort_text.as_deref().unwrap_or(&item.label).to_owned()));
+            convert(wire::CompletionResponse::List(wire::CompletionList { is_incomplete: incomplete, items }))
         })
     }
     fn is_completion_trigger(&self, _: usize, new_text: &str, _: &mut App) -> bool {
@@ -139,13 +136,58 @@ impl CodeActionProvider for Provider {
 fn location_link(location: wire::Location) -> wire::LocationLink { wire::LocationLink { origin_selection_range: None, target_uri: location.uri, target_range: location.range, target_selection_range: location.range } }
 
 impl Workspace {
+    pub(crate) fn warm_language_server(&mut self, language: Language, window: &mut Window, cx: &mut Context<Self>) {
+        if self.intelligence.servers.get(&language).is_some_and(|server| !matches!(server.status(), Status::Failed(_)))
+            || !self.intelligence.warming.insert(language) { return; }
+        self.intelligence.errors.remove(&language);
+        let root = self.config.workspace.clone(); let epoch = self.intelligence.epoch;
+        cx.spawn_in(window, async move |this, cx| {
+            let result = cx.background_spawn(async move {
+                std::fs::create_dir_all(&root)?;
+                let server = Server::start(language, &root)?;
+                server.ready().await?;
+                anyhow::Ok(server)
+            }).await;
+            let _ = this.update_in(cx, |ws, window, cx| {
+                if ws.intelligence.epoch != epoch { return; }
+                ws.intelligence.warming.remove(&language);
+                match result {
+                    Ok(server) => {
+                        ws.intelligence.servers.insert(language, server);
+                        ws.intelligence.errors.remove(&language);
+                        if ws.session.as_ref().is_some_and(|session| session.language == language) { ws.attach_language_server(window, cx); }
+                    }
+                    Err(error) => { ws.intelligence.errors.insert(language, error.to_string()); }
+                }
+                cx.notify();
+            });
+        }).detach();
+        cx.notify();
+    }
+    pub(crate) fn start_language_servers(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Task<()> {
+        self.warm_language_server(self.config.preferred_language, window, cx);
+        cx.spawn_in(window, async move |this, cx| {
+            loop {
+                cx.background_executor().timer(std::time::Duration::from_secs(10)).await;
+                if this.update_in(cx, |ws, window, cx| {
+                    let failed: Vec<_> = ws.intelligence.servers.iter().filter_map(|(&language, server)| matches!(server.status(), Status::Failed(_)).then_some(language)).collect();
+                    for language in failed {
+                        ws.intelligence.documents.retain(|_, document| document.upgrade().is_some_and(|doc| !matches!(doc.server.status(), Status::Failed(_))));
+                        ws.warm_language_server(language, window, cx);
+                    }
+                }).is_err() { break; }
+            }
+        })
+    }
     pub(crate) fn activate_language(&mut self, language: Language, cx: &mut Context<Self>) {
         if self.intelligence.active == Some(language) { return; }
-        self.suspend_language_servers(cx);
         self.intelligence.active = Some(language);
+        cx.notify();
     }
 
     pub(crate) fn suspend_language_servers(&mut self, cx: &mut Context<Self>) {
+        self.intelligence.epoch = self.intelligence.epoch.wrapping_add(1);
+        self.intelligence.warming.clear();
         for (_, server) in self.intelligence.servers.drain() { server.stop(); }
         self.intelligence.documents.clear();
         self.intelligence.pending.clear();
@@ -158,7 +200,7 @@ impl Workspace {
     pub fn restart_language_server(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(session) = self.session.as_ref() else { return; };
         let language = session.language;
-        self.intelligence.active = None;
+        self.suspend_language_servers(cx);
         self.activate_language(language, cx);
         self.attach_language_server(window, cx);
     }
@@ -175,13 +217,10 @@ impl Workspace {
         self.activate_language(language, cx);
         if self.intelligence.documents.get(&self.editor.entity_id()).and_then(Weak::upgrade).is_some() { self.sync_language_document(&self.editor, cx); return; }
         if self.intelligence.pending.contains(&self.editor.entity_id()) { return; }
-        let server = if let Some(server) = self.intelligence.servers.get(&language).filter(|server| !matches!(server.status(), Status::Failed(_))) { server.clone() }
-            else {
-                match Server::start(language, &self.config.workspace) {
-                    Ok(server) => { self.intelligence.servers.insert(language, server.clone()); self.intelligence.errors.remove(&language); server },
-                    Err(error) => { self.intelligence.errors.insert(language, error.to_string()); cx.notify(); return; },
-                }
-            };
+        let Some(server) = self.intelligence.servers.get(&language).filter(|server| !matches!(server.status(), Status::Failed(_))).cloned() else {
+            self.warm_language_server(language, window, cx);
+            return;
+        };
         let generation = self.intelligence.generations.entry(self.editor.entity_id()).or_default(); *generation += 1; let generation = *generation;
         let editor_id = self.editor.entity_id();
         self.intelligence.pending.insert(editor_id);
@@ -221,7 +260,9 @@ impl Workspace {
                         }); true
                     }));
                     editor.refresh(cx);
-                }); cx.notify(); true
+                });
+                ws.editor_pane.update(cx, |pane,cx| pane.connect_language_document(language, document.clone(), cx));
+                cx.notify(); true
             }).unwrap_or(false);
             drop(document);
             if !attached { return; }

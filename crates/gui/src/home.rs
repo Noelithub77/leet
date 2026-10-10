@@ -39,6 +39,11 @@ impl Workspace {
     pub(crate) fn clear_tab_language_adapters(&self, cx: &mut App) {
         for tab in self.tabs.iter().flatten().chain(self.home.closed_tabs.iter().map(|(_, tab)| tab)) { crate::language_server::clear_editor_adapters(&tab.editor, cx); }
     }
+    pub(crate) fn update_tab_snippets(&self, cx: &mut App) {
+        for tab in self.tabs.iter().flatten().chain(self.home.closed_tabs.iter().map(|(_, tab)| tab)) {
+            tab.pane.update(cx, |pane, cx| { pane.library = self.snippet_library.clone(); pane.tab_expand = self.config.snippets.tab_expand; cx.notify(); });
+        }
+    }
     pub fn park_tab(&mut self) {
         self.debug_mode = false;
         if let (Some(index), Some(session)) = (self.active_tab, self.session.take()) {
@@ -65,9 +70,9 @@ impl Workspace {
         self.editor = cx.new(|cx| EditorState::new(window, cx).language(self.config.preferred_language.id())
             .line_number(true).indent_guides(true).folding(true).soft_wrap(false)
             .tab_size(TabSize { tab_size: 4, hard_tabs: false }));
-        self.editor_pane = cx.new(|cx| EditorPane::new(self.editor.clone(), self.config.preferred_language, window, cx));
+        self.editor_pane = cx.new(|cx| EditorPane::new(self.editor.clone(), self.config.preferred_language, self.snippet_library.clone(), window, cx));
         self.editor_pane.update(cx, |pane, cx| pane.connect_predictions(self.copilot.clone(), window, cx));
-        self.reload_snippets(cx);
+        self.apply_snippet_library(cx);
         self.statement = cx.new(|_| Statement::default());
         self.editor_subscription = Some(cx.subscribe_in(&self.editor, window,
             |this, editor, event: &InputEvent, window, cx| {
