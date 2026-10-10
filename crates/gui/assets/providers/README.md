@@ -4,6 +4,7 @@
 - CodeChef silhouette: [Simple Icons 16.0.0](https://www.jsdelivr.com/package/npm/simple-icons?version=16.0.0), `icons/codechef.svg`, downloaded on 2026-10-08; CC0.
 - NeetCode: a compact vector adaptation of the NC monogram shown by the [official logo](https://neetcode.io/assets/neetcode-logo.jpeg). The upstream mark is raster; this SVG keeps the recognizable letters without a raster dependency.
 - ChatGPT, Claude, Gemini, Codex, Claude Code, OpenCode, Antigravity, Gemini CLI, and Cursor: [LobeHub Icons](https://github.com/lobehub/lobe-icons) (`@lobehub/icons-static-svg@1.95.1`, MIT, see `LICENSE`); agent marks downloaded on 2026-10-08.
+- Copilot: [Primer Octicons](https://github.com/primer/octicons), `icons/copilot-16.svg`, downloaded on 2026-10-11; MIT, see `LICENSE-octicons`.
 - App rendering supplies the pastel accent; marks remain identifiable against the active theme.
 
 Brand trademarks remain owned by their respective providers.

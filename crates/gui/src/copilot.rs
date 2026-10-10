@@ -190,7 +190,9 @@ fn inline(suggestion: &Suggestion) -> lsp_types::InlineCompletionResponse {
 
 pub fn status(ws: &crate::workspace::Workspace, cx: &mut Context<crate::workspace::Workspace>) -> impl IntoElement {
     use gpui_kit::component::{Sizable as _, button::{Button, ButtonVariants as _}};
-    Button::new("status-copilot").ghost().xsmall().label("Copilot").tooltip(ws.copilot.read(cx).detail())
+    Button::new("status-copilot").ghost().xsmall()
+        .icon(gpui_kit::component::Icon::default().path("providers/copilot.svg").xsmall())
+        .accessibility_label("Copilot").tooltip(ws.copilot.read(cx).detail())
         .on_click(cx.listener(|ws, _, window, cx| ws.open_settings(Some(crate::settings::Setting::Copilot), window, cx)))
 }
 

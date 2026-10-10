@@ -72,7 +72,9 @@ fn completion_command<'de, D: serde::Deserializer<'de>>(deserializer: D) -> std:
 #[derive(Deserialize, Serialize)] struct Items { items: Vec<Item> }
 #[derive(Deserialize, Serialize)] struct ServerStatus { kind: String, #[serde(default)] message: String }
 enum SignInRequest {}
-impl request::Request for SignInRequest { type Params = (); type Result = SignIn; const METHOD: &'static str = "signIn"; }
+#[derive(Deserialize, Serialize)]
+struct SignInParams {}
+impl request::Request for SignInRequest { type Params = SignInParams; type Result = SignIn; const METHOD: &'static str = "signIn"; }
 enum InlineRequest {}
 impl request::Request for InlineRequest { type Params = Value; type Result = Items; const METHOD: &'static str = "textDocument/inlineCompletion"; }
 enum StatusChanged {}
@@ -167,7 +169,7 @@ impl Client {
         }
         bail!("Copilot initialization timed out")
     }
-    pub async fn sign_in(&self) -> Result<SignIn> { self.ready().await?; deadline(async { Ok(self.socket.request::<SignInRequest>(()).await?) }, 30).await }
+    pub async fn sign_in(&self) -> Result<SignIn> { self.ready().await?; deadline(async { Ok(self.socket.request::<SignInRequest>(SignInParams {}).await?) }, 30).await }
     pub async fn finish_sign_in(&self, command: lsp::Command) -> Result<()> {
         ensure!(command.command == "github.copilot.finishDeviceFlow", "Unexpected Copilot sign-in command");
         self.execute(command, 300).await

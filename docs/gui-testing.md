@@ -87,6 +87,7 @@ The current command selects the node automatically and has no `--gpu` flag.
 Do not change the live compositor to resolve a fixture failure. OmaBox does not prove physical input,
 real monitors, native system services, or performance on another GPU.
 
+`./ops gui:test --fixture copilot --json` runs focused Copilot checks.
 Copilot fixtures use the production source editor with deterministic predictions,
 without downloading a server, reading credentials, or making network requests.
 They dispatch real modifier and keyboard events to verify hidden predictions,

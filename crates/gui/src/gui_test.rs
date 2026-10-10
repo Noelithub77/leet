@@ -38,14 +38,14 @@ fn check_state(debugger: &Entity<Debugger>, cx: &App, case: usize, index: Option
 pub fn run() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(2).collect();
     let mut statement_view = false;
-    let mut snippets_only = false;
+    let mut fixture = None;
     let mut output = None; let mut video = false; let mut pixels = true; let mut wayland = false; let mut explore = false;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
             "--output" if output.is_none() => { i += 1; output = Some(PathBuf::from(args.get(i).context("--output requires a path")?)); }
             "--statement" if !statement_view => statement_view = true,
-            "--fixture" if !snippets_only => { i += 1; ensure!(args.get(i).map(String::as_str) == Some("snippets"), "Supported focused fixture: snippets"); snippets_only = true; }
+            "--fixture" if fixture.is_none() => { i += 1; let name = args.get(i).context("--fixture requires a name")?.as_str(); ensure!(matches!(name, "snippets" | "copilot"), "Supported focused fixtures: snippets, copilot"); fixture = Some(name); }
             "--video" if !video => video = true,
             "--wayland" if !wayland => wayland = true,
             "--explore" if !explore => { explore = true; wayland = true; }
@@ -55,7 +55,7 @@ pub fn run() -> Result<()> {
         i += 1;
     }
     ensure!(!video || pixels, "Video requires pixel rendering");
-    ensure!(!snippets_only || (!wayland && !video), "Focused snippets use native headless checks without video");
+    ensure!(fixture.is_none() || (!wayland && !video), "Focused fixtures use native headless checks without video");
     let output = output.context("--output is required")?;
     std::fs::create_dir_all(&output)?;
     if wayland { ensure!(!video && pixels, "Wayland smoke uses screenshots"); return run_wayland(output, explore, statement_view); }
@@ -64,8 +64,9 @@ pub fn run() -> Result<()> {
     });
     cx.allow_parking();
     cx.update(init);
-    if snippets_only {
-        let fixture = crate::snippets::fixture::native(&mut cx, &output, pixels)?;
+    if let Some(name) = fixture {
+        let fixture = if name == "copilot" { crate::copilot::fixture::native(&mut cx, &output, pixels)? }
+            else { crate::snippets::fixture::native(&mut cx, &output, pixels)? };
         let report = json!({"command":"gui:test","environment":"isolated-fixtures","backend":"gpui-headless","passed":true,"pixels":pixels,"video":false,"output":output,"fixtures":[fixture]});
         std::fs::write(output.join("report.json"), serde_json::to_vec_pretty(&report)?)?;
         println!("{report}");

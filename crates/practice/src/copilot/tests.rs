@@ -54,7 +54,11 @@ while True:
     if method=='initialize': result={'capabilities':{}}
     elif method=='initialized':
         send({'method':'didChangeStatus','params':{'kind':'Error','message':'Sign in'}})
-    elif method=='signIn': result={'userCode':'TEST-CODE','command':{'title':'Sign in','command':'github.copilot.finishDeviceFlow','arguments':[]}}
+    elif method=='signIn':
+        if not isinstance(request.get('params'),dict):
+            send({'id':request['id'],'error':{'code':-32602,'message':'Expected object'}})
+            continue
+        result={'userCode':'TEST-CODE','command':{'title':'Sign in','command':'github.copilot.finishDeviceFlow','arguments':[]}}
     elif method=='workspace/executeCommand' and request['params']['command']=='github.copilot.finishDeviceFlow':
         send({'method':'didChangeStatus','params':{'kind':'Normal','message':'Ready'}})
         send({'method':'copilot/quotaChange','params':{'copilotPlan':'free','completions':{'percentRemaining':42.5,'unlimited':False},'chat':{'unlimited':True}}})

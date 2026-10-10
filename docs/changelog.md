@@ -3,7 +3,7 @@
 
 - Start a chat in the assistant pane with Ctrl+T, Ctrl+Shift+O, or Ctrl+N.
 - Optional GitHub Copilot suggestions: hold Alt to preview and accept with Tab or Alt+L.
-- Hover Copilot in the status bar to see connection status and reported usage.
+- Hover the Copilot logo in the status bar to see connection status and reported usage.
 - 205 competitive-programming snippets and file templates for Python, C++, Go, C, and Java.
 - Expand prefixes with Tab and browse snippets with Ctrl+J.
 - Linked placeholders, choices, transforms, and a cursor that glides between stops.
@@ -21,6 +21,7 @@
 <details>
 <summary>Fix</summary>
 
+- Fix Copilot sign-in rejecting the request format.
 - Hide empty chat placeholders from history.
 - Show the selected conversation title once.
 - Keep empty history free of placeholder controls.

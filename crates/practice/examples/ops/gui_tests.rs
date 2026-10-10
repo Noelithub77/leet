@@ -18,7 +18,7 @@ impl Drop for Process {
 
 pub fn run(args: &[String]) -> Result<()> {
     if args.iter().any(|a| matches!(a.as_str(), "--help" | "-h")) {
-        println!("./ops gui:test [--backend native|cage] [--fixture snippets] [--interaction-only] [--video] [--output /absolute/new-directory] [--json]\nLocal fixture-only GUI checks. Native: real GPUI input and offscreen PNGs; --fixture snippets runs only snippet checks; --video captures 60 fps motion with FFmpeg. Cage: private headless Wayland window smoke test (requires cage and grim). No user desktop input, accounts, services, or saved data. Fails rather than falling back to your active display. Results and logs remain in the output directory; temporary session data is removed."); return Ok(());
+        println!("./ops gui:test [--backend native|cage] [--fixture snippets|copilot] [--interaction-only] [--video] [--output /absolute/new-directory] [--json]\nLocal fixture-only GUI checks. Native: real GPUI input and offscreen PNGs; --fixture selects focused snippet or Copilot checks; --video captures 60 fps motion with FFmpeg. Cage: private headless Wayland window smoke test (requires cage and grim). No user desktop input, accounts, services, or saved data. Fails rather than falling back to your active display. Results and logs remain in the output directory; temporary session data is removed."); return Ok(());
     }
     let mut backend = "native"; let mut video = false; let mut interaction_only = false; let mut output = None; let mut i = 0;
     let mut fixture = None;
@@ -28,7 +28,7 @@ pub fn run(args: &[String]) -> Result<()> {
             "--output" if output.is_none() => { i += 1; output = Some(PathBuf::from(args.get(i).context("--output needs a path")?)); }
             "--video" if !video => video = true,
             "--interaction-only" if !interaction_only => interaction_only = true,
-            "--fixture" if fixture.is_none() => { i += 1; ensure!(args.get(i).map(String::as_str) == Some("snippets"), "Supported focused fixture: snippets"); fixture = Some("snippets"); }
+            "--fixture" if fixture.is_none() => { i += 1; let name = args.get(i).context("--fixture requires a name")?.as_str(); ensure!(matches!(name, "snippets" | "copilot"), "Supported focused fixtures: snippets, copilot"); fixture = Some(name); }
             "--json" => {},
             option => bail!("Unknown GUI-test option: {option}"),
         }
@@ -36,7 +36,7 @@ pub fn run(args: &[String]) -> Result<()> {
     }
     ensure!(!(video && interaction_only), "Video requires rendering");
     ensure!(backend != "cage" || (!video && !interaction_only), "Cage mode is a Wayland screenshot smoke check; use native for interaction-only or video");
-    ensure!(fixture.is_none() || (backend == "native" && !video), "Focused snippets use native headless checks without video");
+    ensure!(fixture.is_none() || (backend == "native" && !video), "Focused fixtures use native headless checks without video");
     if fixture.is_none() {
         for language in [practice::language::Language::Python, practice::language::Language::Cpp] {
             practice::debugger::requirement(language, "python3").map_err(anyhow::Error::msg)?;
