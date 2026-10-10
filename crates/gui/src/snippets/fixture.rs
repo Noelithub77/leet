@@ -48,6 +48,10 @@ pub(crate) fn native(cx:&mut HeadlessAppContext,output:&Path,pixels:bool)->Resul
         window.input("lo",cx);Ok(())
     })??;cx.run_until_parked();
     cx.update_window(handle,|_,window,cx|->Result<()>{
+        let menu=pane.read(cx).menu.as_ref().ok_or_else(||anyhow::anyhow!("Unified completion menu hidden"))?;
+        ensure!(menu.selected==0,"Fresh autocomplete did not select the first result");
+        let index=menu.content.items.iter().position(|item|item.label=="loop").unwrap();
+        for _ in 0..index{window.press("down",cx);}
         window.render_frame(cx);
         let menu=pane.read(cx).menu.as_ref().ok_or_else(||anyhow::anyhow!("Unified completion menu hidden"))?;
         ensure!(window.find("source-completions").visible(),"Cursor completion list hidden");
@@ -99,6 +103,10 @@ pub(crate) fn native(cx:&mut HeadlessAppContext,output:&Path,pixels:bool)->Resul
         window.input("b",cx);
     })?;cx.run_until_parked();
     cx.update_window(handle,|_,window,cx|->Result<()>{
+        let menu=pane.read(cx).menu.as_ref().ok_or_else(||anyhow::anyhow!("Typing did not show snippets"))?;
+        let index=menu.content.items.iter().position(|item|item.label=="bfs").ok_or_else(||anyhow::anyhow!("BFS suggestion missing"))?;
+        for _ in 0..menu.selected{window.press("up",cx);}
+        for _ in 0..index{window.press("down",cx);}
         window.render_frame(cx);
         let menu=pane.read(cx).menu.as_ref().ok_or_else(||anyhow::anyhow!("Typing did not show snippets"))?;
         let item=menu.content.items.iter().find(|item|item.label=="bfs").ok_or_else(||anyhow::anyhow!("BFS suggestion missing"))?;
@@ -285,7 +293,7 @@ fn delayed_autocomplete(cx: &mut HeadlessAppContext) -> Result<()> {
         pane
     })))?;
     let handle=handle.into(); cx.run_until_parked();
-    for query in ["brfs", "reachable", "bfs"] {
+    for (query, navigate) in [("reachable",false),("brfs",true),("reachable",true),("bfs",true)] {
         cx.update_window(handle, |_,window,cx| {
             window.render_frame(cx);
             pane.read(cx).state.clone().update(cx, |editor,cx| { editor.set_value("",window,cx); editor.focus(window,cx); });
@@ -298,7 +306,8 @@ fn delayed_autocomplete(cx: &mut HeadlessAppContext) -> Result<()> {
             let expected=if query=="reachable" {"dfs"} else {"bfs"};
             ensure!(menu.content.items.iter().any(|item|item.label==expected),"Fuzzy name/description missing: {query}");
             ensure!(!menu.content.items.iter().any(|item|item.label=="delayed_variable"),"Delayed fixture returned before its timer");
-            window.press("down",cx);
+            ensure!(menu.selected==0,"Fresh local results did not select the first result");
+            if navigate { window.press("down",cx); }
             Ok(())
         })??;
         let selected=cx.update(|cx| { let menu=pane.read(cx).menu.as_ref().unwrap(); menu.content.items[menu.selected].clone() });
@@ -306,13 +315,18 @@ fn delayed_autocomplete(cx: &mut HeadlessAppContext) -> Result<()> {
         cx.update_window(handle, |_,_,cx| -> Result<()> {
             let menu=pane.read(cx).menu.as_ref().ok_or_else(||anyhow::anyhow!("Late merge hid menu"))?;
             ensure!(menu.content.items.iter().any(|item|item.label=="delayed_variable"),"Late LSP was never merged");
-            ensure!(menu.content.items[menu.selected]==selected,"Late merge changed keyboard selection");
+            if navigate { ensure!(menu.content.items[menu.selected]==selected,"Late merge changed keyboard selection"); }
+            else { ensure!(menu.selected==0,"Late merge kept an automatic snippet selection instead of the first result"); }
             if query=="reachable" { ensure!(menu.content.items[0].label=="reachable","Exact symbol ranked behind a weak snippet description match"); }
             let first_snippet=menu.content.items.iter().position(|item|item.kind==Some(lsp_types::CompletionItemKind::SNIPPET)).unwrap();
             ensure!(menu.content.items[..first_snippet].iter().any(|item|item.kind==Some(lsp_types::CompletionItemKind::KEYWORD)),"Keyword ranked behind snippets: {query}");
             ensure!(menu.content.items[first_snippet..].iter().all(|item|item.kind==Some(lsp_types::CompletionItemKind::SNIPPET)),"Language suggestion ranked behind snippets: {query}");
             Ok(())
         })??;
+        if !navigate {
+            cx.update_window(handle,|_,window,cx|{window.press("enter",cx);})?;cx.run_until_parked();
+            cx.update(|cx|->Result<()>{ensure!(pane.read(cx).state.read(cx).value().as_str()=="reachable","Enter did not accept the first language suggestion");Ok(())})?;
+        }
     }
     cx.update_window(handle, |_,window,cx| {
         pane.read(cx).state.clone().update(cx, |editor,cx| { editor.set_value("",window,cx); editor.focus(window,cx); });

@@ -250,10 +250,7 @@ impl EditorPane {
     }
     fn set_menu(&mut self, content: gpui_kit::base::input::CompletionMenuState, offset: usize) {
         if let Some(menu) = self.menu.as_mut().filter(|menu| menu.offset == offset) {
-            let selected = menu.content.items.get(menu.selected);
-            let selected_index = selected.and_then(|item| content.items.iter().position(|candidate| candidate.label == item.label && candidate.kind == item.kind && candidate.insert_text == item.insert_text)).unwrap_or(0);
-            menu.content = content;
-            menu.selected = selected_index;
+            menu.update(content);
         } else { self.menu = Some(super::menu::Menu::new(content, offset)); }
     }
     fn resolve_detail(&mut self, cx: &mut Context<Self>) {

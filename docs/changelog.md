@@ -24,6 +24,7 @@
 <details>
 <summary>Fix</summary>
 
+- Select the first autocomplete result unless you navigate to another suggestion.
 - Give Vesper clearer pastel syntax colours and brighter comments.
 - Show local autocomplete immediately while language-server results load.
 - Prefer keywords, variables, and functions ahead of snippets in autocomplete.

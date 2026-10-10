@@ -14,17 +14,28 @@ pub(super) struct Menu {
     pub content: CompletionMenuState,
     pub offset: usize,
     pub selected: usize,
+    manually_selected: bool,
     pub scroll: UniformListScrollHandle,
     preview: Option<(String, SyntaxHighlighter)>,
     preview_key: Option<(Language, String)>,
 }
 impl Menu {
     pub fn new(content: CompletionMenuState, offset: usize) -> Self {
-        Self { content, offset, selected: 0, scroll: UniformListScrollHandle::new(), preview: None, preview_key: None }
+        Self { content, offset, selected: 0, manually_selected: false, scroll: UniformListScrollHandle::new(), preview: None, preview_key: None }
+    }
+    pub fn update(&mut self, content: CompletionMenuState) {
+        self.manually_selected &= self.content.query == content.query;
+        let selected = self.manually_selected.then(|| self.content.items.get(self.selected)).flatten();
+        let index = selected.and_then(|item| content.items.iter().position(|candidate| candidate.label == item.label && candidate.kind == item.kind && candidate.insert_text == item.insert_text));
+        self.manually_selected &= index.is_some();
+        self.selected = index.unwrap_or(0);
+        self.content = content;
+        if !self.content.items.is_empty() { self.scroll.scroll_to_item(self.selected, ScrollStrategy::Nearest); }
     }
     pub fn step(&mut self, delta: isize) {
         let len = self.content.items.len();
         if len > 0 {
+            self.manually_selected = true;
             self.selected = (self.selected as isize + delta).rem_euclid(len as isize) as usize;
             self.scroll.scroll_to_item(self.selected, ScrollStrategy::Nearest);
         }
