@@ -91,13 +91,32 @@ pub(super) fn usage(value: &Value, events: &mut dyn FnMut(Event)) { if let Some(
         let pidfile=tempfile::NamedTempFile::new().unwrap();
         let mut command=Command::new("sh");command.args(["-c","sleep 60 & echo $! > \"$1\"; wait","sh"]).arg(pidfile.path());
         let mut process=Process::spawn(&mut command,Duration::from_secs(5)).unwrap();
+        let ready_deadline=Instant::now()+Duration::from_secs(2);
+        let pid=loop {
+            if let Ok(pid)=std::fs::read_to_string(pidfile.path()).unwrap().trim().parse::<u32>() {break pid;}
+            assert!(Instant::now()<ready_deadline,"Agent fixture did not start its child");
+            thread::sleep(Duration::from_millis(10));
+        };
         let cancel=Cancel::default();let signal=cancel.clone();
         let trigger=thread::spawn(move || {thread::sleep(Duration::from_millis(100));signal.cancel();});
         let started=Instant::now();assert!(process.line(&cancel).unwrap_err().to_string().contains("cancelled"));
         drop(process);trigger.join().unwrap();assert!(started.elapsed()<Duration::from_secs(2));
-        let pid=std::fs::read_to_string(pidfile.path()).unwrap();
         // Linux can retain a killed grandchild as a zombie until init reaps it.
-        if let Ok(status)=std::fs::read_to_string(format!("/proc/{}/status",pid.trim())) {assert!(status.lines().any(|line|line.starts_with("State:")&&line.contains('Z')));}
+        #[cfg(target_os="linux")] {
+            let exit_deadline=Instant::now()+Duration::from_secs(2);
+            loop {
+                match std::fs::read_to_string(format!("/proc/{pid}/status")) {
+                    Ok(status)=>{
+                        let state=status.lines().find(|line|line.starts_with("State:")).unwrap_or("State unavailable");
+                        if state.split_whitespace().nth(1).is_some_and(|state|matches!(state,"Z"|"X"|"x")) {break;}
+                        assert!(Instant::now()<exit_deadline,"Cancelled agent child {pid} is still alive: {state}");
+                    }
+                    Err(error) if error.kind()==std::io::ErrorKind::NotFound=>break,
+                    Err(error)=>panic!("Read cancelled agent child {pid}: {error}"),
+                }
+                thread::sleep(Duration::from_millis(10));
+            }
+        }
     }
     #[test] fn agents_cancel_with_blocked_stdin() {
         let mut process=Process::spawn(Command::new("sleep").arg("60"),Duration::from_secs(5)).unwrap();
