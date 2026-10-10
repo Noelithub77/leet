@@ -52,6 +52,7 @@ pub(crate) fn native(cx:&mut HeadlessAppContext,output:&Path,pixels:bool)->Resul
         ensure!(menu.content.items.iter().any(|item|item.label=="loop"),"Snippet missing from normal completions");
         ensure!(menu.content.items.iter().any(|item|item.label=="local_value"),"Language-server suggestions missing from merged menu");
         ensure!(menu.content.items.iter().any(|item|item.documentation.is_some()),"Highlighted snippet preview missing");
+        ensure!(window.find("source-completion-preview").visible(),"Full expansion preview hidden");
         Ok(())
     })??;
     cx.run_until_parked();cx.update_window(handle,|_,window,cx|window.render_frame(cx))?;

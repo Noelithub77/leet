@@ -4,6 +4,8 @@
 - Start a chat in the assistant pane with Ctrl+T, Ctrl+Shift+O, or Ctrl+N.
 - Optional GitHub Copilot suggestions: hold Alt to preview and accept with Tab or Alt+L.
 - Hover the Copilot logo in the status bar to see connection status and reported usage.
+- See a subtle Alt cue when Copilot has a suggestion ready.
+- Preview the selected snippet's expanded code in the completion menu.
 - 205 competitive-programming snippets and file templates for Python, C++, Go, C, and Java.
 - Expand prefixes with Tab and browse snippets with Ctrl+J.
 - Linked placeholders, choices, transforms, and a cursor that glides between stops.

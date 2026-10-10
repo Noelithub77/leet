@@ -56,7 +56,7 @@ impl EditorPane {
             let selection = editor.read(cx).selected_range();
             if let Some(predictions) = &this.predictions {
                 predictions.configure(this.path.clone(), this.language);
-                predictions.warm(text.clone(), editor.read(cx).cursor(), cx);
+                predictions.warm(text.clone(), editor.read(cx).cursor(), cx.weak_entity(), cx);
             }
             if let Some(session) = &mut this.session {
                 match session.changed(&text) {
@@ -296,5 +296,6 @@ impl Render for EditorPane {
                 }))
             })))))
             .when_some(super::menu::render(self, window, cx), |view, menu| view.child(menu))
+            .when_some(if self.menu.is_none() { crate::copilot::preview_overlay(self, window, cx) } else { None }, |view, hint| view.child(hint))
     }
 }

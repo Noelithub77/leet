@@ -96,8 +96,12 @@ pub(super) fn render(pane: &EditorPane, window: &mut Window, cx: &mut Context<Ed
                 .hover(|row| row.bg(theme.accent.opacity(0.5)))
                 .child(div().id(("completion-kind", index)).tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(label).build(window, cx))
                     .child(Icon::new(icon).size(px(14.)).text_color(theme.primary.opacity(0.85))))
-                .child(div().flex_1().truncate().child(item.label.clone()))
-                .when_some(item.detail.clone(), |row, detail| row.child(div().max_w(px(145.)).truncate().text_xs().text_color(theme.muted_foreground).child(detail)))
+                .child(div().flex_1().truncate().child(if index == menu.selected {
+                    menu.preview.as_ref().and_then(|(code, _)| code.lines().find(|line| !line.trim().is_empty()))
+                        .map(str::to_owned).unwrap_or_else(|| item.label.clone())
+                } else { item.label.clone() }))
+                .when_some(if index == menu.selected && menu.preview.is_some() { Some(item.label.clone()) } else { item.detail.clone() }, |row, detail|
+                    row.child(div().max_w(px(145.)).truncate().text_xs().text_color(theme.muted_foreground).child(detail)))
                 .on_mouse_down(MouseButton::Left, cx.listener(move |pane, _, window, cx| {
                     if let Some(menu) = &mut pane.menu { menu.selected = index; }
                     pane.accept_completion(window, cx); cx.stop_propagation();
@@ -106,8 +110,9 @@ pub(super) fn render(pane: &EditorPane, window: &mut Window, cx: &mut Context<Ed
     })).track_scroll(&menu.scroll).w(width).h(height);
     Some(deferred(div().id("source-completions").test_support().absolute().left(left).top(top).flex().gap_1().items_start()
         .when(!side, |popup| popup.flex_col())
-        .child(div().p_1().bg(theme.popover).border_1().border_color(theme.border).rounded_md().shadow_md().child(list))
-        .when_some(preview, |popup, preview| popup.child(div().id("source-completion-preview").relative().overflow_hidden()
+        .child(div().p_1().bg(theme.popover).border_1().border_color(theme.border).rounded_md().shadow_md().child(list)
+            .when_some(crate::copilot::preview_hint(pane, window, cx), |menu, hint| menu.child(hint)))
+        .when_some(preview, |popup, preview| popup.child(div().id("source-completion-preview").test_support().relative().overflow_hidden()
             .w(preview_width).bg(theme.popover).border_1().border_color(theme.border).rounded_md().shadow_md()
             .child(div().id("source-completion-preview-scroll").overflow_y_scroll().max_h(px(240.)).p_2().pb_8().text_xs().child(preview))
             .child(deferred(div().id("completion-preview-fade").test_support().absolute().w_full().left_0().bottom_0().h_8().rounded_b_md()

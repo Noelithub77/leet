@@ -42,13 +42,22 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
     cx.update_window(handle, |_, window, cx| -> Result<()> {
         ensure!(!EditorMode::has_inline_completion(pane.read(cx).state.read(cx)), "Prediction appeared without Alt");
         ensure!(pane.read(cx).predictions.as_ref().unwrap().cache.borrow().is_some(), "Typing did not eagerly prepare a hidden prediction");
-        window.render_frame(cx); alt(window, true, cx); ensure!(pane.read(cx).predictions.as_ref().unwrap().alt.get(), "Alt event did not reach focused editor"); Ok(())
+        window.render_frame(cx);
+        ensure!(window.find("copilot-preview-hint").visible(), "Ready prediction has no Alt cue");
+        Ok(())
+    })??;
+    if pixels { cx.capture_screenshot(handle)?.save(output.join("copilot-ready-cue.png"))?; }
+    cx.update_window(handle, |_, window, cx| -> Result<()> {
+        alt(window, true, cx); ensure!(pane.read(cx).predictions.as_ref().unwrap().alt.get(), "Alt event did not reach focused editor"); Ok(())
     })??;
     settle(cx);
     cx.update_window(handle, |_, window, cx| -> Result<()> {
         ensure!(EditorMode::has_inline_completion(pane.read(cx).state.read(cx)), "Holding Alt did not reveal prediction");
         ensure!(pane.read(cx).state.read(cx).value().as_str() == "pri", "Preview changed source text");
-        window.render_frame(cx); Ok(())
+        window.render_frame(cx);
+        ensure!(window.find("copilot-full-preview").visible(), "Full Copilot preview hidden while holding Alt");
+        ensure!(pane.read(cx).predictions.as_ref().unwrap().preview.borrow().as_ref().unwrap().0 == "print(1)\n", "Full preview omitted the typed prefix");
+        Ok(())
     })??;
     if pixels { cx.capture_screenshot(handle)?.save(output.join("copilot-alt-preview.png"))?; }
     cx.update_window(handle, |_, window, cx| -> Result<()> {
@@ -84,6 +93,7 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
     cx.update_window(handle, |_, window, cx| -> Result<()> {
         window.input("x", cx); window.render_frame(cx); window.press("alt-tab", cx);
         ensure!(!pane.read(cx).state.read(cx).value().contains("print(1)"), "Stale prediction was accepted after typing");
+        ensure!(preview_hint(pane.read(cx), window, cx).is_none(), "Stale prediction kept its cue");
         alt(window, false, cx); window.render_frame(cx); Ok(())
     })??;
     cx.update_window(handle, |_, window, cx| {
@@ -101,6 +111,7 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
     settle(cx);
     cx.update_window(handle, |_, window, cx| -> Result<()> {
         ensure!(!EditorMode::has_inline_completion(pane.read(cx).state.read(cx)), "Focus loss did not hide prediction");
+        ensure!(preview_hint(pane.read(cx), window, cx).is_none(), "Unfocused editor kept its cue");
         pane.read(cx).state.clone().update(cx, |editor, cx| editor.focus(window, cx));
         window.render_frame(cx); alt(window, true, cx); Ok(())
     })??;
@@ -113,9 +124,33 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
     settle(cx);
     cx.update_window(handle, |_, window, cx| -> Result<()> {
         ensure!(!EditorMode::has_inline_completion(pane.read(cx).state.read(cx)), "Disabling Copilot left a visible prediction");
+        ensure!(preview_hint(pane.read(cx), window, cx).is_none(), "Disabled Copilot kept its cue");
         window.render_frame(cx); Ok(())
     })??;
     if pixels { cx.capture_screenshot(handle)?.save(output.join("copilot-hidden.png"))?; }
+    cx.update_window(handle, |_, window, cx| {
+        let predictions = pane.read(cx).predictions.as_ref().unwrap().clone();
+        predictions.connection.update(cx, |connection, cx| { connection.enabled = true; cx.notify(); });
+        let code = format!("nt(1)\n{}", (0..40).map(|i| format!("print({i})\n")).collect::<String>());
+        let item = serde_json::from_value(serde_json::json!({"insertText":code})).unwrap();
+        *predictions.fixture.borrow_mut() = Suggestion::from_item("pri", 3, item);
+        pane.read(cx).state.clone().update(cx, |editor, cx| { editor.set_value("", window, cx); editor.focus(window, cx); });
+        alt(window, false, cx); window.input("pri", cx);
+    })?;
+    settle(cx);
+    cx.update_window(handle, |_, window, cx| alt(window, true, cx))?;
+    settle(cx);
+    cx.update_window(handle, |_, window, cx| -> Result<()> {
+        window.render_frame(cx);
+        let bounds = window.find("copilot-full-preview").bounds();
+        ensure!(bounds.top() >= px(0.) && bounds.bottom() <= window.viewport_size().height, "Long preview escaped the window");
+        let before = window.find("copilot-preview-code").bounds().top();
+        window.scroll("copilot-full-preview", ScrollDelta::Lines(point(0., -12.)), cx);
+        window.render_frame(cx);
+        ensure!(window.find("copilot-preview-code").bounds().top() < before, "Long preview did not scroll");
+        Ok(())
+    })??;
+    if pixels { cx.capture_screenshot(handle)?.save(output.join("copilot-full-preview-scrolled.png"))?; }
     cx.update_window(handle, |_, window, _| window.remove_window())?;
     let db = Arc::new(practice::db::Db::open(&output.join("session/copilot-status.sqlite"))?);
     let config = practice::config::Config { onboarding_completed: true, workspace: output.join("session/solutions"), ..Default::default() };

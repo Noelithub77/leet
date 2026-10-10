@@ -2,6 +2,7 @@
 use std::{cell::{Cell, RefCell}, path::PathBuf, rc::Rc, sync::Arc, time::Duration};
 use anyhow::Result;
 use gpui_kit::*;
+use gpui_kit::prelude::FluentBuilder as _;
 use practice::copilot::{Client, Status, Suggestion};
 
 #[cfg(feature = "gui-test")]
@@ -117,26 +118,36 @@ pub struct Predictions {
     language: Cell<practice::language::Language>,
     pub alt: Cell<bool>,
     cache: RefCell<Option<Suggestion>>,
+    preview: RefCell<Option<(String, gpui_kit::component::highlighter::SyntaxHighlighter)>>,
     generation: Cell<u64>,
     warm_task: RefCell<Task<()>>,
     #[cfg(feature = "gui-test")] pub fixture: RefCell<Option<Suggestion>>,
 }
 impl Predictions {
     pub fn new(connection: Entity<Connection>, language: practice::language::Language) -> Rc<Self> {
-        Rc::new(Self { connection, path: RefCell::new(None), language: Cell::new(language), alt: Cell::new(false), cache: RefCell::new(None), generation: Cell::new(0), warm_task: RefCell::new(Task::ready(())),
+        Rc::new(Self { connection, path: RefCell::new(None), language: Cell::new(language), alt: Cell::new(false), cache: RefCell::new(None), preview: RefCell::new(None), generation: Cell::new(0), warm_task: RefCell::new(Task::ready(())),
             #[cfg(feature = "gui-test")] fixture: RefCell::new(None) })
     }
     pub fn configure(&self, path: Option<PathBuf>, language: practice::language::Language) {
         if *self.path.borrow() != path || self.language.get() != language { self.invalidate(); *self.path.borrow_mut() = path; self.language.set(language); }
     }
-    pub fn invalidate(&self) { self.generation.set(self.generation.get().wrapping_add(1)); self.cache.borrow_mut().take(); *self.warm_task.borrow_mut() = Task::ready(()); }
-    pub fn warm(self: &Rc<Self>, text: String, offset: usize, cx: &mut App) {
+    pub fn invalidate(&self) { self.generation.set(self.generation.get().wrapping_add(1)); self.cache.borrow_mut().take(); self.preview.borrow_mut().take(); *self.warm_task.borrow_mut() = Task::ready(()); }
+    fn cache(&self, suggestion: Suggestion, source: &str, offset: usize) {
+        let prefix = source[..offset].rsplit('\n').next().unwrap_or("");
+        let code = format!("{prefix}{}", suggestion.text());
+        let mut highlighter = gpui_kit::component::highlighter::SyntaxHighlighter::new(self.language.get().id());
+        highlighter.update(None, &ropey::Rope::from_str(&code), None);
+        *self.preview.borrow_mut() = Some((code, highlighter));
+        *self.cache.borrow_mut() = Some(suggestion);
+    }
+    pub fn warm(self: &Rc<Self>, text: String, offset: usize, pane: WeakEntity<crate::snippets::expansion::EditorPane>, cx: &mut App) {
         if self.alt.get() || !self.connection.read(cx).enabled() { return; }
         let this = self.clone(); let executor = cx.background_executor().clone();
         *self.warm_task.borrow_mut() = cx.spawn(async move |cx| {
             executor.timer(Duration::from_millis(150)).await;
             let task = cx.update(|cx| this.fetch(text, offset, cx));
             let _ = task.await;
+            let _ = pane.update(cx, |_, cx| cx.notify());
         });
     }
     pub fn cancel_warm(&self) { *self.warm_task.borrow_mut() = Task::ready(()); }
@@ -160,29 +171,70 @@ impl Predictions {
         }
         #[cfg(feature = "gui-test")]
         if let Some(suggestion) = self.fixture.borrow().as_ref().filter(|item| item.matches(&text, offset)).cloned() {
-            *self.cache.borrow_mut() = Some(suggestion.clone());
+            self.cache(suggestion.clone(), &text, offset);
             return Task::ready(Ok(if self.alt.get() { inline(&suggestion) } else { lsp_types::InlineCompletionResponse::Array(vec![]) }));
         }
         let Some(client) = self.connection.read(cx).client.clone() else { return empty(); };
         let Some(path) = self.path.borrow().clone() else { return empty(); };
         let language = self.language.get(); let this = self.clone();
         let generation = self.generation.get().wrapping_add(1); self.generation.set(generation);
-        let task = cx.background_spawn(async move { client.predict(&path, language, &text, offset).await.map(|suggestion| (client, suggestion)) });
+        let task = cx.background_spawn(async move { client.predict(&path, language, &text, offset).await.map(|suggestion| (client, suggestion, text)) });
         cx.spawn(async move |cx| {
-            let (client, suggestion) = task.await?;
+            let (client, suggestion, text) = task.await?;
             if this.generation.get() != generation { return Ok(lsp_types::InlineCompletionResponse::Array(vec![])); }
             let response = match suggestion {
                 Some(suggestion) => {
                     let visible = this.alt.get() && cx.update(|cx| this.connection.read(cx).enabled());
                     if visible { client.shown(&suggestion); }
                     let response = if visible { inline(&suggestion) } else { lsp_types::InlineCompletionResponse::Array(vec![]) };
-                    *this.cache.borrow_mut() = Some(suggestion); response
+                    this.cache(suggestion, &text, offset); response
                 }
                 None => lsp_types::InlineCompletionResponse::Array(vec![]),
             };
             Ok(response)
         })
     }
+}
+
+pub(crate) fn preview_hint(pane: &crate::snippets::expansion::EditorPane, window: &Window, cx: &App) -> Option<AnyElement> {
+    use gpui_kit::component::{ActiveTheme as _, Icon, h_flex};
+    let editor = pane.state.read(cx);
+    if !editor.focus_handle(cx).is_focused(window) || !window.is_window_active() { return None; }
+    let predictions = pane.predictions.as_ref()?;
+    if !predictions.connection.read(cx).enabled() || !editor.selected_range().is_empty() { return None; }
+    predictions.cache.borrow().as_ref().filter(|item| item.matches(editor.value().as_str(), editor.cursor()))?;
+    let theme = cx.theme();
+    Some(h_flex().id("copilot-preview-hint").test_support().gap_2().px_2().py_1().rounded_md()
+        .bg(theme.popover).text_xs().text_color(theme.muted_foreground)
+        .child(Icon::default().path("providers/copilot.svg").size(px(14.)))
+        .child(if predictions.alt.get() { "Tab or Alt+L" } else { "Hold Alt" }).into_any_element())
+}
+
+pub(crate) fn preview_overlay(pane: &crate::snippets::expansion::EditorPane, window: &Window, cx: &App) -> Option<AnyElement> {
+    use gpui_kit::component::ActiveTheme as _;
+    let hint = preview_hint(pane, window, cx)?;
+    let editor = pane.state.read(cx);
+    let (cursor, line_height) = editor.cursor_layout()?;
+    let input = editor.input_bounds();
+    let position = editor.scroll_offset() + cursor.origin - input.origin;
+    let predictions = pane.predictions.as_ref()?;
+    let expanded = predictions.alt.get();
+    let width = if expanded { px(480.).min(input.size.width) } else { px(150.) };
+    let left = position.x.max(px(0.)).min((input.size.width - width).max(px(0.)));
+    let below = position.y + line_height + px(4.);
+    let height = if expanded { px(240.).min(input.size.height) } else { px(30.) };
+    let top = if below + height > input.size.height { (position.y - height - px(4.)).max(px(0.)) } else { below };
+    let theme = cx.theme();
+    let preview = predictions.preview.borrow();
+    let code = if expanded {
+        preview.as_ref().map(|(code, highlighter)| div().id("copilot-full-preview").test_support()
+            .overflow_y_scroll().max_h((height - px(30.)).max(px(30.))).p_2().font_family(theme.mono_font_family.clone()).text_xs()
+            .child(div().id("copilot-preview-code").test_support()
+                .child(StyledText::new(code.clone()).with_highlights(highlighter.styles(&(0..code.len()), theme.highlight_theme.as_ref())))))
+    } else { None };
+    Some(deferred(div().absolute().left(left).top(top).rounded_md().bg(theme.popover)
+        .when(expanded, |view| view.w(width).border_1().border_color(theme.border).shadow_md())
+        .child(hint).children(code)).into_any_element())
 }
 fn inline(suggestion: &Suggestion) -> lsp_types::InlineCompletionResponse {
     lsp_types::InlineCompletionResponse::Array(vec![lsp_types::InlineCompletionItem { insert_text: suggestion.text().into(), filter_text: None, range: None, command: None, insert_text_format: None }])
