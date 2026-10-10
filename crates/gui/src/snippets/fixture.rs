@@ -109,7 +109,12 @@ pub(crate) fn native(cx:&mut HeadlessAppContext,output:&Path,pixels:bool)->Resul
         ensure!(window.find("completion-preview-fade").bounds().size.width>px(300.),"Preview fade has no width");
         Ok(())
     })??;
-    if pixels{cx.capture_screenshot(handle)?.save(output.join("snippet-bfs-help.png"))?;}
+    if pixels{
+        cx.capture_screenshot(handle)?.save(output.join("snippet-bfs-help.png"))?;
+        cx.update(|cx|{crate::theme::apply("Vesper",cx);});
+        cx.update_window(handle,|_,window,cx|{window.render_frame(cx);})?;
+        cx.capture_screenshot(handle)?.save(output.join("snippet-bfs-help-vesper.png"))?;
+    }
     cx.update_window(handle,|_,window,cx|{
         window.press("escape",cx);
         pane.read(cx).state.clone().update(cx,|editor,cx|{editor.set_value("answer = 42",window,cx);editor.set_selected_range(0..11,cx);editor.focus(window,cx);});

@@ -24,6 +24,7 @@
 <details>
 <summary>Fix</summary>
 
+- Give Vesper clearer pastel syntax colours and brighter comments.
 - Show local autocomplete immediately while language-server results load.
 - Prefer keywords, variables, and functions ahead of snippets in autocomplete.
 - Fuzzy-search snippet names, descriptions, prefixes, and aliases from an in-memory index.

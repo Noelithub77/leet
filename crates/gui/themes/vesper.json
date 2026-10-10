@@ -76,24 +76,24 @@
         "warning": "#FFC799",
         "syntax": {
           "attribute": {
-            "color": "#FFC799"
+            "color": "#D8B4FE"
           },
           "boolean": {
-            "color": "#FFC799"
+            "color": "#D8B4FE"
           },
           "comment": {
-            "color": "#8B8B8B",
+            "color": "#9A9A9A",
             "font_style": "italic"
           },
           "comment.doc": {
-            "color": "#8B8B8B",
+            "color": "#9A9A9A",
             "font_style": "italic"
           },
           "constant": {
-            "color": "#FFC799"
+            "color": "#D8B4FE"
           },
           "constructor": {
-            "color": "#FFC799"
+            "color": "#A0C4FF"
           },
           "embedded": {
             "color": "#FFFFFF"
@@ -102,19 +102,19 @@
             "color": "#FFC799"
           },
           "keyword": {
-            "color": "#A0A0A0"
+            "color": "#F5A9C7"
           },
           "operator": {
-            "color": "#A0A0A0"
+            "color": "#F5CBA7"
           },
           "punctuation": {
-            "color": "#A0A0A0"
+            "color": "#B0B0B0"
           },
           "punctuation.bracket": {
-            "color": "#A0A0A0"
+            "color": "#B0B0B0"
           },
           "punctuation.delimiter": {
-            "color": "#A0A0A0"
+            "color": "#B0B0B0"
           },
           "link_text": {
             "color": "#99FFE4",
@@ -125,25 +125,25 @@
             "font_style": "italic"
           },
           "number": {
-            "color": "#FFC799"
+            "color": "#D8B4FE"
           },
           "string": {
             "color": "#99FFE4"
           },
           "string.escape": {
-            "color": "#FFC799"
+            "color": "#F5A9C7"
           },
           "string.regex": {
             "color": "#99FFE4"
           },
           "string.special": {
-            "color": "#FFC799"
+            "color": "#F5A9C7"
           },
           "string.special.symbol": {
-            "color": "#FFC799"
+            "color": "#D8B4FE"
           },
           "tag": {
-            "color": "#A0A0A0"
+            "color": "#F5A9C7"
           },
           "text.literal": {
             "color": "#99FFE4"
@@ -153,7 +153,7 @@
             "font_weight": 600
           },
           "type": {
-            "color": "#FFC799"
+            "color": "#A0C4FF"
           },
           "property": {
             "color": "#FFFFFF"
@@ -162,7 +162,7 @@
             "color": "#FFFFFF"
           },
           "variable.special": {
-            "color": "#A0A0A0"
+            "color": "#A0C4FF"
           }
         }
       }
