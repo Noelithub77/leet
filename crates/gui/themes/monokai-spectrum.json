@@ -1,0 +1,218 @@
+{
+  "$schema": "https://github.com/longbridge/gpui-kit/raw/refs/heads/main/.theme-schema.json",
+  "name": "Monokai Pro Spectrum",
+  "author": "Monokai; Loc and Erik Brüggemann (community editions); adapted for Leet",
+  "url": "https://github.com/loctvl842/monokai-pro.nvim",
+  "themes": [
+    {
+      "name": "Monokai Pro Spectrum",
+      "mode": "dark",
+      "colors": {
+        "accent.background": "#363537",
+        "accent.foreground": "#f7f1ff",
+        "background": "#191919",
+        "foreground": "#f7f1ff",
+        "border": "#363537",
+        "window_border": "#525053",
+        "ring": "#5ad4e6",
+        "input.border": "#525053",
+        "link.foreground": "#5ad4e6",
+        "link.hover.foreground": "#f7f1ff",
+        "link.active.foreground": "#5ad4e644",
+        "list.active.background": "#5ad4e629",
+        "list.active.border": "#5ad4e6",
+        "list.even.background": "#222222",
+        "list.head.background": "#191919",
+        "muted.background": "#222222",
+        "muted.foreground": "#bab6c0",
+        "panel.background": "#191919",
+        "popover.background": "#222222",
+        "popover.foreground": "#f7f1ff",
+        "primary.background": "#5ad4e6",
+        "primary.foreground": "#131313",
+        "primary.hover.background": "#7CDDEA",
+        "primary.active.background": "#49BED0",
+        "secondary.background": "#363537",
+        "secondary.foreground": "#f7f1ff",
+        "secondary.hover.background": "#525053",
+        "secondary.active.background": "#69676c",
+        "scrollbar.background": "#19191900",
+        "scrollbar.thumb.background": "#bab6c040",
+        "selection.background": "#5ad4e640",
+        "tab.background": "#19191900",
+        "tab.active.background": "#5ad4e624",
+        "tab.active.foreground": "#f7f1ff",
+        "tab_bar.background": "#191919",
+        "title_bar.background": "#191919",
+        "title_bar.border": "#363537",
+        "chart.grid": "#363537",
+        "base.red": "#fc618d",
+        "base.green": "#7bd88f",
+        "base.yellow": "#fce566",
+        "base.blue": "#5ad4e6",
+        "base.magenta": "#948ae3",
+        "base.cyan": "#5ad4e6"
+      },
+      "highlight": {
+        "editor.foreground": "#f7f1ff",
+        "editor.background": "#222222",
+        "editor.active_line.background": "#363537",
+        "editor.line_number": "#69676c",
+        "editor.active_line_number": "#bab6c0",
+        "editor.invisible": "#69676c66",
+        "conflict": "#fd9353",
+        "created": "#7bd88f",
+        "deleted": "#fc618d",
+        "error": "#fc618d",
+        "hidden": "#fce566",
+        "hint": "#948ae3",
+        "ignored": "#69676c",
+        "info": "#5ad4e6",
+        "modified": "#fce566",
+        "predictive": "#bab6c0",
+        "renamed": "#f7f1ff",
+        "success": "#7bd88f",
+        "unreachable": "#8b888f",
+        "warning": "#fd9353",
+        "syntax": {
+          "attribute": {
+            "color": "#5ad4e6"
+          },
+          "boolean": {
+            "color": "#948ae3"
+          },
+          "comment": {
+            "color": "#8b888f",
+            "font_style": "italic"
+          },
+          "comment.doc": {
+            "color": "#8b888f",
+            "font_style": "italic"
+          },
+          "constant": {
+            "color": "#948ae3"
+          },
+          "constructor": {
+            "color": "#7bd88f"
+          },
+          "embedded": {
+            "color": "#fc618d"
+          },
+          "emphasis": {
+            "color": "#f7f1ff"
+          },
+          "emphasis.strong": {
+            "color": "#f7f1ff",
+            "font_weight": 700
+          },
+          "enum": {
+            "color": "#948ae3"
+          },
+          "function": {
+            "color": "#7bd88f"
+          },
+          "hint": {
+            "color": "#8b888f"
+          },
+          "keyword": {
+            "color": "#fc618d"
+          },
+          "label": {
+            "color": "#948ae3"
+          },
+          "link_text": {
+            "color": "#fc618d",
+            "font_style": "normal"
+          },
+          "link_uri": {
+            "color": "#5ad4e6"
+          },
+          "namespace": {
+            "color": "#5ad4e6"
+          },
+          "number": {
+            "color": "#948ae3"
+          },
+          "operator": {
+            "color": "#fc618d"
+          },
+          "predictive": {
+            "color": "#bab6c0",
+            "font_style": "italic"
+          },
+          "preproc": {
+            "color": "#948ae3"
+          },
+          "primary": {
+            "color": "#f7f1ff"
+          },
+          "property": {
+            "color": "#f7f1ff"
+          },
+          "punctuation": {
+            "color": "#8b888f"
+          },
+          "punctuation.bracket": {
+            "color": "#8b888f"
+          },
+          "punctuation.delimiter": {
+            "color": "#8b888f"
+          },
+          "punctuation.list_marker": {
+            "color": "#8b888f"
+          },
+          "punctuation.markup": {
+            "color": "#8b888f"
+          },
+          "punctuation.special": {
+            "color": "#8b888f"
+          },
+          "selector": {
+            "color": "#7bd88f"
+          },
+          "selector.pseudo": {
+            "color": "#5ad4e6",
+            "font_style": "italic"
+          },
+          "string": {
+            "color": "#fce566"
+          },
+          "string.escape": {
+            "color": "#948ae3"
+          },
+          "string.regex": {
+            "color": "#fc618d"
+          },
+          "string.special": {
+            "color": "#948ae3"
+          },
+          "string.special.symbol": {
+            "color": "#948ae3"
+          },
+          "tag": {
+            "color": "#fc618d"
+          },
+          "text.literal": {
+            "color": "#8b888f"
+          },
+          "title": {
+            "color": "#fce566",
+            "font_weight": 400
+          },
+          "type": {
+            "color": "#5ad4e6"
+          },
+          "variable": {
+            "color": "#f7f1ff"
+          },
+          "variable.special": {
+            "color": "#948ae3"
+          },
+          "variant": {
+            "color": "#7bd88f"
+          }
+        }
+      }
+    }
+  ]
+}

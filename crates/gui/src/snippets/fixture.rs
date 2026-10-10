@@ -19,6 +19,7 @@ impl CompletionProvider for FixtureCompletions {
 }
 
 pub(crate) fn native(cx:&mut HeadlessAppContext,output:&Path,pixels:bool)->Result<serde_json::Value>{
+    ensure!(cx.update(|cx|crate::theme::apply("Monokai Pro Spectrum",cx)),"Spectrum theme failed to load");
     cx.update(|cx|{super::bind_keys(cx);crate::snippets::expansion::bind_keys(cx);cx.bind_keys([KeyBinding::new("ctrl-j",crate::actions::InsertSnippet,None)]);});
     let(handle,pane)=cx.update(|cx|gpui_kit::open_window(WindowOptions{window_bounds:Some(WindowBounds::Windowed(Bounds{origin:point(px(0.),px(0.)),size:size(px(1000.),px(700.))})),show:false,focus:false,..Default::default()},cx,|window,cx|cx.new(|cx|{
         let state=cx.new(|cx|EditorState::new(window,cx).language("python"));
@@ -127,7 +128,7 @@ pub(crate) fn native(cx:&mut HeadlessAppContext,output:&Path,pixels:bool)->Resul
         window.press("escape",cx);window.remove_window();Ok(())
     })??;
     let db=Arc::new(Db::open(&output.join("session/snippets.sqlite"))?);
-    for(name,width,height,theme,zoom)in[("regular",1280.,800.,"Vesper",1.),("compact",720.,480.,"Vesper",1.),("light",1280.,800.,"Solarized Light",1.),("zoom",1000.,750.,"Vesper",1.4)]{
+    for(name,width,height,theme,zoom)in[("regular",1280.,800.,"Vesper",1.),("spectrum",1280.,800.,"Monokai Pro Spectrum",1.),("compact",720.,480.,"Vesper",1.),("light",1280.,800.,"Solarized Light",1.),("zoom",1000.,750.,"Vesper",1.4)]{
         cx.update(|cx|{crate::theme::apply(theme,cx);crate::theme::set_zoom(zoom,cx);});
         let(handle,editor)=cx.update(|cx|gpui_kit::open_window(WindowOptions{window_bounds:Some(WindowBounds::Windowed(Bounds{origin:point(px(0.),px(0.)),size:size(px(width),px(height))})),show:false,focus:false,..Default::default()},cx,|window,cx|{
             let config=Config{onboarding_completed:true,workspace:output.join("session/solutions"),..Default::default()};

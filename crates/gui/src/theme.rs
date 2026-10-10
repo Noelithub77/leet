@@ -9,7 +9,7 @@ macro_rules! themes {
 }
 
 const THEMES: &[&str] = themes!(
-    "vesper.json", "adventure.json", "alduin.json", "asciinema.json", "aurora.json", "ayu.json",
+    "vesper.json", "monokai-spectrum.json", "adventure.json", "alduin.json", "asciinema.json", "aurora.json", "ayu.json",
     "catppuccin.json", "everforest.json", "fahrenheit.json", "flexoki.json", "gruvbox.json",
     "harper.json", "hybrid.json", "jellybeans.json", "kibble.json", "macos-classic.json",
     "mellifluous.json", "molokai.json", "solarized.json", "spaceduck.json", "tokyonight.json",
@@ -73,10 +73,12 @@ pub fn apply(name: &str, cx: &mut App) -> bool {
     Theme::update(cx, |theme| {
         theme.apply_config(&config);
         theme.mode = config.mode;
-        let cyan = rgb(0x8be9fd);
-        theme.tab_active = if theme.mode.is_dark() { cyan.opacity(0.14).into() } else { rgb(0x167385).into() };
-        theme.tab_active_foreground = rgb(0xffffff).into();
-        theme.tokens.tab_active = theme.tab_active.into();
+        if name != "Monokai Pro Spectrum" {
+            let cyan = rgb(0x8be9fd);
+            theme.tab_active = if theme.mode.is_dark() { cyan.opacity(0.14).into() } else { rgb(0x167385).into() };
+            theme.tab_active_foreground = rgb(0xffffff).into();
+            theme.tokens.tab_active = theme.tab_active.into();
+        }
         theme.radius = px(10.);
         theme.radius_lg = px(16.);
     });

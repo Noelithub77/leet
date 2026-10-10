@@ -1,6 +1,7 @@
 <details open>
 <summary>Feat</summary>
 
+- Choose Monokai Pro Spectrum for a complete dark theme with distinct syntax colours.
 - Start a chat in the assistant pane with Ctrl+T, Ctrl+Shift+O, or Ctrl+N.
 - Optional GitHub Copilot suggestions: hold Alt to preview and accept with Tab or Alt+L.
 - Hover the Copilot logo in the status bar to see connection status and reported usage.
