@@ -208,14 +208,12 @@ impl Completions {
     }
 }
 fn rank_items(items: &mut [CompletionItem], query: &str) {
-    if query.is_empty() { return; }
     let query = query.to_lowercase();
     items.sort_by_cached_key(|item| {
         let label = item.filter_text.as_deref().unwrap_or(&item.label).to_lowercase();
         let snippet = item.kind == Some(CompletionItemKind::SNIPPET);
-        if label == query { if snippet { 0 } else { 1 } }
-        else if label.starts_with(&query) { if snippet { 2 } else { 3 } }
-        else if snippet { 4 } else { 5 }
+        let relevance = if label == query { 0 } else if label.starts_with(&query) { 1 } else { 2 };
+        (snippet, relevance)
     });
 }
 fn prepare_items(items: &mut Vec<CompletionItem>, text: &Rope, source: &str, replacement: &Range<usize>, candidates: &mut Vec<(CompletionItem, Range<usize>, String)>) {

@@ -115,7 +115,10 @@ pub(crate) fn native(cx:&mut HeadlessAppContext,output:&Path,pixels:bool)->Resul
         window.press("ctrl-j",cx);
     })?;cx.run_until_parked();
     cx.update_window(handle,|_,window,cx|->Result<()>{
-        let index=pane.read(cx).menu.as_ref().ok_or_else(||anyhow::anyhow!("Selection completion menu missing"))?.content.items.iter().position(|item|item.label=="wrap").unwrap();
+        let menu=pane.read(cx).menu.as_ref().ok_or_else(||anyhow::anyhow!("Selection completion menu missing"))?;
+        let index=menu.content.items.iter().position(|item|item.label=="wrap").unwrap();
+        let selected=menu.selected;
+        for _ in 0..selected{window.press("up",cx);}
         for _ in 0..index{window.press("down",cx);}
         window.press("enter",cx);Ok(())
     })??;cx.run_until_parked();
@@ -261,7 +264,8 @@ impl CompletionProvider for DelayedCompletions {
             cx.background_executor().timer(std::time::Duration::from_millis(500)).await;
             Ok(lsp_types::CompletionResponse::Array(vec![
                 lsp_types::CompletionItem { label: "delayed_variable".into(), ..Default::default() },
-                lsp_types::CompletionItem { label: "reachable".into(),kind:Some(lsp_types::CompletionItemKind::VARIABLE), ..Default::default() }
+                lsp_types::CompletionItem { label: "reachable".into(),kind:Some(lsp_types::CompletionItemKind::VARIABLE), ..Default::default() },
+                lsp_types::CompletionItem { label: "break".into(),kind:Some(lsp_types::CompletionItemKind::KEYWORD), ..Default::default() }
             ]))
         })
     }
@@ -275,7 +279,7 @@ fn delayed_autocomplete(cx: &mut HeadlessAppContext) -> Result<()> {
         pane
     })))?;
     let handle=handle.into(); cx.run_until_parked();
-    for query in ["brfs", "reachable"] {
+    for query in ["brfs", "reachable", "bfs"] {
         cx.update_window(handle, |_,window,cx| {
             window.render_frame(cx);
             pane.read(cx).state.clone().update(cx, |editor,cx| { editor.set_value("",window,cx); editor.focus(window,cx); });
@@ -285,7 +289,7 @@ fn delayed_autocomplete(cx: &mut HeadlessAppContext) -> Result<()> {
         cx.update_window(handle, |_,window,cx| -> Result<()> {
             window.render_frame(cx);
             let menu=pane.read(cx).menu.as_ref().ok_or_else(||anyhow::anyhow!("Local results waited for LSP: {query}"))?;
-            let expected=if query=="brfs" {"bfs"} else {"dfs"};
+            let expected=if query=="reachable" {"dfs"} else {"bfs"};
             ensure!(menu.content.items.iter().any(|item|item.label==expected),"Fuzzy name/description missing: {query}");
             ensure!(!menu.content.items.iter().any(|item|item.label=="delayed_variable"),"Delayed fixture returned before its timer");
             window.press("down",cx);
@@ -298,6 +302,9 @@ fn delayed_autocomplete(cx: &mut HeadlessAppContext) -> Result<()> {
             ensure!(menu.content.items.iter().any(|item|item.label=="delayed_variable"),"Late LSP was never merged");
             ensure!(menu.content.items[menu.selected]==selected,"Late merge changed keyboard selection");
             if query=="reachable" { ensure!(menu.content.items[0].label=="reachable","Exact symbol ranked behind a weak snippet description match"); }
+            let first_snippet=menu.content.items.iter().position(|item|item.kind==Some(lsp_types::CompletionItemKind::SNIPPET)).unwrap();
+            ensure!(menu.content.items[..first_snippet].iter().any(|item|item.kind==Some(lsp_types::CompletionItemKind::KEYWORD)),"Keyword ranked behind snippets: {query}");
+            ensure!(menu.content.items[first_snippet..].iter().all(|item|item.kind==Some(lsp_types::CompletionItemKind::SNIPPET)),"Language suggestion ranked behind snippets: {query}");
             Ok(())
         })??;
     }

@@ -24,6 +24,7 @@
 <summary>Fix</summary>
 
 - Show local autocomplete immediately while language-server results load.
+- Prefer keywords, variables, and functions ahead of snippets in autocomplete.
 - Fuzzy-search snippet names, descriptions, prefixes, and aliases from an in-memory index.
 - Hot-reload snippet changes across editor tabs without restarting.
 - Warm IntelliSense in the background at startup and retain servers across language switches.
