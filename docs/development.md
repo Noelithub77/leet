@@ -12,7 +12,7 @@ leet --version
 
 Use the development command for quick iterations; it skips release optimization and installation. The `gui-test` feature shares build artifacts with the focused GUI checks; fixture mode runs only with the separate `--gui-test` argument. Re-run the command after source changes; it does not hot-reload Rust code. The `Dev` script in `t3.json` can be imported through T3's **Settings → Project → Actions → Import scripts**. The declaration becomes a saved action only after import.
 
-Agent builds run with low CPU and I/O priority and at most two workers. Use `local:deploy` when a release installation is wanted. Each install keeps a versioned binary in `~/.local/share/leet/bin` (the newest 3 are kept) and repoints the `leet` symlink. A running window notices the new build and shows **Update ready**; `ctrl+shift+r` restarts into it, opening Home with the saved recent problems and panel layout.
+Agent builds run with low CPU and I/O priority and at most two workers. Keep the same target directory and feature set to reuse cached artifacts. Use the development workflow by default; run `local:deploy` only when the user explicitly requests a release installation. Each install keeps a versioned binary in `~/.local/share/leet/bin` (the newest 3 are kept) and repoints the `leet` symlink. A running window notices the new build and shows **Update ready**; `ctrl+shift+r` restarts into it, opening Home with the saved recent problems and panel layout.
 
 ## Layout
 
