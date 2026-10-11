@@ -16,6 +16,7 @@
 
 - Show local autocomplete immediately while language-server results load.
 - Prefer keywords, variables, and functions ahead of snippets.
+- Prioritize your own declarations and keep CP-relevant Python auto-imports last.
 - Select the first autocomplete result unless you navigate to another suggestion.
 - Keep your selected suggestion visible when new results arrive.
 - Warm IntelliSense at startup and retain servers across language switches.

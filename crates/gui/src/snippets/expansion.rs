@@ -256,7 +256,8 @@ impl EditorPane {
     fn resolve_detail(&mut self, cx: &mut Context<Self>) {
         self.detail_task = Task::ready(());
         let Some(menu) = &self.menu else { return; };
-        let Some(item) = menu.content.items.get(menu.selected).filter(|item| item.kind != Some(lsp_types::CompletionItemKind::SNIPPET) && item.documentation.is_none()).cloned() else { return; };
+        let Some(item) = menu.content.items.get(menu.selected).filter(|item| item.kind != Some(lsp_types::CompletionItemKind::SNIPPET)
+            && item.detail.as_deref() != Some("Defined in this file") && item.documentation.is_none()).cloned() else { return; };
         let Some(document) = self.language_document.clone().filter(|document| document.server.supports_completion_resolve()) else { return; };
         let text = self.state.read(cx).value().to_string(); let offset = menu.offset;
         self.detail_task = cx.spawn(async move |this, cx| {

@@ -1,5 +1,6 @@
 pub mod expansion;
 mod completion;
+mod symbols;
 mod menu;
 mod editor;
 pub use editor::SnippetEditor;

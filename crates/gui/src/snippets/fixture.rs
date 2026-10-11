@@ -193,7 +193,63 @@ pub(crate) fn native(cx:&mut HeadlessAppContext,output:&Path,pixels:bool)->Resul
     cx.update(|cx|{crate::theme::apply("Vesper",cx);crate::theme::set_zoom(1.,cx);});
     workspace_tab(cx,output,pixels)?;
     delayed_autocomplete(cx)?;
+    cp_autocomplete(cx)?;
     Ok(serde_json::json!({"fixture":"snippets","passed":true,"pixels":pixels,"checks":["prefix Tab expansion","typing mirrors","Tab and Shift+Tab","native cursor completions and Escape","merged language-server suggestions","Enter and Tab accept linked snippet placeholders","manual creation and save","drag cursor drop","compact light and zoom layouts","AI panel without agent startup","staged review edit, Apply and Undo","workspace tab and Explorer","field titles","Ctrl+W close and invalid-save guard","immediate local fuzzy results with delayed LSP","late merge preserves selection","Escape cancels late LSP","safe cached server results while extending and deleting a word","external snippet hot reload and invalid-file recovery"]}))
+}
+
+struct CpCompletions;
+impl CompletionProvider for CpCompletions {
+    fn is_completion_trigger(&self, _: usize, _: &str, _: &mut App) -> bool { true }
+    fn completions(&self, _: &ropey::Rope, _: usize, _: lsp_types::CompletionContext, _: &mut Window, cx: &mut App) -> Task<anyhow::Result<lsp_types::CompletionResponse>> {
+        cx.spawn(async move |cx| {
+            cx.background_executor().timer(std::time::Duration::from_millis(500)).await;
+            let mut items: Vec<_> = (0..200).map(|i| lsp_types::CompletionItem {
+                label: format!("TextWrapper{i}"), detail: Some("Auto-import".into()),
+                data: Some(serde_json::json!({"autoImportText":"from textwrap import TextWrapper"})), ..Default::default()
+            }).collect();
+            items.push(lsp_types::CompletionItem { label: "heappush".into(), detail: Some("Auto-import".into()), data: Some(serde_json::json!({"autoImportText":"from heapq import heappush"})), ..Default::default() });
+            items.push(lsp_types::CompletionItem { label: "trap".into(), kind: Some(lsp_types::CompletionItemKind::METHOD), detail: Some("(height: list[int]) -> int".into()), ..Default::default() });
+            items.push(lsp_types::CompletionItem { label: "water".into(), kind: Some(lsp_types::CompletionItemKind::VARIABLE), detail: Some("int".into()), ..Default::default() });
+            Ok(lsp_types::CompletionResponse::Array(items))
+        })
+    }
+}
+fn cp_autocomplete(cx: &mut HeadlessAppContext) -> Result<()> {
+    let (handle, pane) = cx.update(|cx| gpui_kit::open_window(WindowOptions { show:false, focus:false, ..Default::default() }, cx, |window,cx| cx.new(|cx| {
+        let state = cx.new(|cx| EditorState::new(window,cx).language("python"));
+        let library = std::rc::Rc::new(practice::snippets::search::Library::new(practice::snippets::builtin()));
+        let pane = crate::snippets::expansion::EditorPane::new(state.clone(),Language::Python,library,window,cx);
+        state.update(cx, |editor,cx| { editor.lsp_mut().completion_provider=Some(std::rc::Rc::new(CpCompletions)); editor.focus(window,cx); });
+        pane
+    })))?;
+    let handle=handle.into(); cx.run_until_parked();
+    for (source, query, expected) in [
+        ("class Solution:\n    def trap(self, height):\n        water = 0\n        return water\n\n", "tra", "trap"),
+        ("def trap(height):\n    water = 0\n    ", "wat", "water"),
+    ] {
+        cx.update_window(handle, |_,window,cx| {
+            pane.read(cx).state.clone().update(cx, |editor,cx| { editor.set_value(source,window,cx); editor.set_selected_range(source.len()..source.len(),cx); editor.focus(window,cx); });
+            window.input(query,cx);
+        })?; cx.run_until_parked();
+        cx.update_window(handle, |_,window,cx| -> Result<()> {
+            window.render_frame(cx);
+            let menu=pane.read(cx).menu.as_ref().ok_or_else(||anyhow::anyhow!("Document declarations waited for the LSP"))?;
+            ensure!(menu.selected==0 && menu.content.items[0].label==expected,"Defined symbol was not selected immediately: {expected}; query {:?}, rows {:?}, source {:?}", menu.content.query, menu.content.items.iter().map(|item| &item.label).collect::<Vec<_>>(), pane.read(cx).state.read(cx).value().as_str());
+            Ok(())
+        })??;
+        cx.advance_clock(std::time::Duration::from_millis(550)); cx.run_until_parked();
+        cx.update_window(handle, |_,window,cx| -> Result<()> {
+            window.render_frame(cx);
+            let menu=pane.read(cx).menu.as_ref().ok_or_else(||anyhow::anyhow!("Merged CP menu missing"))?;
+            ensure!(menu.selected==0 && menu.content.items[0].label==expected,"Late auto-imports displaced {expected}");
+            ensure!(menu.content.items.iter().filter(|item|item.label==expected).count()==1,"Local and LSP declarations duplicated");
+            ensure!(!menu.content.items.iter().any(|item|item.label.starts_with("TextWrapper")),"Unrelated Python auto-import leaked");
+            ensure!(menu.content.items.last().is_some_and(|item|item.label=="heappush"),"CP auto-import was not last");
+            window.press("enter",cx); Ok(())
+        })??; cx.run_until_parked();
+        cx.update(|cx| -> Result<()> { ensure!(pane.read(cx).state.read(cx).value().as_str()==format!("{source}{expected}"),"Enter did not accept the defined symbol"); Ok(()) })?;
+    }
+    cx.update_window(handle, |_,window,_|window.remove_window())?; cx.run_until_parked(); Ok(())
 }
 
 fn workspace_tab(cx:&mut HeadlessAppContext,output:&Path,pixels:bool)->Result<()> {
