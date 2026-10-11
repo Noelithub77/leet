@@ -6,7 +6,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::Disableable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{InputGroup, InputGroupAddon, InputGroupAddonAlignment, Textarea};
-use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, h_flex, v_flex};
+use gpui_kit::component::{ActiveTheme as _, Theme, Icon, Sizable as _, h_flex, v_flex};
 
 use super::{Assist, Action, Phase, SendChat, NewChat, Target, icon, accent};
 
@@ -37,7 +37,7 @@ impl Assist {
     pub(super) fn send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.composer.read(cx).value().trim().is_empty() && self.editing.is_none() { return; }
         if self.runs.iter().any(|run| Some(run.thread_id) == self.selected_thread && (run.phase.active() || run.phase == Phase::Confirm)) { return; }
-        self.show_threads = false;
+        self.ai_tab = 2;
         self.run_action(Action::Ask, window, cx);
     }
 }
@@ -54,33 +54,39 @@ impl Render for Assist {
         });
         let web = workspace.as_ref().map(|ws| matches!(self.target(&ws.read(cx).config), Target::Web(_))).unwrap_or(true);
         self.sync_composer(window, cx);
+        let slug = self.slug.clone();
         let cards: Vec<AnyElement> = self.runs.iter().rev().filter(|run| Some(run.thread_id) == self.selected_thread).map(|run| self.card(run, window, cx)).collect();
         let busy = self.runs.iter().any(|run| Some(run.thread_id) == self.selected_thread && (run.phase.active() || run.phase == Phase::Confirm));
         let empty = cards.is_empty();
+        let review = self.runs.iter().filter(|run| Some(&run.slug) == slug.as_ref() && (run.action == Action::Review || matches!(run.answer, Some(super::Answer::Review(_))))).max_by_key(|run| run.message_id)
+            .map(|run| self.card(run, window, cx));
         v_flex().key_context("AgentChat").size_full().min_h_0()
             .on_action(cx.listener(|this, _: &SendChat, window, cx| this.send(window, cx)))
             .on_action(cx.listener(|this, _: &NewChat, window, cx| this.new_thread(window, cx)))
             .child(h_flex().px_3().py_3().gap_2().min_w_0()
                 .child(Icon::new(IconName::Sparkles).size_4().text_color(theme.primary))
-                .child(div().id("chat-title").test_support().flex_1().text_sm().child("Chats"))
+                .child(h_flex().id("ai-tabs").flex_1().min_w_0().overflow_x_scroll().gap_1()
+                    .children([(2, "Chats"), (1, "Analysis")].into_iter().map(|(tab, label)| {
+                        crate::theme::selected_choice(Button::new(SharedString::from(format!("ai-tab-{tab}"))).ghost().small(), self.ai_tab == tab, cx)
+                            .label(label).on_click(cx.listener(move |this, _, _, cx| { this.ai_tab = tab; cx.notify(); }))
+                    })))
                 .child(Button::new("chat-model").ghost().small().icon(IconName::Settings2)
                     .tooltip_with_action("Agent and model", &crate::actions::ConfigureAi, Some(crate::actions::WORKSPACE)).accessibility_label("Agent and model")
                     .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::actions::ConfigureAi), cx)))
                 .child(Button::new("chat-hide").ghost().small().icon(IconName::X)
                     .tooltip_with_action("Hide AI", &crate::actions::ToggleRight, Some(crate::actions::WORKSPACE)).accessibility_label("Hide AI")
                     .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::actions::ToggleRight), cx))))
-            .child(self.thread_header(window, cx))
-            .child(v_flex().id("assist-cards").test_support().flex_1().min_h_0().overflow_y_scroll().track_scroll(&self.scroll).px_3().py_3().gap_3()
-                .when(empty, |area| area.justify_center().child(self.render_actions(has_problem, has_attempt, web, busy, cx)))
-                .children(cards))
-            .child(self.render_composer(has_problem, web, busy, cx))
-    }
-}
-
-impl Assist {
-    fn render_actions(&self, has_problem: bool, has_attempt: bool, web: bool, busy: bool, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = cx.theme().clone();
-        v_flex().items_center().gap_2()
+            .when(self.ai_tab == 1, |el| el.child(v_flex().id("ai-review").test_support().flex_1().min_h_0().overflow_y_scroll().px_3().py_3().gap_3()
+                .when(review.is_none(), |area| area.justify_center())
+                .child(v_flex().w_full().max_w(px(440.)).flex_none().gap_3().mx_auto()
+                .when(review.is_none(), |area| area.child(review_placeholder(&theme)))
+                .child(Button::new("analyse-my-solution").primary().icon(IconName::Sparkles).label("Run analysis")
+                    .tooltip("Check correctness, bugs, complexity, improvements, and a visual dry run")
+                    .disabled(!has_problem || !has_attempt || busy)
+                    .on_click(cx.listener(|this, _, window, cx| this.run_action(Action::Review, window, cx)))))
+                .children(review)))
+            .when(self.ai_tab == 2, |el| el.child(self.thread_header(window, cx)).child(v_flex().id("assist-cards").test_support().flex_1().min_h_0().overflow_y_scroll().track_scroll(&self.scroll).px_3().py_3().gap_3()
+                .when(empty, |area| area.justify_center()
                 .child(div().id("ai-action-grid").test_support().flex_none().w_full().max_w(px(344.)).mx_auto().grid().grid_cols(3).px_3().py_4().gap_3()
                 .children([Action::Hints, Action::Stuck, Action::Explain, Action::Visualize, Action::Pattern, Action::Solve].into_iter().map(|action| {
                     let color = accent(action, &theme);
@@ -92,12 +98,13 @@ impl Assist {
                         .child(div().text_xs().child(action.label()))
                         .tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(action.instructions()).build(window, cx))
                         .on_click(cx.listener(move |this, _, window, cx| { if !disabled { this.run_action(action, window, cx); } }))
-                })))
-                .child(Button::new("analyse-my-solution").ghost().small().icon(IconName::Sparkles).label("Run analysis")
-                    .tooltip(Action::Review.summary()).disabled(!has_problem || !has_attempt || busy)
-                    .on_click(cx.listener(|this, _, window, cx| this.run_action(Action::Review, window, cx))))
+                }))))
+                .children(cards)))
+            .child(self.render_composer(has_problem, web, busy, cx))
     }
+}
 
+impl Assist {
     pub(super) fn render_composer(&self, has_problem: bool, web: bool, busy: bool, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme().clone();
         v_flex().p_3().gap_2().border_t_1().border_color(theme.border)
@@ -117,4 +124,21 @@ impl Assist {
                             .on_click(cx.listener(|this, _, window, cx| this.send(window, cx))).into_any_element()
                     })))
     }
+}
+
+fn review_placeholder(theme: &Theme) -> impl IntoElement {
+    let field = |label: &'static str, detail: &'static str| {
+        v_flex().flex_1().min_w_0().p_3().gap_2().rounded_xl().bg(theme.secondary.opacity(0.45))
+            .child(div().text_xs().text_color(theme.muted_foreground).child(label))
+            .child(div().text_lg().font_family(theme.mono_font_family.clone()).text_color(theme.muted_foreground).child("__"))
+            .child(div().text_xs().text_color(theme.muted_foreground).child(detail))
+    };
+    v_flex().gap_3()
+        .child(h_flex().gap_2().child(field("Time complexity", "Dominant operations"))
+            .child(field("Space complexity", "Auxiliary memory")))
+        .children(["Correctness", "Improvements", "Dry run"].into_iter().map(|label| {
+            h_flex().gap_3().px_3().py_2().rounded_lg().bg(theme.secondary.opacity(0.25))
+                .child(div().flex_1().text_xs().text_color(theme.muted_foreground).child(label))
+                .child(div().font_family(theme.mono_font_family.clone()).text_color(theme.muted_foreground).child("__"))
+        }))
 }
