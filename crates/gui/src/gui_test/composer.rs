@@ -2,7 +2,7 @@
 use std::{path::Path, sync::Arc};
 use anyhow::{Result, ensure};
 use gpui_kit::*;
-use gpui_kit::component::{ActiveTheme as _, v_flex};
+use gpui_kit::component::{ActiveTheme as _, h_flex, v_flex};
 use gpui_kit::test::TestWindowExt as _;
 use practice::{config::Config, db::Db};
 use super::Assist;
@@ -21,11 +21,12 @@ impl Render for Fixture {
             return v_flex().size_full().bg(cx.theme().background).child(self.assist.clone());
         }
         if self.threads {
+            let new_chat = self.assist.update(cx, |assist, cx| assist.new_chat_button(cx).into_any_element());
             let header = self.assist.update(cx, |assist, cx| assist.thread_header(window, cx));
             let composer = self.assist.read(cx).threads.is_empty().then(|| self.assist.update(cx, |assist, cx| assist.render_composer(true, false, false, cx).into_any_element()));
             return v_flex().key_context("AgentChat").size_full().bg(cx.theme().background)
                 .on_action(cx.listener(|view, _: &super::NewChat, window, cx| view.assist.update(cx, |assist, cx| assist.new_thread(window, cx))))
-                .child(header).children(composer);
+                .child(h_flex().justify_end().child(new_chat)).child(header).children(composer);
         }
         let composer = self.assist.update(cx, |assist, cx| assist.render_composer(self.enabled, false, self.busy, cx).into_any_element());
         v_flex().size_full().bg(cx.theme().background).child(composer)
@@ -190,6 +191,10 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             fixture.update(cx, |view, cx| { view.full_view = true; cx.notify(); });
             window.render_frame(cx);
             ensure!(window.try_find("ai-tab-0").is_none(), "General tab still exists");
+            let new_chat = window.find("chat-new-thread").bounds();
+            let close = window.find("chat-hide").bounds();
+            ensure!(new_chat.right() <= close.left() && new_chat.center().y == close.center().y, "Plus is not immediately before Close in the header");
+            ensure!(window.try_find("chat-thread-toolbar").is_none(), "Empty chat kept a second toolbar row");
             ensure!(window.find("ai-tab-2").visible() && window.find("ai-tab-1").visible(), "Chats or Analysis is missing");
             ensure!(window.find("ai-action-grid").visible(), "Empty Chats lost the quick actions");
             window.click("ai-tab-1", cx);
@@ -225,5 +230,5 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         cx.run_until_parked();
     }
     cx.update(|cx| { crate::theme::apply("Vesper", cx); crate::theme::set_zoom(1., cx); });
-    Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["Enter sends","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","send button input","send and stop containment","compact/light/zoom","thread borders and keyboard selection","empty chats hidden","Ctrl+T / Ctrl+Shift+O / Ctrl+N","aligned toolbar and search","empty history has only Plus","merged Chats quick actions and Analysis navigation"]}))
+    Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["Enter sends","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","send button input","send and stop containment","compact/light/zoom","thread borders and keyboard selection","empty chats hidden","Ctrl+T / Ctrl+Shift+O / Ctrl+N","aligned toolbar and search","header Plus and no empty history row","merged Chats quick actions and Analysis navigation"]}))
 }

@@ -63,7 +63,7 @@ impl Render for Assist {
         v_flex().key_context("AgentChat").size_full().min_h_0()
             .on_action(cx.listener(|this, _: &SendChat, window, cx| this.send(window, cx)))
             .on_action(cx.listener(|this, _: &NewChat, window, cx| this.new_thread(window, cx)))
-            .child(h_flex().px_3().py_3().gap_2().min_w_0()
+            .child(h_flex().px_3().py_3().gap_1().min_w_0()
                 .child(Icon::new(IconName::Sparkles).size_4().text_color(theme.primary))
                 .child(h_flex().id("ai-tabs").flex_1().min_w_0().overflow_x_scroll().gap_1()
                     .children([(2, "Chats"), (1, "Analysis")].into_iter().map(|(tab, label)| {
@@ -73,6 +73,7 @@ impl Render for Assist {
                 .child(Button::new("chat-model").ghost().small().icon(IconName::Settings2)
                     .tooltip_with_action("Agent and model", &crate::actions::ConfigureAi, Some(crate::actions::WORKSPACE)).accessibility_label("Agent and model")
                     .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::actions::ConfigureAi), cx)))
+                .child(self.new_chat_button(cx))
                 .child(Button::new("chat-hide").ghost().small().icon(IconName::X)
                     .tooltip_with_action("Hide AI", &crate::actions::ToggleRight, Some(crate::actions::WORKSPACE)).accessibility_label("Hide AI")
                     .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::actions::ToggleRight), cx))))

@@ -154,6 +154,12 @@ impl Assist {
 }
 
 impl Assist {
+    pub(super) fn new_chat_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        Button::new("chat-new-thread").ghost().small().icon(IconName::Plus)
+            .tooltip("New chat · Ctrl+T / Ctrl+Shift+O / Ctrl+N").accessibility_label("New chat")
+            .disabled(self.slug.is_none()).on_click(cx.listener(|this, _, window, cx| this.new_thread(window, cx)))
+    }
+
     pub(super) fn thread_header(&self, _window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
         let theme = cx.theme().clone();
@@ -161,15 +167,13 @@ impl Assist {
         let weak = cx.entity().downgrade();
         let has_thread = self.threads.iter().any(|thread| Some(thread.id) == self.selected_thread);
         let has_history = !self.threads.is_empty() || !self.thread_query.trim().is_empty();
-        let has_problem = self.slug.is_some();
-        v_flex().px_3().pb_2().gap_2().border_b_1().border_color(theme.border)
+        if !has_history && !self.db.can_undo_chat() { return div().into_any_element(); }
+        v_flex().px_3().pb_2().gap_2()
             .child(h_flex().id("chat-thread-toolbar").test_support().w_full().gap_1().min_w_0()
                 .when(has_history, |el| el.border_1().border_color(theme.border).rounded_md().p_1()
                     .child(Button::new("chat-thread-picker").ghost().small().icon(if self.show_threads { IconName::ChevronDown } else { IconName::ChevronRight }).label(title).flex_1().min_w_0()
                         .tooltip("Conversation threads").on_click(cx.listener(|this, _, window, cx| { if this.show_threads { this.show_threads = false; cx.notify(); } else { this.open_thread_list(window, cx); } }))))
                 .when(!has_history, |el| el.child(div().flex_1()))
-                .child(Button::new("chat-new-thread").ghost().small().icon(IconName::Plus).tooltip("New chat · Ctrl+T / Ctrl+Shift+O / Ctrl+N").accessibility_label("New chat")
-                    .disabled(!has_problem).on_click(cx.listener(|this, _, window, cx| this.new_thread(window, cx))))
                 .when(self.db.can_undo_chat(), |el| el.child(Button::new("chat-undo").ghost().small().icon(IconName::Undo2).tooltip("Undo latest branch or deletion").accessibility_label("Undo latest branch or deletion")
                     .on_click(cx.listener(|this, _, window, cx| this.undo_thread(window, cx)))))
                 .when(has_thread, |el| el.child(Button::new("chat-thread-options").ghost().small().icon(IconName::Ellipsis).tooltip("Thread options")
