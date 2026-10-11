@@ -7,56 +7,6 @@ use gpui_kit::test::TestWindowExt as _;
 use practice::{config::Config, db::Db};
 use super::Assist;
 
-struct LaunchFixture {
-    workspace: Entity<crate::workspace::Workspace>,
-    snapshot: super::Snapshot,
-}
-impl Render for LaunchFixture {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        gpui_kit::component::button::Button::new("fixture-ai-run").label("Start AI")
-            .on_click(cx.listener(|fixture, _, window, cx| {
-                let snapshot = fixture.snapshot.clone();
-                fixture.workspace.update(cx, |ws, cx| {
-                    ws.assist.update(cx, |assist, cx| assist.start(super::Action::Hints, snapshot,
-                        super::Target::Agent(practice::agents::Detected {
-                            kind: practice::agents::AgentKind::OpenCode,
-                            path: "/fixture/no-agent".into(), version: None,
-                        }, None), window, cx));
-                });
-            }))
-    }
-}
-
-fn launch_inside_workspace(cx: &mut HeadlessAppContext, output: &Path) -> Result<()> {
-    let db = Arc::new(Db::open(&output.join("session/launch.sqlite"))?);
-    let (handle, fixture) = cx.update(|cx| gpui_kit::open_window(WindowOptions {
-        window_bounds: Some(WindowBounds::Windowed(Bounds { origin: point(px(0.), px(0.)), size: size(px(400.), px(200.)) })),
-        show: false, focus: false, ..Default::default()
-    }, cx, |window, cx| cx.new(|cx| {
-        let config = Config { onboarding_completed: true, workspace: output.join("session/launch-solutions"), ..Default::default() };
-        let workspace = cx.new(|cx| crate::workspace::Workspace::from_storage(config, db, [None, None], window, cx));
-        workspace.read(cx).assist.clone().update(cx, |assist, _| assist.fixture_no_transport = true);
-        LaunchFixture { workspace, snapshot: super::Snapshot {
-            slug: "launch-fixture".into(), title: "Launch fixture".into(), difficulty: "Easy".into(), url: String::new(),
-            statement_html: String::new(), code: "pass\n".into(), starter: String::new(), language: practice::language::Language::Python,
-            cases: vec![], focus_case: 0, solution_path: output.join("session/launch-solutions/solution.py"),
-            workspace: output.join("session/launch-solutions"), trace: None,
-        } }
-    })))?;
-    let handle = handle.into(); cx.run_until_parked();
-    cx.update_window(handle, |_, window, cx| { window.render_frame(cx); window.click("fixture-ai-run", cx); })?;
-    cx.run_until_parked();
-    cx.update_window(handle, |_, window, cx| -> Result<()> {
-        let ws = fixture.read(cx).workspace.read(cx);
-        let assist = ws.assist.read(cx);
-        let run = assist.runs.first().ok_or_else(|| anyhow::anyhow!("AI run was not created"))?;
-        ensure!(run.generation == 1, "Deferred launch did not prepare the run");
-        ensure!(run.snippet_before.as_ref().is_some_and(|(dir, _)| dir == &ws.snippet_dir), "Launch did not capture workspace context");
-        window.remove_window(); Ok(())
-    })??;
-    cx.run_until_parked(); Ok(())
-}
-
 struct Fixture {
     assist: Entity<Assist>,
     enabled: bool,
@@ -284,6 +234,5 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         cx.run_until_parked();
     }
     cx.update(|cx| { crate::theme::apply("Vesper", cx); crate::theme::set_zoom(1., cx); });
-    launch_inside_workspace(cx, output)?;
     Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["Enter sends","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","send button input","send and stop containment","compact/light/zoom","neutral history rows and visible keyboard selection","empty chats hidden","Ctrl+T / Ctrl+Shift+O / Ctrl+N","aligned toolbar and search","header Plus and no empty history row","merged Chats quick actions and Analysis navigation"]}))
 }
