@@ -49,6 +49,7 @@ impl Assist {
     pub(super) fn open_thread_list(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.persist_draft(cx); self.refresh_threads();
         self.show_threads = !self.threads.is_empty() || !self.thread_query.trim().is_empty();
+        self.thread_selection_visible = false;
         self.thread_selection = self.threads.iter().position(|thread| Some(thread.id) == self.selected_thread).unwrap_or(0);
         if self.show_threads { self.thread_search.focus_handle(cx).focus(window, cx); } else { self.composer.focus_handle(cx).focus(window, cx); }
         cx.notify();
@@ -94,6 +95,7 @@ impl Assist {
         self.editing = None; self.composer_thread = None; self.sync_composer(window, cx); cx.notify();
     }
     fn navigate_threads(&mut self, direction: isize, cx: &mut Context<Self>) {
+        self.thread_selection_visible = true;
         self.thread_selection = self.thread_selection.saturating_add_signed(direction).min(self.threads.len().saturating_sub(1));
         self.thread_scroll.scroll_to_item(self.thread_selection, ScrollStrategy::Nearest); cx.notify();
     }
@@ -190,8 +192,8 @@ impl Assist {
                     let theme = cx.theme().clone();
                     range.filter_map(|index| this.threads.get(index).map(|thread| {
                         let id = thread.id;
-                        h_flex().id(("chat-thread-row", id as u64)).h(px(34.)).w_full().px_2().gap_2().items_center().rounded_md().border_1().border_color(if index == this.thread_selection { theme.border } else { theme.border.opacity(0.) }).cursor_pointer()
-                            .bg(if index == this.thread_selection { theme.list_active } else { theme.background.opacity(0.) })
+                        h_flex().id(("chat-thread-row", id as u64)).h(px(34.)).w_full().px_2().gap_2().items_center().rounded_md().border_1().border_color(if this.thread_selection_visible && index == this.thread_selection { theme.border } else { theme.border.opacity(0.) }).cursor_pointer()
+                            .bg(if this.thread_selection_visible && index == this.thread_selection { theme.list_active } else { theme.background.opacity(0.) })
                             .hover(|el| el.bg(theme.list_hover))
                             .child(Icon::new(if thread.fork_of.is_some() { IconName::GitBranch } else { IconName::MessageCircle }).xsmall().text_color(theme.muted_foreground))
                             .child(div().flex_1().min_w_0().truncate().text_sm().child(if thread.title == "New chat" { thread.draft.lines().find(|line| !line.trim().is_empty()).unwrap_or("Draft").trim().to_owned() } else { thread.title.clone() }))

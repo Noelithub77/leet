@@ -219,6 +219,7 @@ pub struct Assist {
     thread_search: Entity<InputState>,
     thread_query: String,
     thread_selection: usize,
+    thread_selection_visible: bool,
     conversation_error: Option<String>,
     editing: Option<u64>,
     ai_tab: u8,
@@ -247,10 +248,10 @@ impl Assist {
         }).detach();
         let thread_search = cx.new(|cx| InputState::new(window, cx).placeholder("Search chats"));
         cx.subscribe_in(&thread_search, window, |this, input, event: &InputEvent, _, cx| {
-            if matches!(event, InputEvent::Change) { this.thread_query = input.read(cx).value().to_string(); this.thread_selection = 0; this.refresh_threads(); cx.notify(); }
+            if matches!(event, InputEvent::Change) { this.thread_query = input.read(cx).value().to_string(); this.thread_selection = 0; this.thread_selection_visible = false; this.refresh_threads(); cx.notify(); }
         }).detach();
         let mut this = Self { workspace, db, agents: vec![], detecting: false, catalogs, catalog_cache, requested_catalogs: HashSet::new(), installing: None,
-            runs: vec![], next_id: 0, slug: None, ticker: None, scroll: ScrollHandle::new(), composer, composer_thread: None, threads: vec![], selected_thread: None, loaded_threads: HashSet::new(), show_threads: true, thread_scroll: UniformListScrollHandle::new(), thread_search, thread_query: String::new(), thread_selection: 0, conversation_error: None, editing: None, ai_tab: 2, context_key: None };
+            runs: vec![], next_id: 0, slug: None, ticker: None, scroll: ScrollHandle::new(), composer, composer_thread: None, threads: vec![], selected_thread: None, loaded_threads: HashSet::new(), show_threads: true, thread_scroll: UniformListScrollHandle::new(), thread_search, thread_query: String::new(), thread_selection: 0, thread_selection_visible: false, conversation_error: None, editing: None, ai_tab: 2, context_key: None };
         if let Err(error) = this.db.migrate_chats() { this.conversation_error = Some(error.to_string()); }
         this.refresh_threads();
         this

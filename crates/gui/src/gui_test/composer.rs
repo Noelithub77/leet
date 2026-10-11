@@ -135,6 +135,7 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             });
             window.render_frame(cx);
             window.hover("chat-thread-picker", cx);
+            ensure!(!assist.read(cx).thread_selection_visible, "Opening history highlighted a row before navigation");
             let toolbar = window.find("chat-thread-toolbar").bounds();
             let search = window.find("chat-thread-search").bounds();
             ensure!(toolbar.left() == search.left() && toolbar.right() == search.right(), "History toolbar and search edges do not align");
@@ -148,6 +149,7 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             let assist = fixture.read(cx).assist.clone();
             let selected = assist.read(cx).threads[0].id;
             window.press("up", cx);
+            ensure!(assist.read(cx).thread_selection_visible && assist.read(cx).thread_selection == 0, "Keyboard navigation lost its visible selection");
             window.press("enter", cx);
             ensure!(assist.read(cx).selected_thread == Some(selected) && !assist.read(cx).show_threads, "Keyboard selection did not open the selected chat");
             for shortcut in ["ctrl-t", "ctrl-shift-o", "ctrl-n"] {
@@ -230,5 +232,5 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         cx.run_until_parked();
     }
     cx.update(|cx| { crate::theme::apply("Vesper", cx); crate::theme::set_zoom(1., cx); });
-    Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["Enter sends","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","send button input","send and stop containment","compact/light/zoom","thread borders and keyboard selection","empty chats hidden","Ctrl+T / Ctrl+Shift+O / Ctrl+N","aligned toolbar and search","header Plus and no empty history row","merged Chats quick actions and Analysis navigation"]}))
+    Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["Enter sends","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","send button input","send and stop containment","compact/light/zoom","neutral history rows and visible keyboard selection","empty chats hidden","Ctrl+T / Ctrl+Shift+O / Ctrl+N","aligned toolbar and search","header Plus and no empty history row","merged Chats quick actions and Analysis navigation"]}))
 }

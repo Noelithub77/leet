@@ -35,6 +35,7 @@
 - Show snippet inputs, outputs, and short examples in the preview.
 - Explain snippet expansion in the skippable onboarding step.
 - Keep chat history compact, with clearer selection and empty states.
+- Keep chat rows neutral until hover or keyboard navigation.
 - Give the assistant header balanced spacing, with New chat beside Close.
 
 </details>
