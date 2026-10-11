@@ -221,7 +221,6 @@ pub struct Assist {
     thread_selection: usize,
     conversation_error: Option<String>,
     editing: Option<u64>,
-    ai_tab: u8,
     context_key: Option<(Option<String>, bool, bool, bool)>,
 
 }
@@ -250,7 +249,7 @@ impl Assist {
             if matches!(event, InputEvent::Change) { this.thread_query = input.read(cx).value().to_string(); this.thread_selection = 0; this.refresh_threads(); cx.notify(); }
         }).detach();
         let mut this = Self { workspace, db, agents: vec![], detecting: false, catalogs, catalog_cache, requested_catalogs: HashSet::new(), installing: None,
-            runs: vec![], next_id: 0, slug: None, ticker: None, scroll: ScrollHandle::new(), composer, composer_thread: None, threads: vec![], selected_thread: None, loaded_threads: HashSet::new(), show_threads: true, thread_scroll: UniformListScrollHandle::new(), thread_search, thread_query: String::new(), thread_selection: 0, conversation_error: None, editing: None, ai_tab: 2, context_key: None };
+            runs: vec![], next_id: 0, slug: None, ticker: None, scroll: ScrollHandle::new(), composer, composer_thread: None, threads: vec![], selected_thread: None, loaded_threads: HashSet::new(), show_threads: true, thread_scroll: UniformListScrollHandle::new(), thread_search, thread_query: String::new(), thread_selection: 0, conversation_error: None, editing: None, context_key: None };
         if let Err(error) = this.db.migrate_chats() { this.conversation_error = Some(error.to_string()); }
         this.refresh_threads();
         this
@@ -1219,7 +1218,7 @@ impl Workspace {
             self.right = true; self.save_layout();
         }
         self.flash(format!("AI: {}", action.label()), cx);
-        self.assist.update(cx, |assist, cx| { assist.ai_tab = if action == Action::Review { 1 } else { 2 }; assist.start(action, snapshot, target, window, cx); });
+        self.assist.update(cx, |assist, cx| { assist.show_threads = false; assist.start(action, snapshot, target, window, cx); });
         cx.notify();
     }
 

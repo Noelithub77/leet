@@ -67,11 +67,11 @@ impl Assist {
         if self.slug.is_none() { return; }
         if self.editing.is_none() && self.composer.read(cx).value().trim().is_empty()
             && self.selected_thread.is_some_and(|id| self.db.chat_messages(id).is_ok_and(|messages| messages.is_empty())) {
-            self.ai_tab = 2; self.show_threads = false; self.composer.focus_handle(cx).focus(window, cx); cx.notify(); return;
+            self.show_threads = false; self.composer.focus_handle(cx).focus(window, cx); cx.notify(); return;
         }
         self.persist_draft(cx); self.selected_thread = None; self.editing = None;
         match self.ensure_thread() {
-            Ok(_) => { self.sync_composer(window, cx); self.ai_tab = 2; self.show_threads = false; self.composer.focus_handle(cx).focus(window, cx); }
+            Ok(_) => { self.sync_composer(window, cx); self.show_threads = false; self.composer.focus_handle(cx).focus(window, cx); }
             Err(error) => self.conversation_error = Some(error.to_string()),
         }
         cx.notify();

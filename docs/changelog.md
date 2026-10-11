@@ -15,7 +15,7 @@
 <details>
 <summary>Fix</summary>
 
-- Merge General into Chats, with quick actions in empty conversations.
+- Keep all assistant actions in Chats, including solution analysis.
 - Show local autocomplete immediately while language-server results load.
 - Prefer keywords, variables, and functions ahead of snippets.
 - Prioritize your own declarations and keep CP-relevant Python auto-imports last.
