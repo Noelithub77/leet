@@ -65,7 +65,7 @@ impl Render for Assist {
             .on_action(cx.listener(|this, _: &NewChat, window, cx| this.new_thread(window, cx)))
             .child(h_flex().px_3().py_3().gap_1().min_w_0()
                 .child(Icon::new(IconName::Sparkles).size_4().text_color(theme.primary))
-                .child(h_flex().id("ai-tabs").flex_1().min_w_0().overflow_x_scroll().gap_1()
+                .child(h_flex().id("ai-tabs").ml_1().flex_1().min_w_0().overflow_x_scroll().gap_1()
                     .children([(2, "Chats"), (1, "Analysis")].into_iter().map(|(tab, label)| {
                         crate::theme::selected_choice(Button::new(SharedString::from(format!("ai-tab-{tab}"))).ghost().small(), self.ai_tab == tab, cx)
                             .label(label).on_click(cx.listener(move |this, _, _, cx| { this.ai_tab = tab; cx.notify(); }))

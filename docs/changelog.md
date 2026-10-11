@@ -35,6 +35,6 @@
 - Show snippet inputs, outputs, and short examples in the preview.
 - Explain snippet expansion in the skippable onboarding step.
 - Keep chat history compact, with clearer selection and empty states.
-- Put New chat beside Close and remove the empty history divider.
+- Give the assistant header balanced spacing, with New chat beside Close.
 
 </details>
