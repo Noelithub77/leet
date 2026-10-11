@@ -36,6 +36,7 @@
 - Explain snippet expansion in the skippable onboarding step.
 - Keep chat history compact, with clearer selection and empty states.
 - Keep chat rows neutral until hover or keyboard navigation.
+- Group chat history and search in one container with separated rows.
 - Give the assistant header balanced spacing, with New chat beside Close.
 
 </details>

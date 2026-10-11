@@ -170,9 +170,10 @@ impl Assist {
         let has_thread = self.threads.iter().any(|thread| Some(thread.id) == self.selected_thread);
         let has_history = !self.threads.is_empty() || !self.thread_query.trim().is_empty();
         if !has_history && !self.db.can_undo_chat() { return div().into_any_element(); }
-        v_flex().px_3().pb_2().gap_2()
+        v_flex().px_3().pb_2()
+            .child(v_flex().id("chat-history-container").test_support().w_full().p_2().gap_2().border_1().border_color(theme.border).rounded_lg().bg(theme.secondary.opacity(0.3))
             .child(h_flex().id("chat-thread-toolbar").test_support().w_full().gap_1().min_w_0()
-                .when(has_history, |el| el.border_1().border_color(theme.border).rounded_md().p_1()
+                .when(has_history, |el| el
                     .child(Button::new("chat-thread-picker").ghost().small().icon(if self.show_threads { IconName::ChevronDown } else { IconName::ChevronRight }).label(title).flex_1().min_w_0()
                         .tooltip("Conversation threads").on_click(cx.listener(|this, _, window, cx| { if this.show_threads { this.show_threads = false; cx.notify(); } else { this.open_thread_list(window, cx); } }))))
                 .when(!has_history, |el| el.child(div().flex_1()))
@@ -192,14 +193,14 @@ impl Assist {
                     let theme = cx.theme().clone();
                     range.filter_map(|index| this.threads.get(index).map(|thread| {
                         let id = thread.id;
-                        h_flex().id(("chat-thread-row", id as u64)).h(px(34.)).w_full().px_2().gap_2().items_center().rounded_md().border_1().border_color(if this.thread_selection_visible && index == this.thread_selection { theme.border } else { theme.border.opacity(0.) }).cursor_pointer()
+                        h_flex().id(("chat-thread-row", id as u64)).h(px(40.)).w_full().px_3().gap_2().items_center().rounded_sm().border_b_1().border_color(if index + 1 < this.threads.len() { theme.border } else { theme.border.opacity(0.) }).cursor_pointer()
                             .bg(if this.thread_selection_visible && index == this.thread_selection { theme.list_active } else { theme.background.opacity(0.) })
                             .hover(|el| el.bg(theme.list_hover))
                             .child(Icon::new(if thread.fork_of.is_some() { IconName::GitBranch } else { IconName::MessageCircle }).xsmall().text_color(theme.muted_foreground))
                             .child(div().flex_1().min_w_0().truncate().text_sm().child(if thread.title == "New chat" { thread.draft.lines().find(|line| !line.trim().is_empty()).unwrap_or("Draft").trim().to_owned() } else { thread.title.clone() }))
                             .on_click(cx.listener(move |this, _, window, cx| this.select_thread(id, window, cx))).into_any_element()
                     })).collect()
-                })).track_scroll(&self.thread_scroll).w_full().h(px(self.threads.len().min(5) as f32 * 34.)).border_1().border_color(theme.border).rounded_md())))
+                })).track_scroll(&self.thread_scroll).w_full().h(px(self.threads.len().min(5) as f32 * 40.))))))
             .into_any_element()
     }
 }
