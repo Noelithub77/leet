@@ -57,6 +57,17 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         window.render_frame(cx);
         ensure!(window.find("copilot-full-preview").visible(), "Full Copilot preview hidden while holding Alt");
         ensure!(pane.read(cx).predictions.as_ref().unwrap().preview.borrow().as_ref().unwrap().0 == "print(1)\n", "Full preview omitted the typed prefix");
+        let editor = pane.read(cx).state.clone();
+        let predictions = pane.read(cx).predictions.as_ref().unwrap();
+        let (text, styles) = predictions.inline_highlights(editor.read(cx).value().as_str(), editor.read(cx).cursor(), cx).unwrap();
+        ensure!(styles.iter().all(|(_, style)| style.color.is_some_and(|color| color.a > 0. && color.a < 0.8)), "Ghost syntax colors are not faint");
+        ensure!(styles.iter().filter_map(|(_, style)| style.color).any(|color| color != styles[0].1.color.unwrap()), "Ghost preview lost syntax color differences");
+        editor.update(cx, |editor, cx| -> Result<()> {
+            ensure!(!editor.set_inline_completion_highlights("stale", styles.clone(), cx), "Stale ghost styles were accepted");
+            ensure!(!editor.set_inline_completion_highlights(&text, vec![(0..text.len() + 1, HighlightStyle::default())], cx), "Invalid ghost style bounds were accepted");
+            ensure!(editor.set_inline_completion_highlights(&text, styles, cx), "Current ghost styles were rejected");
+            Ok(())
+        })?;
         Ok(())
     })??;
     if pixels { cx.capture_screenshot(handle)?.save(output.join("copilot-alt-preview.png"))?; }
@@ -68,8 +79,21 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
     settle(cx);
     cx.update_window(handle, |_, window, cx| -> Result<()> {
         window.render_frame(cx); window.press("alt-tab", cx);
-        ensure!(pane.read(cx).state.read(cx).value().as_str() == "print(1)\n", "Tab did not accept the visible prediction");
+        ensure!(pane.read(cx).state.read(cx).value().as_str() == "pri", "Alt+Tab accepted a prediction");
+        window.press("alt-l", cx);
+        ensure!(pane.read(cx).state.read(cx).value().as_str() == "print(1)\n", "Alt+L did not accept the visible prediction");
         ensure!(!EditorMode::has_inline_completion(pane.read(cx).state.read(cx)), "Accepted prediction stayed visible");
+        ensure!(pane.read(cx).can_revert_prediction(cx), "Accepted prediction cannot be reverted");
+        window.render_frame(cx); window.press("alt-k", cx);
+        ensure!(pane.read(cx).state.read(cx).value().as_str() == "pri", "Alt+K did not restore the original source");
+        ensure!(pane.read(cx).state.read(cx).cursor() == 3, "Alt+K did not restore the caret");
+        Ok(())
+    })??;
+    settle(cx);
+    cx.update_window(handle, |_, window, cx| -> Result<()> {
+        ensure!(EditorMode::has_inline_completion(pane.read(cx).state.read(cx)), "Revert did not restore the preview");
+        window.render_frame(cx); window.press("alt-l", cx);
+        ensure!(pane.read(cx).state.read(cx).value().as_str() == "print(1)\n", "Alt+L did not accept again after reverting");
         let state = pane.read(cx).state.clone();
         state.update(cx, |editor, cx| { editor.set_value("", window, cx); editor.focus(window, cx); });
         alt(window, false, cx); window.input("pri", cx); window.render_frame(cx); alt(window, true, cx); Ok(())
@@ -85,13 +109,15 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
     cx.update_window(handle, |_, window, cx| -> Result<()> {
         window.render_frame(cx); window.press("alt-l", cx);
         ensure!(pane.read(cx).state.read(cx).value().as_str() == "print(1)\n", "Alt+L did not accept prediction");
+        window.input("x", cx); window.press("alt-k", cx);
+        ensure!(pane.read(cx).state.read(cx).value().as_str() == "print(1)\nx", "Alt+K removed later typing");
         let state = pane.read(cx).state.clone();
         state.update(cx, |editor, cx| editor.set_value("", window, cx));
         alt(window, false, cx); window.input("pri", cx); window.render_frame(cx); alt(window, true, cx); Ok(())
     })??;
     settle(cx);
     cx.update_window(handle, |_, window, cx| -> Result<()> {
-        window.input("x", cx); window.render_frame(cx); window.press("alt-tab", cx);
+        window.input("x", cx); window.render_frame(cx); window.press("alt-l", cx);
         ensure!(!pane.read(cx).state.read(cx).value().contains("print(1)"), "Stale prediction was accepted after typing");
         ensure!(preview_hint(pane.read(cx), window, cx).is_none(), "Stale prediction kept its cue");
         alt(window, false, cx); window.render_frame(cx); Ok(())
@@ -131,7 +157,7 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
     cx.update_window(handle, |_, window, cx| {
         let predictions = pane.read(cx).predictions.as_ref().unwrap().clone();
         predictions.connection.update(cx, |connection, cx| { connection.enabled = true; cx.notify(); });
-        let code = format!("nt(1)\n{}", (0..40).map(|i| format!("print({i})\n")).collect::<String>());
+        let code = format!("nt(1)\n{}", (0..40).map(|i| format!("print(\"café {i}\")\n")).collect::<String>());
         let item = serde_json::from_value(serde_json::json!({"insertText":code})).unwrap();
         *predictions.fixture.borrow_mut() = Suggestion::from_item("pri", 3, item);
         pane.read(cx).state.clone().update(cx, |editor, cx| { editor.set_value("", window, cx); editor.focus(window, cx); });
@@ -145,6 +171,11 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         let bounds = window.find("copilot-full-preview").bounds();
         ensure!(bounds.top() >= px(0.) && bounds.bottom() <= window.viewport_size().height, "Long preview escaped the window");
         let before = window.find("copilot-preview-code").bounds().top();
+        let editor = pane.read(cx).state.clone();
+        let (text, _) = pane.read(cx).predictions.as_ref().unwrap().inline_highlights(editor.read(cx).value().as_str(), editor.read(cx).cursor(), cx).unwrap();
+        let boundary = text.find('é').unwrap() + 1;
+        ensure!(!editor.update(cx, |editor, cx| editor.set_inline_completion_highlights(&text,
+            vec![(boundary..boundary + 1, HighlightStyle::default())], cx)), "Mid-character ghost style boundary was accepted");
         let editor_scroll = pane.read(cx).state.read(cx).scroll_offset();
         window.scroll("copilot-full-preview", ScrollDelta::Lines(point(0., -12.)), cx);
         window.render_frame(cx);
@@ -187,5 +218,5 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         ensure!(status_fixture.read(cx).0.read(cx).settings.tab == crate::settings::SettingsTab::Editor, "Copilot status button did not open Editor settings");
         window.remove_window(); Ok(())
     })??;
-    Ok(serde_json::json!({"fixture":"copilot","passed":true,"pixels":pixels,"checks":["hidden without Alt","Alt reveals native ghost text","preview preserves document","Alt release hides immediately","Tab and Alt+L accept visible prediction","Escape dismisses","typing invalidates stale predictions","focus loss hides prediction","turning off clears preview"]}))
+    Ok(serde_json::json!({"fixture":"copilot","passed":true,"pixels":pixels,"checks":["hidden without Alt","Alt reveals native ghost text","faint syntax colors","stale and invalid highlight ranges rejected","preview preserves document","Alt release hides immediately","Alt+Tab does not accept","Alt+L accepts and Alt+K reverts","revert restores the preview and caret","revert preserves later typing","Escape dismisses","typing invalidates stale predictions","focus loss hides prediction","turning off clears preview","long Unicode preview scrolls without moving the editor"]}))
 }

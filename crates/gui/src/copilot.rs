@@ -30,7 +30,7 @@ impl Connection {
             detail.push_str(&self.quota.as_ref().map_or_else(|| "Usage not reported by Copilot".into(), |quota| quota.detail()));
             if let Some(message) = self.client.as_ref().and_then(|client| client.message()) { detail.push('\n'); detail.push_str(&message); }
         }
-        detail.push_str("\nHold Alt to preview · Tab or Alt+L to accept"); detail
+        detail.push_str("\nHold Alt to preview · Alt+L accept · Alt+K revert"); detail
     }
     pub fn label(&self) -> String {
         if self.busy { if self.code.is_some() { "Finish sign-in in your browser" } else { "Connecting…" }.into() }
@@ -140,6 +140,24 @@ impl Predictions {
         *self.preview.borrow_mut() = Some((code, highlighter));
         *self.cache.borrow_mut() = Some(suggestion);
     }
+    pub(crate) fn restore(&self, suggestion: Suggestion, source: &str, offset: usize) {
+        self.cache(suggestion, source, offset);
+        self.alt.set(true);
+    }
+    pub(crate) fn inline_highlights(&self, text: &str, offset: usize, cx: &App) -> Option<(String, Vec<(std::ops::Range<usize>, HighlightStyle)>)> {
+        use gpui_kit::component::ActiveTheme as _;
+        let suggestion = self.current(text, offset, cx)?;
+        let preview = self.preview.borrow();
+        let (code, highlighter) = preview.as_ref()?;
+        let prefix = code.len() - suggestion.text().len();
+        let theme = cx.theme();
+        let styles = highlighter.styles(&(prefix..code.len()), theme.highlight_theme.as_ref()).into_iter()
+            .map(|(range, mut style)| {
+                style.color = Some(style.color.unwrap_or(theme.foreground).opacity(0.62));
+                (range.start - prefix..range.end - prefix, style)
+            }).collect();
+        Some((suggestion.text().into(), styles))
+    }
     pub fn warm(self: &Rc<Self>, text: String, offset: usize, pane: WeakEntity<crate::snippets::expansion::EditorPane>, cx: &mut App) {
         if self.alt.get() || !self.connection.read(cx).enabled() { return; }
         let this = self.clone(); let executor = cx.background_executor().clone();
@@ -202,12 +220,13 @@ pub(crate) fn preview_hint(pane: &crate::snippets::expansion::EditorPane, window
     if !editor.focus_handle(cx).is_focused(window) || !window.is_window_active() { return None; }
     let predictions = pane.predictions.as_ref()?;
     if !predictions.connection.read(cx).enabled() || !editor.selected_range().is_empty() { return None; }
-    predictions.cache.borrow().as_ref().filter(|item| item.matches(editor.value().as_str(), editor.cursor()))?;
+    let accepted = pane.can_revert_prediction(cx);
+    if !accepted { predictions.cache.borrow().as_ref().filter(|item| item.matches(editor.value().as_str(), editor.cursor()))?; }
     let theme = cx.theme();
     Some(h_flex().id("copilot-preview-hint").test_support().gap_2().px_2().py_1().rounded_md()
         .bg(theme.popover).text_xs().text_color(theme.muted_foreground)
         .child(Icon::default().path("providers/copilot.svg").size(px(14.)))
-        .child(if predictions.alt.get() { "Tab or Alt+L" } else { "Hold Alt" }).into_any_element())
+        .child(if accepted { "Alt+K revert" } else if predictions.alt.get() { "Alt+L accept" } else { "Hold Alt" }).into_any_element())
 }
 
 pub(crate) fn preview_overlay(pane: &crate::snippets::expansion::EditorPane, window: &Window, cx: &App) -> Option<AnyElement> {
@@ -218,7 +237,7 @@ pub(crate) fn preview_overlay(pane: &crate::snippets::expansion::EditorPane, win
     let input = editor.input_bounds();
     let position = editor.scroll_offset() + cursor.origin - input.origin;
     let predictions = pane.predictions.as_ref()?;
-    let expanded = predictions.alt.get();
+    let expanded = predictions.alt.get() && !pane.can_revert_prediction(cx);
     let width = if expanded { px(480.).min(input.size.width) } else { px(150.) };
     let left = position.x.max(px(0.)).min((input.size.width - width).max(px(0.)));
     let below = position.y + line_height + px(4.);

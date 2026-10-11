@@ -12,10 +12,14 @@ struct Fixture {
     enabled: bool,
     busy: bool,
     threads: bool,
+    full_view: bool,
 }
 
 impl Render for Fixture {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.full_view {
+            return v_flex().size_full().bg(cx.theme().background).child(self.assist.clone());
+        }
         if self.threads {
             let header = self.assist.update(cx, |assist, cx| assist.thread_header(window, cx));
             let composer = self.assist.read(cx).threads.is_empty().then(|| self.assist.update(cx, |assist, cx| assist.render_composer(true, false, false, cx).into_any_element()));
@@ -43,7 +47,8 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             cx.observe(&assist, |_, _, cx| cx.notify()).detach();
             // Dropping the fixture workspace leaves the real send handler without transport side effects.
             drop(workspace);
-            Fixture { assist, enabled: true, busy: false, threads: false }
+            assist.update(cx, |assist, _| assist.ai_tab = 1);
+            Fixture { assist, enabled: true, busy: false, threads: false, full_view: false }
         })))?;
         let handle = handle.into();
         cx.run_until_parked();
@@ -56,19 +61,19 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         cx.run_until_parked();
         cx.update_window(handle, |_, window, cx| -> Result<()> {
             let assist = fixture.read(cx).assist.clone();
-            ensure!(assist.read(cx).ai_tab == 0, "Empty Enter sent a chat");
+            ensure!(assist.read(cx).ai_tab == 1, "Empty Enter sent a chat");
             window.input("tell me more", cx);
             window.press("shift-enter", cx);
             window.input("about maps", cx);
             ensure!(assist.read(cx).composer.read(cx).value().as_ref() == "tell me more\nabout maps", "Shift+Enter did not add a line");
-            ensure!(assist.read(cx).ai_tab == 0, "Shift+Enter sent a chat");
+            ensure!(assist.read(cx).ai_tab == 1, "Shift+Enter sent a chat");
             window.press("ctrl-enter", cx);
-            ensure!(assist.read(cx).ai_tab == 0, "Removed Ctrl+Enter binding still sends");
+            ensure!(assist.read(cx).ai_tab == 1, "Removed Ctrl+Enter binding still sends");
             Ok(())
         })??;
         cx.run_until_parked();
         cx.update_window(handle, |_, window, cx| -> Result<()> {
-            ensure!(fixture.read(cx).assist.read(cx).ai_tab == 0, "Line break or removed shortcut sent a chat");
+            ensure!(fixture.read(cx).assist.read(cx).ai_tab == 1, "Line break or removed shortcut sent a chat");
             window.press("enter", cx);
             Ok(())
         })??;
@@ -77,7 +82,7 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             let assist = fixture.read(cx).assist.clone();
             ensure!(assist.read(cx).ai_tab == 2, "Enter did not invoke send");
             ensure!(assist.read(cx).composer.read(cx).value().as_ref() == "tell me more\nabout maps", "Enter inserted a newline");
-            assist.update(cx, |assist, _| assist.ai_tab = 0);
+            assist.update(cx, |assist, _| assist.ai_tab = 1);
             window.click("chat-send", cx);
             Ok(())
         })??;
@@ -104,10 +109,10 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             let stop = window.find("chat-send-stop").bounds();
             ensure!(stop.right() < group.right() && stop.bottom() < group.bottom(), "Stop escaped the prompt box");
             fixture.update(cx, |view, cx| { view.busy = false; view.enabled = false; cx.notify(); });
-            assist.update(cx, |assist, _| assist.ai_tab = 0);
+            assist.update(cx, |assist, _| assist.ai_tab = 1);
             window.render_frame(cx);
             window.click("chat-send", cx);
-            ensure!(assist.read(cx).ai_tab == 0, "Disabled composer sent a chat");
+            ensure!(assist.read(cx).ai_tab == 1, "Disabled composer sent a chat");
             fixture.update(cx, |view, cx| { view.threads = true; cx.notify(); });
             assist.update(cx, |assist, cx| {
                 assist.slug = Some("composer-fixture".into());
@@ -169,6 +174,50 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         })??;
         cx.run_until_parked();
         if pixels { cx.capture_screenshot(handle)?.save(output.join(format!("threads-empty-{name}.png")))?; }
+        cx.update_window(handle, |_, window, _| window.remove_window())?;
+        let handle = cx.update(|cx| gpui_kit::open_window(WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(Bounds { origin: point(px(0.), px(0.)), size: size(px(width.max(320.)), px(640.)) })),
+            show: false, focus: false, ..Default::default()
+        }, cx, |_, _| fixture.clone()))?.0.into();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| -> Result<()> {
+            let assist = fixture.read(cx).assist.clone();
+            assist.update(cx, |assist, cx| {
+                assist.set_problem(None, cx);
+                assist.ai_tab = 2;
+                cx.notify();
+            });
+            fixture.update(cx, |view, cx| { view.full_view = true; cx.notify(); });
+            window.render_frame(cx);
+            ensure!(window.try_find("ai-tab-0").is_none(), "General tab still exists");
+            ensure!(window.find("ai-tab-2").visible() && window.find("ai-tab-1").visible(), "Chats or Analysis is missing");
+            ensure!(window.find("ai-action-grid").visible(), "Empty Chats lost the quick actions");
+            window.click("ai-tab-1", cx);
+            window.render_frame(cx);
+            ensure!(window.find("ai-review").visible() && window.try_find("ai-action-grid").is_none(), "Analysis did not stay separate");
+            window.click("ai-tab-2", cx);
+            window.render_frame(cx);
+            ensure!(window.find("ai-action-grid").visible() && !assist.read(cx).show_threads, "Chats did not return to its empty state");
+            Ok(())
+        })??;
+        cx.run_until_parked();
+        if pixels { cx.capture_screenshot(handle)?.save(output.join(format!("chats-merged-{name}.png")))?; }
+        cx.update_window(handle, |_, window, cx| -> Result<()> {
+            let assist = fixture.read(cx).assist.clone();
+            let thread = db.visible_chat_threads(Some("composer-fixture"), "Maps")?.remove(0);
+            let message = db.chat_messages(thread.id)?.remove(0);
+            assist.update(cx, |assist, cx| {
+                assist.restore_message(message);
+                assist.selected_thread = Some(thread.id);
+                cx.notify();
+            });
+            window.render_frame(cx);
+            ensure!(window.try_find("ai-action-grid").is_none(), "Quick actions crowd the existing conversation");
+            ensure!(window.find("assist-cards").visible(), "Chats lost its conversation");
+            Ok(())
+        })??;
+        cx.run_until_parked();
+        if pixels { cx.capture_screenshot(handle)?.save(output.join(format!("chats-populated-{name}.png")))?; }
         cx.update_window(handle, |_, window, _cx| -> Result<()> {
             window.remove_window();
             Ok(())
@@ -176,5 +225,5 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         cx.run_until_parked();
     }
     cx.update(|cx| { crate::theme::apply("Vesper", cx); crate::theme::set_zoom(1., cx); });
-    Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["Enter sends","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","send button input","send and stop containment","compact/light/zoom","thread borders and keyboard selection","empty chats hidden","Ctrl+T / Ctrl+Shift+O / Ctrl+N","aligned toolbar and search","empty history has only Plus"]}))
+    Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["Enter sends","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","send button input","send and stop containment","compact/light/zoom","thread borders and keyboard selection","empty chats hidden","Ctrl+T / Ctrl+Shift+O / Ctrl+N","aligned toolbar and search","empty history has only Plus","merged Chats quick actions and Analysis navigation"]}))
 }

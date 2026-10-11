@@ -21,6 +21,12 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("escape", CancelSnippet, Some("SnippetPicker > Input")),
     ]);
 }
+struct AcceptedPrediction {
+    before: String,
+    after: String,
+    selection: Range<usize>,
+    suggestion: practice::copilot::Suggestion,
+}
 pub struct EditorPane {
     pub state: Entity<EditorState>,
     pub language: Language,
@@ -34,6 +40,7 @@ pub struct EditorPane {
     changing: bool,
     epoch: u64,
     pub(crate) predictions: Option<Rc<crate::copilot::Predictions>>,
+    accepted_prediction: Option<AcceptedPrediction>,
     language_document: Option<std::sync::Arc<practice::lsp::Document>>,
     detail_task: Task<()>,
     _subscriptions: Vec<Subscription>,
@@ -58,6 +65,7 @@ impl EditorPane {
         let changes = cx.subscribe_in(&state, window, |this, editor, event, window, cx| {
             if !matches!(event, InputEvent::Change) || this.changing { return; }
             let text = editor.read(cx).value().to_string();
+            if this.accepted_prediction.as_ref().is_some_and(|accepted| accepted.after != text) { this.accepted_prediction = None; }
             if let Some(predictions) = &this.predictions { predictions.invalidate(); }
             this.menu = None;
             this.detail_task = Task::ready(());
@@ -84,7 +92,7 @@ impl EditorPane {
             }
             cx.notify();
         });
-        Self { state, language, library, tab_expand: true, path: None, workspace: None, session: None, completions, menu: None, changing: false, epoch: 0, predictions: None, language_document: None, detail_task: Task::ready(()), _subscriptions: vec![observe, changes] }
+        Self { state, language, library, tab_expand: true, path: None, workspace: None, session: None, completions, menu: None, changing: false, epoch: 0, predictions: None, accepted_prediction: None, language_document: None, detail_task: Task::ready(()), _subscriptions: vec![observe, changes] }
     }
 
     pub(crate) fn connect_language_document(&mut self, language: Language, document: std::sync::Arc<practice::lsp::Document>, cx: &mut Context<Self>) {
@@ -137,13 +145,43 @@ impl EditorPane {
         let Some(predictions) = &self.predictions else { return false; };
         let editor = self.state.read(cx);
         let Some(suggestion) = predictions.current(editor.value().as_str(), editor.cursor(), cx) else { return false; };
+        let before = editor.value().to_string();
+        let selection = editor.selected_range();
         predictions.accepted(suggestion.clone(), cx);
         self.state.update(cx, |editor, cx| {
             EditorMode::clear_inline_completion(editor, cx);
             editor.set_selected_range(suggestion.range(), cx);
             editor.replace(suggestion.text(), window, cx);
         });
+        self.accepted_prediction = Some(AcceptedPrediction { before, after: self.state.read(cx).value().to_string(), selection, suggestion });
         self.menu = None;
+        cx.notify(); true
+    }
+    pub(crate) fn can_revert_prediction(&self, cx: &App) -> bool {
+        self.accepted_prediction.as_ref().is_some_and(|accepted| self.state.read(cx).value().as_str() == accepted.after)
+    }
+    fn revert_prediction(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        if !self.can_revert_prediction(cx) { return false; }
+        let Some(accepted) = self.accepted_prediction.take() else { return false; };
+        self.hide_prediction(cx);
+        if let Some(predictions) = &self.predictions { predictions.invalidate(); }
+        self.changing = true;
+        self.state.update(cx, |editor, cx| {
+            editor.set_selected_range(0..accepted.after.len(), cx);
+            editor.replace(accepted.before.clone(), window, cx);
+            editor.set_selected_range(accepted.selection, cx);
+        });
+        self.changing = false;
+        self.menu = None;
+        self.completions.cancel();
+        self.detail_task = Task::ready(());
+        if let Some(predictions) = &self.predictions {
+            predictions.restore(accepted.suggestion, &accepted.before, self.state.read(cx).cursor());
+            self.state.update(cx, |editor, cx| {
+                let offset = editor.cursor();
+                EditorMode::on_text_typed(editor, &(offset..offset), "", window, cx);
+            });
+        }
         cx.notify(); true
     }
 
@@ -319,6 +357,10 @@ impl Render for EditorPane {
         if self.menu.as_ref().is_some_and(|menu| menu.offset != self.state.read(cx).cursor()) { self.menu = None; }
         if let Some(menu) = &mut self.menu { menu.prepare(self.language, &self.library); }
         let theme = cx.theme().clone();
+        if let Some((text, styles)) = self.predictions.as_ref().and_then(|predictions|
+            predictions.inline_highlights(self.state.read(cx).value().as_str(), self.state.read(cx).cursor(), cx)) {
+            self.state.update(cx, |editor, cx| { editor.set_inline_completion_highlights(&text, styles, cx); });
+        }
         let selection = self.state.read(cx).selected_range();
         let active = self.session.as_ref().filter(|s| { let r=s.range(); selection.start>=r.start && selection.end<=r.end });
         let expandable = active.is_some() || self.tab_expand && !self.matching_prefix(cx).is_empty();
@@ -348,7 +390,10 @@ impl Render for EditorPane {
                     this.close_completions(window, cx);
                     cx.stop_propagation();
                 } else if !event.keystroke.modifiers.control && !event.keystroke.modifiers.platform && !event.keystroke.modifiers.shift
-                    && (event.keystroke.key == "tab" || event.keystroke.key == "l" && event.keystroke.modifiers.alt)
+                    && event.keystroke.key == "k" && event.keystroke.modifiers.alt
+                    && this.revert_prediction(window, cx) { cx.stop_propagation(); }
+                else if !event.keystroke.modifiers.control && !event.keystroke.modifiers.platform && !event.keystroke.modifiers.shift
+                    && event.keystroke.key == "l" && event.keystroke.modifiers.alt
                     && this.accept_prediction(window, cx) { cx.stop_propagation(); }
                 else if this.menu.is_some() && !event.keystroke.modifiers.control && !event.keystroke.modifiers.platform && !event.keystroke.modifiers.shift && !event.keystroke.modifiers.alt {
                     match event.keystroke.key.as_str() {

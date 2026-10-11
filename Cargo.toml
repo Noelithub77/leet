@@ -1,6 +1,10 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
+exclude = ["vendor/gpui-base"]
+
+[patch.crates-io]
+gpui-base = { path = "vendor/gpui-base" }
 
 [workspace.package]
 version = "0.3.1"

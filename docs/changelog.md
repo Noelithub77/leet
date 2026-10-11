@@ -1,7 +1,8 @@
 <details open>
 <summary>Feat</summary>
 
-- Optional GitHub Copilot suggestions: hold Alt to preview and accept with Tab or Alt+L.
+- Optional GitHub Copilot suggestions: hold Alt to preview, Alt+L to accept, and Alt+K to revert.
+- Distinguish Copilot suggestions with faint syntax colors.
 - See Copilot connection status and reported usage from the status bar.
 - Choose Monokai Pro Spectrum for a complete dark theme with distinct syntax colours.
 - Fuzzy-search snippet names, descriptions, prefixes, and aliases.
@@ -14,6 +15,7 @@
 <details>
 <summary>Fix</summary>
 
+- Merge General into Chats, with quick actions in empty conversations.
 - Show local autocomplete immediately while language-server results load.
 - Prefer keywords, variables, and functions ahead of snippets.
 - Prioritize your own declarations and keep CP-relevant Python auto-imports last.

@@ -19,6 +19,8 @@ remain with the report and screenshots. The operator removes temporary session
 data and bounds the fixture process to 180 seconds. Failure never falls back to
 the user's display.
 
+Run `./ops gui:test --fixture chat --json` for focused chat checks, including the merged Chats empty state and navigation to Analysis.
+
 The chat composer fixture checks Enter sending, Shift+Enter line breaks, removal of Ctrl+Enter, empty and disabled input, and send/stop containment. It renders compact, light, dark, and 140%-zoom variants. It uses the production composer with a dropped fixture workspace, so sends do not start agents or open web chats.
 
 Native mode also checks long statement cards at regular and compact sizes, in light and dark themes, and at 140% zoom: visible headers, independent expansion and scrolling, increased wheel speed, scrollbar thumb dragging, natural short-content sizing without overflow, shared saved flags across questions and reopened storage, PageDown, and Tab/Space activation. Statement PNGs are saved alongside debugger captures.
@@ -91,7 +93,7 @@ real monitors, native system services, or performance on another GPU.
 Copilot fixtures use the production source editor with deterministic predictions,
 without downloading a server, reading credentials, or making network requests.
 They dispatch real modifier and keyboard events to verify hidden predictions,
-Alt-held previews, release dismissal, Tab acceptance, Escape, and stale-document
+Alt-held previews, release dismissal, Alt+L acceptance, Alt+K reversion, Escape, and stale-document
 rejection. `copilot-alt-preview.png` and `copilot-hidden.png` separate rendered
 evidence from assertions. Onboarding fixtures verify that Copilot can be skipped
 without starting authentication. Live GitHub sign-in and subscription-backed

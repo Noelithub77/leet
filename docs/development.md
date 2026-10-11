@@ -186,10 +186,15 @@ SHA-512 digest, and starts GitHub's browser device flow. The server stores its o
 credentials; Leet does not copy credentials from Zed or store tokens in `config.toml`.
 
 Predictions are fetched after typing and stay hidden until Alt is held. Releasing
-Alt hides them immediately; Escape dismisses them. Tab accepts a visible prediction.
-Alt+L also accepts, for desktops that reserve Alt+Tab for window switching. Snippet
+Alt hides them immediately; Escape dismisses them. Alt+L accepts a visible prediction.
+Alt+K reverts the last accepted prediction before further editing. Snippet
 and language-server completion menus retain their existing keyboard behavior.
 This integration accepts insertion predictions; next-edit rewrites are not enabled.
+
+Ghost suggestions use faint theme syntax colors through a pinned local
+`gpui-base` 0.7.1 patch. See [the patch notes](../vendor/README.md) for its
+highlighting hook, provenance, and removal condition. Alt+K restores both the
+previous source and caret, then reveals the same suggestion for Alt+L to accept again.
 
 The status-bar Copilot button opens its Editor setting. Hover shows connection
 status and quota snapshots supplied by `copilot/quotaChange`: plan, completion,
