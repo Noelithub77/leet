@@ -215,6 +215,10 @@ pub fn question(slug: &str) -> Result<crate::leetcode::Question> {
         Err(live) => match curl_question(slug) {
             Ok(question) => Ok(question),
             Err(curl) => crate::codeforces_snapshot::question(slug)
+                .map(|mut question| {
+                    question.meta["statementFetchError"] = serde_json::json!("Using a historical Codeforces text snapshot; original diagrams may be missing.");
+                    question
+                })
                 .map_err(|snapshot| anyhow::anyhow!("Codeforces statement unavailable ({live}). Curl fallback: {curl:#}. Snapshot fallback: {snapshot}")),
         },
     }

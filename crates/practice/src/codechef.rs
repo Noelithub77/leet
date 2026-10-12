@@ -76,10 +76,10 @@ struct Response {
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct Components { #[serde(default)] sample_test_cases: Vec<Sample> }
+struct Components { #[serde(default)] sample_test_cases: Vec<Sample>, #[serde(flatten)] sections: std::collections::BTreeMap<String, serde_json::Value> }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct Sample { input: String, output: String, #[serde(default)] is_deleted: bool }
+struct Sample { input: String, output: String, #[serde(default)] explanation: String, #[serde(default)] is_deleted: bool }
 
 pub fn question(slug: &str) -> Result<Question> {
     let code = problem_code(slug)?;
@@ -93,9 +93,35 @@ pub fn parse_response(slug: &str, mut value: serde_json::Value) -> Result<Questi
     if response.status != "success" || response.problem_code != problem_code(slug)? || response.problem_name.trim().is_empty() || response.body.trim().is_empty() {
         bail!("CodeChef returned no public statement for {}", problem_code(slug)?);
     }
+    let body_blocks = crate::description::parse(&response.body);
+    let body_text: String = scraper::Html::parse_fragment(&response.body).root_element().text().collect();
+    let mut extras = Vec::new();
     let (mut examples, mut outputs) = (vec![], vec![]);
     if let Some(components) = response.problem_components {
-        for sample in components.sample_test_cases.into_iter().filter(|sample| !sample.is_deleted) { examples.push(sample.input); outputs.push(sample.output); }
+        let document = scraper::Html::parse_fragment(&response.body);
+        let heading_selector = scraper::Selector::parse("h1,h2,h3,h4,h5,h6").expect("static heading selector");
+        let headings: Vec<_> = document.select(&heading_selector).map(|node| node.text().collect::<String>().to_lowercase()).collect();
+        for (key, label) in [("statement", "Problem statement"), ("inputFormat", "Input"), ("outputFormat", "Output"), ("constraints", "Constraints"), ("subtasks", "Subtasks")] {
+            if components.sections.get(&format!("{key}State")).and_then(serde_json::Value::as_bool) == Some(false) { continue; }
+            if let Some(content) = components.sections.get(key).and_then(serde_json::Value::as_str).filter(|content| !content.trim().is_empty())
+                && !headings.iter().any(|heading| heading.contains(&label.to_lowercase())) && !body_text.contains(content.trim()) {
+                extras.push(if key == "constraints" { crate::description::Block::Constraints(content.into()) } else { crate::description::Block::Markdown(format!("### {label}\n\n{content}")) });
+            }
+        }
+        for sample in components.sample_test_cases.into_iter().filter(|sample| !sample.is_deleted) {
+            let title = format!("Example {}", examples.len() + 1);
+            let mut parts = Vec::new();
+            let in_body = body_blocks.iter().any(|block| matches!(block, crate::description::Block::Example { parts, .. } if parts.iter().any(|part| matches!(part, crate::description::Part::Field { label, value } if label == "Input" && value.trim() == sample.input.trim())) && parts.iter().any(|part| matches!(part, crate::description::Part::Field { label, value } if label == "Output" && value.trim() == sample.output.trim()))));
+            if !in_body {
+                parts.push(crate::description::Part::Field { label: "Input".into(), value: sample.input.clone() });
+                parts.push(crate::description::Part::Field { label: "Output".into(), value: sample.output.clone() });
+            }
+            if !sample.explanation.trim().is_empty() && !body_text.contains(sample.explanation.trim()) {
+                parts.push(crate::description::Part::Markdown(sample.explanation));
+            }
+            if !parts.is_empty() { extras.push(crate::description::Block::Example { title, parts }); }
+            examples.push(sample.input); outputs.push(sample.output);
+        }
     }
     if examples.is_empty() {
         use scraper::{Html, Selector};
@@ -112,8 +138,11 @@ pub fn parse_response(slug: &str, mut value: serde_json::Value) -> Result<Questi
             }
         }
     }
-    if examples.is_empty() || examples.len() != outputs.len() || examples.len() > 100 { bail!("CodeChef statement has no matching sample inputs/outputs"); }
-    Ok(imported_question(slug, &response.problem_name, response.body, examples, outputs, response.difficulty_rating))
+    if examples.len() > 100 || outputs.len() > 100 { bail!("CodeChef statement exceeds the sample limit"); }
+    let mut question = imported_question(slug, &response.problem_name, response.body, examples, outputs, response.difficulty_rating);
+    question.meta["statementExtras"] = serde_json::to_value(extras)?;
+    question.meta["statementVersion"] = serde_json::json!(2);
+    Ok(question)
 }
 pub fn imported_question(slug: &str, title: &str, content: String, examples: Vec<String>, outputs: Vec<String>, rating: Option<u32>) -> Question {
     let snippets = Language::ALL.into_iter().map(|language| (language.judge_id().into(), language.stdin_template().into())).collect();
@@ -124,6 +153,32 @@ pub fn imported_question(slug: &str, title: &str, content: String, examples: Vec
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn missing_samples_do_not_hide_a_complete_statement() {
+        let question = parse_response("cc:START01", serde_json::json!({"status":"success","problem_code":"START01","problem_name":"Statement only","body":"<p>Complete description.</p><img src='/diagram.svg'><p>Constraints:</p><ul><li>n &gt; 0</li></ul>"})).unwrap();
+        assert!(question.examples.is_empty());
+        let rendered = format!("{:?}", crate::description::for_question(&question).unwrap());
+        assert!(rendered.contains("Complete description") && rendered.contains("diagram.svg"));
+    }
+    #[test]
+    fn complete_response_keeps_structured_samples_explanations_and_missing_sections() {
+        let value = serde_json::json!({"status":"success","problem_code":"START01","problem_name":"Number Mirror","body":"<h3>Problem Statement</h3><p>Print n.</p><h3>Sample Input</h3><pre>123</pre><h3>Sample Output</h3><pre>123</pre><aside>Public note <img src='/note.png'></aside>","problemComponents":{"subtasks":"Score 50 points for n &lt; 10.","subtasksState":true,"constraints":"- $0 \u{2264} n \u{2264} 100$","sampleTestCases":[{"input":"123","output":"123","explanation":"First explanation ![trace](/trace.png)"},{"input":"15","output":"15","explanation":"Second explanation."},{"input":"99","output":"99","isDeleted":true}]}});
+        let question = parse_response("cc:START01", value).unwrap();
+        assert_eq!(question.examples, ["123", "15"]);
+        let blocks = crate::description::for_question(&question).unwrap();
+        let rendered = format!("{blocks:?}");
+        for token in ["Print n", "https://www.codechef.com/note.png", "123", "15", "First explanation", "Second explanation", "https://www.codechef.com/trace.png", "Score 50 points", "100"] { assert!(rendered.contains(token), "Dropped {token}: {rendered}"); }
+        assert!(!rendered.contains("99"));
+        assert_eq!(blocks.iter().filter(|block| matches!(block, crate::description::Block::Example { title, .. } if title == "Example 1")).count(), 1);
+    }
+    #[test]
+    #[ignore = "fetches public CodeChef question data"]
+    fn live_complete_codechef_statement() {
+        let question = question("cc:START01").unwrap();
+        let blocks = crate::description::for_question(&question).unwrap();
+        let rendered = format!("{blocks:?}");
+        assert!(rendered.contains("Example 2") && rendered.contains("15") && rendered.contains("The input is 123"));
+    }
     #[test]
     fn identities_reject_untrusted_hosts_and_paths() {
         for url in ["https://www.codechef.com/problems/START01", "https://www.codechef.com/JAN24/problems/START01", "https://www.codechef.com/practice/course/basic/problems/START01"] {

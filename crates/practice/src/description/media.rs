@@ -5,8 +5,10 @@ use regex::{Captures, Regex};
 use std::sync::LazyLock;
 use url::Url;
 
+static EMBED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?is)<(?:iframe|video|audio|object)\b[^>]*>.*?</(?:iframe|video|audio|object)>|<embed\b[^>]*>").unwrap());
+static MARKDOWN_LINK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(!?\[[^\]]*\]\()([^\s)]+)(\))").unwrap());
 static SVG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?is)<svg\b[^>]*>.*?</svg>").unwrap());
-static IMAGE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?is)<img\b[^>]*>").unwrap());
+static RESOURCE_TAG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?is)<(?:img|a)\b[^>]*>").unwrap());
 
 pub fn base_url(slug: &str) -> String {
     if slug.starts_with("cf:") { crate::codeforces::problem_url(slug).unwrap_or_else(|_| "https://codeforces.com/".into()) }
@@ -16,31 +18,54 @@ pub fn base_url(slug: &str) -> String {
 
 /// Keep the HTML intact while making lazy and relative image sources usable outside a browser.
 pub fn normalize(html: &str, base: &str) -> String {
-    let html = SVG.replace_all(html, |capture: &Captures<'_>| {
+    let html = EMBED.replace_all(html, |capture: &Captures<'_>| {
+        let fragment = scraper::Html::parse_fragment(&capture[0]);
+        let selector = scraper::Selector::parse("iframe,video,audio,object,embed").expect("static embed selector");
+        let Some(element) = fragment.select(&selector).next() else { return capture[0].to_owned(); };
+        let attrs = element.value();
+        let sources = scraper::Selector::parse("source[src]").expect("static media source selector");
+        let source = attrs.attr("src").or_else(|| attrs.attr("data")).or_else(|| element.select(&sources).next().and_then(|source| source.value().attr("src")));
+        let Some(source) = source.and_then(|source| Url::parse(base).ok()?.join(source).ok()).filter(|url| matches!(url.scheme(), "https" | "http")) else { return capture[0].to_owned(); };
+        let label = attrs.attr("title").unwrap_or(match attrs.name() { "video" => "Video", "audio" => "Audio", _ => "Embedded content" });
+        if attrs.attr("type").is_some_and(|kind| kind.starts_with("image/")) {
+            return format!("<img src=\"{}\" alt=\"{}\">", html_escape::encode_double_quoted_attribute(source.as_str()), html_escape::encode_double_quoted_attribute(label));
+        }
+        let poster = attrs.attr("poster").map(|poster| format!("<img src=\"{}\" alt=\"{}\">", html_escape::encode_double_quoted_attribute(poster), html_escape::encode_double_quoted_attribute(label))).unwrap_or_default();
+        format!("{poster}<p><a href=\"{}\">{}</a></p>", html_escape::encode_double_quoted_attribute(source.as_str()), html_escape::encode_text(label))
+    });
+    let html = SVG.replace_all(&html, |capture: &Captures<'_>| {
         let encoded: String = url::form_urlencoded::byte_serialize(capture[0].as_bytes()).collect();
         format!("<img src=\"data:image/svg+xml,{}\" alt=\"Diagram\">", encoded.replace('+', "%20"))
     });
-    IMAGE.replace_all(&html, |capture: &Captures<'_>| {
+    RESOURCE_TAG.replace_all(&html, |capture: &Captures<'_>| {
         let fragment = scraper::Html::parse_fragment(&capture[0]);
-        let selector = scraper::Selector::parse("img").expect("static image selector");
+        let selector = scraper::Selector::parse("img,a").expect("static resource selector");
         let Some(image) = fragment.select(&selector).next() else { return capture[0].to_owned(); };
         let attrs = image.value();
         let from_set = |set: &str| set.split(',').next_back().and_then(|item| item.split_whitespace().next()).map(str::to_owned);
-        let source = ["data-src", "data-original", "data-lazy-src"].into_iter()
+        let key = if attrs.name() == "a" { "href" } else { "src" };
+        let source = if key == "href" { attrs.attr(key).map(str::to_owned) } else { ["data-src", "data-original", "data-lazy-src"].into_iter()
             .filter_map(|key| attrs.attr(key)).find(|value| !value.trim().is_empty()).map(str::to_owned)
             .or_else(|| attrs.attr("data-srcset").and_then(from_set))
             .or_else(|| attrs.attr("src").filter(|value| !value.trim().is_empty()).map(str::to_owned))
-            .or_else(|| attrs.attr("srcset").and_then(from_set));
+            .or_else(|| attrs.attr("srcset").and_then(from_set)) };
         let Some(source) = source else { return capture[0].to_owned(); };
         let source = Url::parse(base).ok().and_then(|base| base.join(source.trim()).ok())
-            .filter(|url| matches!(url.scheme(), "https" | "http" | "data"))
+            .filter(|url| matches!(url.scheme(), "https" | "http" | "data") || (key == "href" && url.scheme() == "mailto"))
             .map(|url| url.to_string()).unwrap_or_else(|| source.to_owned());
-        let mut tag = String::from("<img");
-        for (key, value) in attrs.attrs().filter(|(key, _)| *key != "src") {
-            tag.push_str(&format!(" {key}=\"{}\"", html_escape::encode_double_quoted_attribute(value)));
+        let mut tag = format!("<{}", attrs.name());
+        for (attribute, value) in attrs.attrs().filter(|(attribute, _)| *attribute != key) {
+            tag.push_str(&format!(" {attribute}=\"{}\"", html_escape::encode_double_quoted_attribute(value)));
         }
-        tag.push_str(&format!(" src=\"{}\">", html_escape::encode_double_quoted_attribute(&source)));
+        tag.push_str(&format!(" {key}=\"{}\">", html_escape::encode_double_quoted_attribute(&source)));
         tag
+    }).into_owned()
+}
+
+pub fn normalize_markdown(markdown: &str, base: &str) -> String {
+    MARKDOWN_LINK.replace_all(markdown, |capture: &Captures<'_>| {
+        Url::parse(base).ok().and_then(|base| base.join(&capture[2]).ok())
+            .map_or_else(|| capture[0].to_owned(), |url| format!("{}{}{}", &capture[1], url, &capture[3]))
     }).into_owned()
 }
 
@@ -87,6 +112,12 @@ mod tests {
         assert!(normalize("<img src='blank.gif' data-srcset='small.png 1x, large.png 2x'>", "https://www.codechef.com/").contains("src=\"https://www.codechef.com/large.png\""));
         assert!(normalize("<svg width='20'><rect width='20'/></svg>", "https://codeforces.com/").contains("data:image/svg+xml,"));
         assert!(normalize("<img srcset='small.png 1x, large.png 2x'>", "https://www.codechef.com/").contains("https://www.codechef.com/large.png"));
+    }
+    #[test]
+    fn embedded_media_remains_available_as_links_and_posters() {
+        let html = normalize("<video poster='/preview.png'><source src='/animation.mp4'></video><iframe src='/interactive' title='Interactive diagram'></iframe><audio src='/explanation.ogg'></audio>", "https://www.codechef.com/problems/EXAMPLE");
+        for token in ["https://www.codechef.com/preview.png", "https://www.codechef.com/animation.mp4", "https://www.codechef.com/interactive", "Interactive diagram", "https://www.codechef.com/explanation.ogg"] { assert!(html.contains(token), "Dropped {token}: {html}"); }
+        assert!(!html.contains("<video") && !html.contains("<iframe"));
     }
     #[test]
     fn download_cache_reopens_offline_and_rejects_failures() {

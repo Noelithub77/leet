@@ -697,6 +697,7 @@ impl Workspace {
     pub(crate) fn load_problem(&mut self, slug: String, window: &mut Window, cx: &mut Context<Self>) {
         let Some(session) = &self.session else { return; };
         let language = session.language;
+        let source = session.source;
         let (db, client) = (self.db.clone(), self.client.clone());
         let workspace = self.config.workspace.clone();
         let template = self.starting_snippet(language,cx);
@@ -704,7 +705,7 @@ impl Workspace {
             let fetch_slug = slug.clone();
             let loaded = cx
                 .background_spawn(async move {
-                    load_question(&db, &client, &workspace, &fetch_slug, language, template.as_deref())
+                    load_question(&db, &client, &workspace, &fetch_slug, language, source, template.as_deref())
                 })
                 .await;
             let _ = this.update_in(cx, |this, window, cx| {
@@ -728,6 +729,7 @@ impl Workspace {
         self.assist.update(cx, |assist, cx| assist.stop_solves(cx));
         let slug = session.slug.clone();
         let previous = session.language;
+        let source = session.source;
         let tab = self.active_tab;
         let editor = self.editor.clone();
         self.save_now(cx);
@@ -741,7 +743,7 @@ impl Workspace {
         cx.notify();
         cx.spawn_in(window, async move |this, cx| {
             let fetch_slug = slug.clone();
-            let loaded = cx.background_spawn(async move { load_question(&db, &client, &directory, &fetch_slug, language, template.as_deref()) }).await;
+            let loaded = cx.background_spawn(async move { load_question(&db, &client, &directory, &fetch_slug, language, source, template.as_deref()) }).await;
             let _ = this.update_in(cx, |this, window, cx| {
                 this.language_picker.loading = false;
                 if this.active_tab != tab || this.editor != editor || !this.session.as_ref().is_some_and(|session| session.slug == slug && session.language == previous && !session.running && !matches!(session.judge, Some(Judge::Running { .. }))) { cx.notify(); return; }
@@ -841,7 +843,7 @@ impl Workspace {
         let path = ws::ensure_solution(&self.config.workspace, &rel, starter)?;
         let code = std::fs::read_to_string(&path)?;
         let mtime = std::fs::metadata(&path).and_then(|meta| meta.modified()).ok();
-        let statement = practice::description::parse(&practice::description::media::normalize(&q.content, &practice::description::media::base_url(&q.slug)));
+        let statement = practice::description::for_question(&q)?;
         let saved_cases = self.db.test_cases(&q.slug)?;
         self.apply_loaded(Loaded { q, rel, path, code, mtime, custom: vec![], saved_cases,
             history: vec![], statement, hints: vec![] }, window, cx);
@@ -1227,7 +1229,7 @@ impl Workspace {
     }
 }
 
-fn load_question(db: &Db, client: &Client, workspace: &std::path::Path, slug: &str, language: Language, template: Option<&str>) -> anyhow::Result<Loaded> {
+fn load_question(db: &Db, client: &Client, workspace: &std::path::Path, slug: &str, language: Language, source: Source, template: Option<&str>) -> anyhow::Result<Loaded> {
     let mut q = match db.question(slug)? {
         Some(q) => q,
         None => {
@@ -1236,7 +1238,7 @@ fn load_question(db: &Db, client: &Client, workspace: &std::path::Path, slug: &s
             q
         }
     };
-    if q.meta["statementSource"] == "competitive-companion" || q.meta["statementSource"] == "open-r1/codeforces" || q.meta["statementMarkdown"].as_bool() == Some(true) {
+    if (slug.starts_with("cc:") && q.meta["statementVersion"] != 2) || q.meta["statementSource"] == "competitive-companion" || q.meta["statementSource"] == "open-r1/codeforces" || q.meta["statementMarkdown"].as_bool() == Some(true) {
         let full = if slug.starts_with("cf:") { practice::codeforces::question(slug) } else if slug.starts_with("cc:") { practice::codechef::question(slug) } else { client.question(slug) };
         match full {
             Ok(full) => { db.save_question(&full)?; q = full; }
@@ -1246,6 +1248,17 @@ fn load_question(db: &Db, client: &Client, workspace: &std::path::Path, slug: &s
     if q.starter(language).is_none() {
         q = if slug.starts_with("cf:") { practice::codeforces::question(slug)? } else if slug.starts_with("cc:") { practice::codechef::question(slug)? } else { client.question(slug)? };
         db.save_question(&q)?;
+    }
+    if source == Source::NeetCode && roadmap::entry(slug).is_some() {
+        match practice::neetcode::statement::get(db, slug) {
+            Ok(statement) => {
+                q.content = statement.html; q.title = statement.title;
+                q.hints = statement.hints; q.topics = statement.topics;
+                q.meta["statementMarkdown"] = serde_json::json!(false);
+                q.meta["statementProvider"] = serde_json::json!("neetcode");
+            }
+            Err(error) => q.meta["statementFetchError"] = serde_json::json!(format!("NeetCode description: {error}")),
+        }
     }
     let frontend_id = q.frontend_id.parse().unwrap_or(0);
     let rel = ws::solution_rel(frontend_id, &q.slug, language);
@@ -1262,8 +1275,8 @@ fn load_question(db: &Db, client: &Client, workspace: &std::path::Path, slug: &s
     let custom = db.custom_tests(&q.slug)?;
     let saved_cases = db.test_cases(&q.slug)?;
     let history = crate::history::local_versions(workspace, q.frontend_id.parse().unwrap_or(0), &q.slug);
-    let statement = if q.meta["statementMarkdown"].as_bool() == Some(true) { vec![practice::description::Block::Markdown(q.content.clone())] } else { practice::description::parse(&practice::description::media::normalize(&q.content, &practice::description::media::base_url(&q.slug))) };
-    let hints: Vec<String> = q.hints.iter().map(|h| prompts::statement_markdown(h)).collect();
+    let statement = practice::description::for_question(&q)?;
+    let hints: Vec<String> = q.hints.iter().map(|h| prompts::statement_markdown(&practice::description::media::normalize(h, if source == Source::NeetCode { "https://neetcode.io/" } else { "https://leetcode.com/" }))).collect();
     anyhow::Ok(Loaded { q, rel, path, code, mtime, custom, saved_cases, history, statement, hints })
 }
 

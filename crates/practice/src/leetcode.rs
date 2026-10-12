@@ -429,6 +429,23 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore = "fetches a public LeetCode question without account credentials"]
+    fn live_public_statement() {
+        let question = Client::new(None).question("trapping-rain-water").unwrap();
+        assert!(question.content.contains("rainwatertrap.png"));
+        let rendered = format!("{:?}", crate::description::for_question(&question).unwrap());
+        assert!(rendered.contains("rainwatertrap.png") && rendered.contains("height"));
+    }
+    #[test]
+    fn full_question_payload_keeps_html_and_supplementary_fields() {
+        let html = "<p>Full description.</p><img src='/diagram.png'><table><tr><th>Value</th><td>2</td></tr></table><p><strong>Example 1:</strong></p><pre>Input: nums = [2]\nOutput: 2</pre><p>Constraints:</p><ul><li>n &gt; 0</li></ul><h3>Follow-up</h3><p>Use constant space.</p>";
+        let value = json!({"questionId":"1","questionFrontendId":"1","title":"Full","titleSlug":"full","content":html,"metaData":"{}","exampleTestcaseList":["[2]"],"hints":["<p>Hint with <img src='/hint.png'></p>"],"topicTags":[{"name":"Array"}],"codeSnippets":[{"langSlug":"python3","code":"class Solution: pass"}]});
+        let question = Client::parse_question(&value, "full").unwrap();
+        assert_eq!(question.content, html); assert_eq!(question.topics, ["Array"]); assert!(question.hints[0].contains("hint.png"));
+        let rendered = format!("{:?}", crate::description::for_question(&question).unwrap());
+        for token in ["Full description", "https://leetcode.com/diagram.png", "Value", "Constraints", "n > 0", "Follow-up", "Use constant space"] { assert!(rendered.contains(token), "Dropped {token}: {rendered}"); }
+    }
+    #[test]
     fn parses_pre_and_block_example_outputs() {
         let pre = "<pre>\n<strong>Input:</strong> nums = [2,7]\n<strong>Output:</strong> [0,1]\n<strong>Explanation:</strong> x</pre>";
         assert_eq!(example_outputs(pre), vec!["[0,1]"]);

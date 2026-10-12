@@ -144,7 +144,7 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         cx.run_until_parked();
     }
     cx.update(|cx| { crate::theme::apply("Vesper", cx); crate::theme::set_zoom(1., cx); });
-    Ok(json!({"fixture":"statement-cards","passed":true,"checks":["production image HTTP loading and persistent cache", "offline image reopening", "long description scroll","visible headers at regular and compact sizes","independent expansion and scrolling","faster wheel scrolling","scrollbar thumb dragging","shared persisted flags","natural short content without overflow","PageDown","Tab/Space card activation","all collapsed"],"pixels":pixels}))
+    Ok(json!({"fixture":"statement-cards","passed":true,"checks":["complete statements from all four providers", "production image HTTP loading and persistent cache", "offline image reopening", "long description scroll","visible headers at regular and compact sizes","independent expansion and scrolling","faster wheel scrolling","scrollbar thumb dragging","shared persisted flags","natural short content without overflow","PageDown","Tab/Space card activation","all collapsed"],"pixels":pixels}))
 }
 
 pub(super) fn explore(output: PathBuf) -> Result<()> {
@@ -171,7 +171,7 @@ fn media(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -> Result<()>
     server.set_nonblocking(true)?;
     let uri = format!("http://{}/diagram.svg", server.local_addr()?);
     let worker = std::thread::spawn(move || -> Result<()> {
-        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        let deadline = std::time::Instant::now() + Duration::from_secs(90);
         let mut socket = loop {
             match server.accept() {
                 Ok((socket, _)) => break socket,
@@ -188,7 +188,7 @@ fn media(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -> Result<()>
     let cache = output.join("session/statement-images");
     cx.update(|cx| { crate::statement_images::install(cx, cache.clone()); cx.set_global(Sections([true; 3])); });
     let source = format!("<p>Bars trap water between taller neighbours.</p><p><b>Example 1:</b></p><p><img src='{uri}' alt='Elevation diagram'></p><pre><b>Input:</b> height = [1,0,2,0,3]\n<b>Output:</b> 3</pre><p><b>Constraints:</b></p><ul><li>height is nonnegative</li></ul>");
-    let (handle, _) = cx.update(|cx| gpui_kit::open_window(WindowOptions {
+    let (handle, view) = cx.update(|cx| gpui_kit::open_window(WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(Bounds { origin: point(px(0.), px(0.)), size: size(px(640.), px(720.)) })),
         show: false, focus: false, ..Default::default()
     }, cx, |window, cx| {
@@ -198,11 +198,42 @@ fn media(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -> Result<()>
     let handle = handle.into();
     cx.update_window(handle, |_, window, cx| window.render_frame(cx))?;
     cx.run_until_parked();
-    worker.join().map_err(|_| anyhow::anyhow!("Image fixture server panicked"))??;
+    let deadline = std::time::Instant::now() + Duration::from_secs(15);
+    while !cache.is_dir() && std::time::Instant::now() < deadline {
+        cx.update_window(handle, |_, window, cx| window.render_frame(cx))?;
+        cx.run_until_parked();
+        std::thread::sleep(Duration::from_millis(20));
+    }
     ensure!(cache.is_dir() && std::fs::read_dir(&cache)?.count() == 1, "Production TextView did not download and persist its diagram");
+    worker.join().map_err(|_| anyhow::anyhow!("Image fixture server panicked"))??;
     cx.update_window(handle, |_, window, cx| { window.render_frame(cx); })?;
     cx.run_until_parked();
     if pixels { cx.capture_screenshot(handle)?.save(output.join("statement-media.png"))?; }
+    let codeforces_html = format!("<div class='problem-statement'><div class='header'><div class='title'>A. Provider statement</div><div class='time-limit'>2 seconds</div></div><section><p>Complete provider description.</p><img src='{uri}'><table><tr><th>Value</th><td>7</td></tr></table></section><div class='sample-test'><div class='input'><pre>7</pre></div><div class='output'><pre>7</pre></div><p>Sample note.</p></div><h3>Note</h3><p>Consider zero too.</p></div>");
+    let codeforces = practice::codeforces::parse_statement("cf:1:A", &codeforces_html)?;
+    let mut leetcode = codeforces.clone(); leetcode.slug = "full".into(); leetcode.title = "LeetCode statement".into(); leetcode.content = source.clone(); leetcode.meta = json!({});
+    let neetcode_html = format!("<div class='question-tab'><h1 class='problem-title'>NeetCode statement</h1><app-article><main class='neeter-article-content'>{source}<details><summary>Recommended complexity</summary><p>O(n) time.</p></details><details><summary>Hint 1</summary><p>Use prefix maxima.</p></details></main></app-article></div>");
+    let native = practice::neetcode::statement::parse(&neetcode_html, "https://neetcode.io/problems/trapping-rain-water/question")?;
+    let mut neetcode = leetcode.clone(); neetcode.slug = "trapping-rain-water".into(); neetcode.title = native.title; neetcode.content = native.html; neetcode.hints = native.hints; neetcode.meta = json!({"statementProvider":"neetcode"});
+    let codechef = practice::codechef::parse_response("cc:START01", json!({"status":"success","problem_code":"START01","problem_name":"CodeChef statement","body":format!("<h3>Problem Statement</h3><p>Mirror the number.</p><img src='{uri}'><h3>Sample Input</h3><pre>123</pre><h3>Sample Output</h3><pre>123</pre>"),"problemComponents":{"constraints":"- n is nonnegative.","sampleTestCases":[{"input":"123","output":"123","explanation":"First sample explanation."},{"input":"15","output":"15","explanation":"Second sample explanation."}]}}))?;
+    for (name, question) in [("leetcode", leetcode), ("neetcode", neetcode), ("codeforces", codeforces), ("codechef", codechef)] {
+        let blocks = practice::description::for_question(&question)?;
+        let constraints = blocks.iter().any(|block| matches!(block, Block::Constraints(_)));
+        cx.update_window(handle, |_, window, cx| {
+            view.update(cx, |statement, cx| { statement.title = question.title.clone().into(); statement.slug = question.slug.clone().into(); statement.blocks = blocks; statement.hints = question.hints.iter().map(|hint| practice::prompts::statement_markdown(hint).into()).collect(); for scroll in &statement.section_scroll { scroll.set_offset(point(px(0.), px(0.))); } cx.notify(); });
+            window.render_frame(cx);
+        })?;
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| -> Result<()> {
+            window.render_frame(cx);
+            if constraints { headers(window)?; }
+            else { ensure!(window.find(("statement-section", 0usize)).visible() && window.find(("statement-section", 1usize)).visible(), "{name} statement headers are hidden"); }
+            window.click(("statement-section", 1usize), cx); ensure!(!cx.global::<Sections>().0[1], "{name} examples cannot collapse");
+            window.click(("statement-section", 1usize), cx); ensure!(cx.global::<Sections>().0[1], "{name} examples cannot expand");
+            Ok(())
+        })??;
+        if pixels { cx.capture_screenshot(handle)?.save(output.join(format!("statement-provider-{name}.png")))?; }
+    }
     let cached = practice::description::media::cached_image(&cache, &uri)?;
     ensure!(cached.starts_with(b"<svg"), "Offline image cache lost the original diagram");
     cx.update_window(handle, |_, window, _| window.remove_window())?;

@@ -12,6 +12,7 @@ use crate::creds::{self, Account, Creds};
 
 const KEY: &str = "AIzaSyD4emZpWF1MIsu6Z8O6yaMMcPxJ2Z38L8g";
 pub const EXPORT_SCRIPT: &str = include_str!("../assets/neetcode-export.js");
+pub mod statement;
 pub type Progress = BTreeMap<String, Vec<String>>;
 
 pub struct Client {
