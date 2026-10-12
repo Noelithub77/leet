@@ -22,6 +22,7 @@ fn snapshot(slug: &str, language: Language) -> Snapshot {
 fn init(cx: &mut App) {
     gpui_kit::init(cx);
     crate::theme::init("Vesper", 1., "Liberation Sans", cx);
+    crate::note_card::install(cx);
     crate::debug_view::bind_keys(cx);
 }
 

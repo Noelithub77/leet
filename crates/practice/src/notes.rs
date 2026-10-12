@@ -10,7 +10,7 @@ const TEXT_LIMIT: usize = 160;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum View {
-    /// Notes styled and their code highlighted.
+    /// `#!` lines hidden, their code highlighted, details on hover.
     #[default]
     Rich,
     /// Plain comments.
@@ -23,9 +23,15 @@ impl View {
     pub const ALL: [Self; 3] = [Self::Rich, Self::Raw, Self::Off];
     pub fn label(self) -> &'static str { match self { Self::Rich => "Rich", Self::Raw => "Raw", Self::Off => "Off" } }
     pub fn next(self) -> Self { match self { Self::Rich => Self::Raw, Self::Raw => Self::Off, Self::Off => Self::Rich } }
+
+    /// Whether this view leaves a line out of the editor.
+    pub fn hides(self, line: &str) -> bool {
+        match self { Self::Rich => is_ai_line(line), Self::Raw => false, Self::Off => is_note_line(line) }
+    }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Kind {
     Bug,
     Risk,
@@ -87,6 +93,14 @@ pub fn is_note_line(line: &str) -> bool {
     let line = line.trim_start();
     let rest = line.strip_prefix('#').or_else(|| line.strip_prefix("//"));
     rest.is_some_and(|rest| (rest.starts_with('!') && !rest.starts_with("!/")) || rest.starts_with('?'))
+}
+
+/// Whether a line is a `#!` note from the AI.
+pub fn is_ai_line(line: &str) -> bool { is_note_line(line) && !is_question_line(line) }
+
+fn is_question_line(line: &str) -> bool {
+    let line = line.trim_start();
+    line.strip_prefix('#').or_else(|| line.strip_prefix("//")).is_some_and(|rest| rest.starts_with('?'))
 }
 
 /// Byte ranges of each line, without the `\n`.
@@ -157,20 +171,20 @@ fn tagged(body: &str) -> (Kind, Option<(u32, u32)>, usize) {
     (kind, step, body.len() - after_colon.len())
 }
 
-/// The code without `#!` and `#?` lines, for the judge and the Off view.
-pub fn strip(code: &str) -> String { hide(code).0 }
+/// The code without `#!` and `#?` lines, for the judge.
+pub fn strip(code: &str) -> String { hide(code, View::Off).0 }
 
-/// The `#!` and `#?` lines removed from a view, each kept before the view line it preceded.
+/// The note lines removed from a view, each kept before the view line it preceded.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Hidden {
     lines: Vec<(usize, String)>,
 }
 
-pub fn hide(code: &str) -> (String, Hidden) {
+pub fn hide(code: &str, shown: View) -> (String, Hidden) {
     let mut view = Vec::new();
     let mut hidden = Hidden::default();
     for (index, line) in code.split('\n').enumerate() {
-        if is_note_line(line) && !(index == 0 && line.trim_start().starts_with("#!/")) { hidden.lines.push((view.len(), line.to_owned())); } else { view.push(line); }
+        if shown.hides(line) && !(index == 0 && line.trim_start().starts_with("#!/")) { hidden.lines.push((view.len(), line.to_owned())); } else { view.push(line); }
     }
     (view.join("\n"), hidden)
 }
@@ -400,7 +414,10 @@ mod tests {
 
     #[test]
     fn hide_and_restore_round_trip_with_edits() {
-        let (view, mut hidden) = hide(CODE);
+        let (rich, _) = hide(CODE, View::Rich);
+        assert!(!rich.contains("#!") && rich.contains("#? why") && rich.contains("# hi is exclusive"));
+        assert_eq!(hide(CODE, View::Raw).0, CODE);
+        let (view, mut hidden) = hide(CODE, View::Off);
         assert!(!view.contains("#!") && !view.contains("#?") && view.contains("# hi is exclusive"));
         assert_eq!(hidden.restore(&view), CODE);
         assert_eq!(strip(CODE), view);
@@ -425,7 +442,7 @@ mod tests {
     #[test]
     fn trailing_note_without_newline_restores() {
         let code = "x = 1\n#! hint: done";
-        let (view, hidden) = hide(code);
+        let (view, hidden) = hide(code, View::Off);
         assert_eq!(view, "x = 1");
         assert_eq!(hidden.restore(&view), code);
     }

@@ -3,11 +3,13 @@
 
 - Revert accepted Copilot suggestions with Alt+K.
 - Distinguish Copilot suggestions with faint syntax colors.
-- Write AI findings as `#!` notes above the code they mention, with highlights and hover details.
+- Save AI findings as `#!` comments; Rich hides them and highlights the code, with details on hover.
+- Show note hovers as cards with a kind chip, step bar, labelled detail, and shortcut keys.
+- Resolve notes with Alt+Shift+R and ask about a line with Alt+Q.
 - Ask the AI in place with `#?` questions; answers appear below them.
-- Switch notes between Rich, Raw, and Off; Off hides notes from view and copies.
+- Switch notes between Rich, Raw, and Off; hidden notes stay out of copies.
 - Step through I'm stuck reasoning trails with Alt+] and Alt+[.
-- Show complexity costs and last debugger values at line ends.
+- Show complexity costs and last debugger values in line hovers.
 - Preview and flash cited lines from chat line links, even after edits.
 - Leave AI notes and questions out of judge submissions.
 

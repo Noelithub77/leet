@@ -522,7 +522,7 @@ impl Debugger {
     }
 }
 
-/// A short value for a line-end badge; containers are left to the debugger.
+/// A short value for a line hover; containers are left to the debugger.
 fn scalar(value: &debugger::Value, language: Language) -> Option<String> {
     let python = language == Language::Python;
     let text = match value {

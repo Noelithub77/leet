@@ -4,11 +4,11 @@ use std::{cell::{Cell, RefCell}, ops::Range, rc::Rc, time::Duration};
 use anyhow::Result;
 use gpui_kit::*;
 use gpui_kit::component::{ActiveTheme as _, Theme};
-use gpui_kit::base::input::LineEndHint;
 use gpui_kit::component::input::{CodeActionProvider, EditorState, HoverProvider, Position, RangeDecoration, RangeDecorationCollection,
-    RangeDecorationStyle, Rope, RopeExt as _, TextDecoration, TextDecorationCollection};
+    RangeDecorationStyle, Rope, RopeExt as _};
 use practice::{language::Language, notes::{self, Hidden, Kind, Note, View}};
 use crate::actions::{AddQuestion, AskInPlace, ClearAiNotes, ResolveNote};
+use crate::note_card::{Card, Item, Key};
 use crate::snippets::expansion::EditorPane;
 use crate::workspace::Workspace;
 
@@ -21,11 +21,10 @@ pub(crate) type Detail = Rc<dyn Fn(&str, &App) -> Option<String>>;
 
 pub(crate) struct Notes {
     view: View,
-    /// Note lines removed from the editor in the Off view.
+    /// Note lines the view leaves out of the editor.
     hidden: Hidden,
     /// The editor text the hidden lines were last placed against.
     shown: String,
-    styles: Option<TextDecorationCollection>,
     marks: Option<RangeDecorationCollection>,
     flash: Option<RangeDecorationCollection>,
     flash_task: Task<()>,
@@ -36,7 +35,7 @@ pub(crate) struct Notes {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BadgeKind { Cost, Trace }
 
-/// A line-end label tied to a line of earlier code, found again after edits.
+/// A hover detail tied to a line of earlier code, found again after edits.
 struct Badge {
     kind: BadgeKind,
     seen: Rc<str>,
@@ -46,54 +45,100 @@ struct Badge {
     text: SharedString,
 }
 
+/// A note with the editor lines it shows on.
+#[derive(Clone)]
+struct Placed {
+    note: Note,
+    /// Editor line of the comment; `None` while the view hides it.
+    line: Option<usize>,
+    /// Editor line of the code the note is about.
+    target: Option<usize>,
+}
+
 impl Notes {
     pub(crate) fn new(view: View, language: Language) -> Self {
-        let provider = Rc::new(Provider { view: Cell::new(view), language: Cell::new(language), ai: Cell::new(false), detail: RefCell::new(None), upstream: RefCell::new(None) });
-        Self { view, hidden: Hidden::default(), shown: String::new(), styles: None, marks: None, flash: None, flash_task: Task::ready(()), badges: Vec::new(), provider }
+        let provider = Rc::new(Provider { view: Cell::new(view), language: Cell::new(language), ai: Cell::new(false), placed: RefCell::default(), badges: RefCell::default(), detail: RefCell::new(None), upstream: RefCell::new(None) });
+        Self { view, hidden: Hidden::default(), shown: String::new(), marks: None, flash: None, flash_task: Task::ready(()), badges: Vec::new(), provider }
     }
 }
 
-/// Hovers and code actions for notes. Hovers elsewhere go to the language server.
+/// Hovers and code actions for notes, merged with the language server's hover.
 pub(crate) struct Provider {
     view: Cell<View>,
     language: Cell<Language>,
     /// The file has AI notes, including hidden ones.
     ai: Cell<bool>,
+    placed: RefCell<Vec<Placed>>,
+    /// Cost and debugger values by editor line, shown in Rich.
+    badges: RefCell<Vec<(usize, BadgeKind, SharedString)>>,
     pub(crate) detail: RefCell<Option<Detail>>,
     upstream: RefCell<Option<Rc<dyn HoverProvider>>>,
 }
 
 impl HoverProvider for Provider {
     fn hover(&self, text: &Rope, offset: usize, window: &mut Window, cx: &mut App) -> Task<Result<Option<lsp_types::Hover>>> {
-        if self.view.get() == View::Rich {
-            let code = text.to_string();
-            let found = notes::parse(&code, self.language.get()).into_iter().filter(|note| note.kind != Kind::Comment).find_map(|note| {
-                if let Some(anchor) = note.anchor.clone().filter(|anchor| anchor.contains(&offset)) { return Some((anchor, note)); }
-                note.comment.contains(&offset).then(|| (note.comment.clone(), note))
-            });
-            if let Some((range, note)) = found {
-                let detail = self.detail.borrow().as_ref().and_then(|detail| detail(&note.text, cx));
-                let value = hover_text(&note, detail.as_deref());
-                let range = lsp_types::Range { start: text.offset_to_position(range.start), end: text.offset_to_position(range.end) };
-                let contents = lsp_types::HoverContents::Markup(lsp_types::MarkupContent { kind: lsp_types::MarkupKind::Markdown, value });
-                return Task::ready(Ok(Some(lsp_types::Hover { contents, range: Some(range) })));
-            }
-        }
-        let upstream = self.upstream.borrow().clone();
-        match upstream { Some(upstream) => upstream.hover(text, offset, window, cx), None => Task::ready(Ok(None)) }
+        let upstream = self.upstream.borrow().clone().map(|upstream| upstream.hover(text, offset, window, cx));
+        let code = text.to_string();
+        let line = line_of(&code, offset);
+        let own = (self.view.get() == View::Rich).then(|| code_range(&code, line)).flatten()
+            .filter(|range| range.start <= offset && offset <= range.end)
+            .and_then(|range| Some((range, self.line_details(line, cx)?)));
+        let Some((range, value)) = own else { return upstream.unwrap_or_else(|| Task::ready(Ok(None))) };
+        let range = lsp_types::Range { start: text.offset_to_position(range.start), end: text.offset_to_position(range.end) };
+        let hover = move |value: String, range| lsp_types::Hover { contents: lsp_types::HoverContents::Markup(lsp_types::MarkupContent { kind: lsp_types::MarkupKind::Markdown, value }), range: Some(range) };
+        let Some(upstream) = upstream else { return Task::ready(Ok(Some(hover(value, range)))) };
+        cx.spawn(async move |_| {
+            let Some(found) = upstream.await.ok().flatten() else { return Ok(Some(hover(value, range))) };
+            Ok(Some(hover(format!("{value}\n\n---\n\n{}", markdown(&found.contents)), found.range.unwrap_or(range))))
+        })
     }
 }
 
-fn hover_text(note: &Note, detail: Option<&str>) -> String {
-    let title = match (note.kind, note.step) {
-        (Kind::Ask, _) => return "**Your question** · alt+enter asks the AI".into(),
-        (Kind::Stuck, Some((step, of))) => format!("Stuck · step {step} of {of}"),
-        (kind, _) => { let tag = kind.tag(); format!("{}{}", tag[..1].to_uppercase(), &tag[1..]) }
+impl Provider {
+    /// The hover card for an editor line: its notes, a question's answers, and its values.
+    fn line_details(&self, line: usize, cx: &App) -> Option<String> {
+        let placed = self.placed.borrow();
+        let detail = self.detail.borrow();
+        let item = |note: &Note| card_item(note, detail.as_ref().and_then(|detail| detail(&note.text, cx)));
+        let mut card = Card::default();
+        match placed.iter().find(|placed| placed.line == Some(line) && placed.note.kind == Kind::Ask) {
+            Some(question) => {
+                card.items = placed.iter().filter(|placed| placed.note.kind == Kind::Answer && placed.target == question.target).map(|placed| item(&placed.note)).collect();
+                if card.items.is_empty() { card.items.push(Item { kind: Kind::Ask, step: None, summary: question.note.text.clone(), detail: String::new(), outdated: false }); }
+                if !question.note.text.is_empty() { card.keys.push(Key::Ask); }
+            }
+            None => {
+                card.items = placed.iter().filter(|placed| placed.note.kind.ai() && placed.target == Some(line) && placed.line.is_none()).map(|placed| item(&placed.note)).collect();
+                if !card.items.is_empty() { card.keys.push(Key::Resolve); }
+                if card.items.iter().any(|item| item.step.is_some()) { card.keys.push(Key::NextStep); }
+            }
+        }
+        card.facts = self.badges.borrow().iter().filter(|(at, ..)| *at == line).map(|(_, kind, text)| (match kind {
+            BadgeKind::Cost => "Cost", BadgeKind::Trace => "Last values",
+        }.to_owned(), text.to_string())).collect();
+        if card.items.is_empty() && card.facts.is_empty() { return None; }
+        if !card.keys.contains(&Key::Ask) { card.keys.push(Key::Question); }
+        Some(card.markdown())
+    }
+}
+
+fn markdown(contents: &lsp_types::HoverContents) -> String {
+    use lsp_types::{HoverContents, MarkedString};
+    let marked = |item: &MarkedString| match item {
+        MarkedString::String(text) => text.clone(),
+        MarkedString::LanguageString(code) => format!("```{}\n{}\n```", code.language, code.value),
     };
-    let mut text = format!("**{title}** · {}", note.text);
-    if let Some(detail) = detail.filter(|detail| !detail.trim().is_empty()) { text.push_str("\n\n"); text.push_str(detail); }
-    if note.outdated() { text.push_str("\n\n_The quoted code has changed._"); }
-    text
+    match contents {
+        HoverContents::Scalar(item) => marked(item),
+        HoverContents::Array(items) => items.iter().map(marked).collect::<Vec<_>>().join("\n\n"),
+        HoverContents::Markup(markup) => markup.value.clone(),
+    }
+}
+
+fn card_item(note: &Note, detail: Option<String>) -> Item {
+    // The highlight already shows the quoted code.
+    let summary = note.snippet.as_ref().and_then(|snippet| note.text.strip_suffix(&format!(" (`{snippet}`)"))).unwrap_or(&note.text);
+    Item { kind: note.kind, step: note.step, summary: summary.to_owned(), detail: detail.unwrap_or_default(), outdated: note.outdated() }
 }
 
 const ACTIONS: &str = "notes";
@@ -102,15 +147,18 @@ impl CodeActionProvider for Provider {
     fn id(&self) -> SharedString { ACTIONS.into() }
     fn code_actions(&self, editor: Entity<EditorState>, range: Range<usize>, _: &mut Window, cx: &mut App) -> Task<Result<Vec<lsp_types::CodeAction>>> {
         let text = editor.read(cx).value().to_string();
-        let line = text[..range.start.min(text.len())].matches('\n').count();
-        let parsed = notes::parse(&text, self.language.get());
+        let line = line_of(&text, range.start);
+        let placed = self.placed.borrow();
         let action = |title: &str, id: &str| lsp_types::CodeAction { title: title.into(), data: Some(serde_json::Value::from(id)), ..Default::default() };
         let mut actions = Vec::new();
-        match parsed.iter().find(|note| note.line == line).map(|note| note.kind) {
+        match placed.iter().find(|placed| placed.line == Some(line)).map(|placed| placed.note.kind) {
             Some(Kind::Ask) => actions.push(action("Ask AI", "ask")),
             Some(kind) if kind.ai() => actions.push(action("Resolve note", "resolve")),
             Some(_) => {}
-            None => if text.split('\n').nth(line).is_some_and(|code| !code.trim().is_empty()) { actions.push(action("Ask about this line", "question")); },
+            None => if code_range(&text, line).is_some() {
+                if placed.iter().any(|placed| placed.note.kind.ai() && placed.target == Some(line)) { actions.push(action("Resolve note", "resolve")); }
+                actions.push(action("Ask about this line", "question"));
+            },
         }
         if self.ai.get() { actions.push(action("Clear AI notes", "clear")); }
         Task::ready(Ok(actions))
@@ -128,33 +176,48 @@ impl CodeActionProvider for Provider {
     }
 }
 
-fn color(kind: Kind, theme: &Theme) -> Option<Hsla> {
+pub(crate) fn color(kind: Kind, theme: &Theme) -> Option<Hsla> {
     match kind {
         Kind::Bug => Some(theme.danger),
         Kind::Risk | Kind::Slow => Some(theme.warning),
         Kind::Stuck => Some(theme.info),
         Kind::Hint => Some(theme.magenta),
         Kind::Answer => Some(theme.success),
-        Kind::Ask => Some(theme.cyan),
-        Kind::Comment => None,
+        Kind::Ask | Kind::Comment => None,
     }
 }
 
-/// Text styles for markers and comments, and fills for the code each note is about.
-fn decorations(parsed: &[Note], theme: &Theme) -> (Vec<TextDecoration>, Vec<RangeDecoration>) {
-    let (mut styles, mut marks) = (Vec::new(), Vec::new());
-    for note in parsed {
-        let Some(color) = color(note.kind, theme) else { continue };
-        let fade = note.outdated().then_some(0.5);
-        styles.push(TextDecoration::new(note.marker.clone(), HighlightStyle { color: Some(color), font_weight: Some(FontWeight::SEMIBOLD), fade_out: fade, ..Default::default() }));
-        styles.push(TextDecoration::new(note.marker.end..note.comment.end, HighlightStyle { color: Some(theme.foreground.opacity(0.78)), font_style: Some(FontStyle::Italic), fade_out: fade, ..Default::default() }));
-        let Some(anchor) = note.anchor.clone().filter(|_| note.kind.ai() && note.snippet.is_some()) else { continue };
-        if note.kind == Kind::Bug {
-            styles.push(TextDecoration::new(anchor.clone(), HighlightStyle { underline: Some(UnderlineStyle { thickness: px(1.), color: Some(color), wavy: true }), ..Default::default() }));
+/// Which note colors a line when several are about it.
+fn rank(kind: Kind) -> u8 {
+    match kind { Kind::Bug => 0, Kind::Risk => 1, Kind::Slow => 2, Kind::Stuck => 3, Kind::Hint => 4, Kind::Answer => 5, Kind::Ask | Kind::Comment => 6 }
+}
+
+/// One fill over each code line that AI notes are about; fainter when every note there is outdated.
+fn marks(placed: &[Placed], text: &str, theme: &Theme) -> Vec<RangeDecoration> {
+    let mut lines: Vec<(usize, Kind, bool)> = Vec::new();
+    for placed in placed.iter().filter(|placed| placed.note.kind.ai()) {
+        let Some(target) = placed.target else { continue };
+        let fresh = !placed.note.outdated();
+        match lines.iter_mut().find(|(line, ..)| *line == target) {
+            Some(entry) => { if rank(placed.note.kind) < rank(entry.1) { entry.1 = placed.note.kind; } entry.2 |= fresh; }
+            None => lines.push((target, placed.note.kind, fresh)),
         }
-        marks.push(RangeDecoration::new(anchor).with_style(RangeDecorationStyle::Fill).with_color(color.opacity(0.14)));
     }
-    (styles, marks)
+    lines.sort_by_key(|(line, ..)| *line);
+    lines.into_iter().filter_map(|(line, kind, fresh)| {
+        let range = code_range(text, line)?;
+        let color = color(kind, theme)?;
+        Some(RangeDecoration::new(range).with_style(RangeDecorationStyle::Fill).with_color(color.opacity(if fresh { 0.14 } else { 0.07 })))
+    }).collect()
+}
+
+/// Byte range of a line's code without surrounding whitespace; `None` for a blank line.
+fn code_range(text: &str, line: usize) -> Option<Range<usize>> {
+    let range = line_range(text, line)?;
+    let code = &text[range.clone()];
+    let trimmed = code.trim_end();
+    let lead = trimmed.len() - trimmed.trim_start().len();
+    (lead < trimmed.len()).then(|| range.start + lead..range.start + trimmed.len())
 }
 
 /// Zero-based line of a byte offset.
@@ -181,7 +244,7 @@ impl EditorPane {
     }
 
     fn show_file(&mut self, file: String, undoable: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let (view, hidden) = if self.notes.view == View::Off { notes::hide(&file) } else { (file, Hidden::default()) };
+        let (view, hidden) = notes::hide(&file, self.notes.view);
         self.notes.hidden = hidden;
         if self.state.read(cx).value().as_ref() != view {
             let text = view.clone();
@@ -194,13 +257,9 @@ impl EditorPane {
     /// Applies a changed file, such as one with new AI notes, as the smallest edit.
     pub(crate) fn apply_file(&mut self, file: String, window: &mut Window, cx: &mut Context<Self>) {
         let current = self.state.read(cx).value().to_string();
-        let view = if self.notes.view == View::Off {
-            let (view, hidden) = notes::hide(&file);
-            if view == current { self.notes.hidden = hidden; self.refresh_notes(cx); return; }
-            self.notes.hidden = hidden;
-            view
-        } else { file };
-        if view == current { return; }
+        let (view, hidden) = notes::hide(&file, self.notes.view);
+        self.notes.hidden = hidden;
+        if view == current { self.refresh_notes(cx); return; }
         let (range, text) = notes::changed_bytes(&current, &view);
         let selection = self.state.read(cx).selected_range();
         let delta = text.len() as isize - range.len() as isize;
@@ -230,7 +289,6 @@ impl EditorPane {
         if previous == view { return; }
         self.notes.view = view;
         self.notes.provider.view.set(view);
-        if (previous == View::Off) == (view == View::Off) { self.refresh_notes(cx); return; }
         let file = self.notes.hidden.restore(&self.state.read(cx).value());
         let cursor = self.state.read(cx).cursor_position();
         let file_line = self.notes.hidden.file_line(cursor.line as usize);
@@ -249,21 +307,20 @@ impl EditorPane {
 
     pub(crate) fn refresh_notes(&mut self, cx: &mut Context<Self>) {
         let text = self.state.read(cx).value().to_string();
-        let parsed = notes::parse(&text, self.language);
+        let hidden = &self.notes.hidden;
+        let parsed = notes::parse(&hidden.restore(&text), self.language);
         let provider = &self.notes.provider;
         provider.language.set(self.language);
-        provider.ai.set(if self.notes.view == View::Off { notes::parse(&self.file_text(cx), self.language).iter().any(|note| note.kind.ai()) } else { parsed.iter().any(|note| note.kind.ai()) });
-        let (styles, marks) = if self.notes.view == View::Rich { decorations(&parsed, cx.theme()) } else { (Vec::new(), Vec::new()) };
-        match &self.notes.styles {
-            Some(collection) => collection.set(styles, cx),
-            None => self.notes.styles = Some(self.state.update(cx, |editor, cx| editor.create_decorations_collection(styles, cx))),
-        }
+        provider.ai.set(parsed.iter().any(|note| note.kind.ai()));
+        let placed: Vec<Placed> = parsed.into_iter().map(|note| Placed { line: hidden.view_line(note.line), target: note.target.and_then(|line| hidden.view_line(line)), note }).collect();
+        let rich = self.notes.view == View::Rich;
+        let marks = if rich { marks(&placed, &text, cx.theme()) } else { Vec::new() };
+        *provider.badges.borrow_mut() = if rich { self.badge_lines(&text) } else { Vec::new() };
+        *provider.placed.borrow_mut() = placed;
         match &self.notes.marks {
             Some(collection) => collection.set(marks, cx),
             None => self.notes.marks = Some(self.state.update(cx, |editor, cx| editor.create_range_decorations_collection(marks, cx))),
         }
-        let hints = if self.notes.view == View::Rich { self.badge_hints(&text, cx) } else { Vec::new() };
-        if hints.as_slice() != self.state.read(cx).line_end_hints() { self.state.update(cx, |editor, cx| editor.set_line_end_hints(hints, cx)); }
     }
 
     /// Replaces one kind of badge. Lines are zero-based in `seen`.
@@ -274,17 +331,14 @@ impl EditorPane {
         self.refresh_notes(cx);
     }
 
-    fn badge_hints(&self, view: &str, cx: &App) -> Vec<LineEndHint> {
+    /// Badges on the editor lines they now belong to.
+    fn badge_lines(&self, view: &str) -> Vec<(usize, BadgeKind, SharedString)> {
         if self.notes.badges.is_empty() { return Vec::new(); }
         let file = self.notes.hidden.restore(view);
-        let theme = cx.theme();
-        let mut hints: Vec<LineEndHint> = self.notes.badges.iter().filter_map(|badge| {
+        self.notes.badges.iter().filter_map(|badge| {
             let line = if badge.file { self.view_line(notes::relocate(&badge.seen, &file, badge.line, None)?) } else { notes::relocate(&badge.seen, view, badge.line, None)? };
-            let color = match badge.kind { BadgeKind::Cost => theme.warning.opacity(0.85), BadgeKind::Trace => theme.info.opacity(0.85) };
-            Some(LineEndHint { line, text: badge.text.clone(), color })
-        }).collect();
-        hints.sort_by_key(|hint| hint.line);
-        hints
+            Some((line, badge.kind, badge.text.clone()))
+        }).collect()
     }
 
     /// Keeps the notes provider first, wrapping the language server's hover.
@@ -328,37 +382,41 @@ impl EditorPane {
         self.flash_line(line, cx);
     }
 
-    /// The `#?` question on the cursor line.
-    pub(crate) fn question_at_cursor(&self, cx: &App) -> Option<Note> {
+    /// The line note actions apply to: the hovered line while its hover is open, else the cursor's.
+    fn acting_line(&self, cx: &App) -> usize {
         let editor = self.state.read(cx);
-        let text = editor.value().to_string();
-        let line = line_of(&text, editor.cursor());
+        line_of(&editor.value().to_string(), editor.hover_popover().map_or(editor.cursor(), |hover| hover.symbol_range.start))
+    }
+
+    /// The `#?` question on the acting line.
+    pub(crate) fn question_at_cursor(&self, cx: &App) -> Option<Note> {
+        let text = self.state.read(cx).value().to_string();
+        let line = self.acting_line(cx);
         notes::parse(&text, self.language).into_iter().find(|note| note.kind == Kind::Ask && note.line == line && !note.text.is_empty())
     }
 
     /// Steps through a reasoning trail, wrapping at either end.
     pub(crate) fn step_trail(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        let text = self.state.read(cx).value().to_string();
-        let mut trail: Vec<Note> = notes::parse(&text, self.language).into_iter().filter(|note| note.step.is_some()).collect();
+        let mut trail: Vec<Placed> = self.notes.provider.placed.borrow().iter().filter(|placed| placed.note.step.is_some()).cloned().collect();
         if trail.is_empty() { return false; }
-        trail.sort_by_key(|note| note.step);
-        let line = line_of(&text, self.state.read(cx).cursor());
-        let current = trail.iter().position(|note| note.line == line || note.target == Some(line));
+        trail.sort_by_key(|placed| placed.note.step);
+        let line = self.acting_line(cx);
+        let current = trail.iter().position(|placed| placed.line == Some(line) || placed.target == Some(line));
         let next = match (current, forward) {
             (Some(index), true) => (index + 1) % trail.len(),
             (Some(index), false) => (index + trail.len() - 1) % trail.len(),
             (None, true) => 0,
             (None, false) => trail.len() - 1,
         };
-        let note = &trail[next];
-        self.reveal_line(note.target.unwrap_or(note.line), window, cx);
+        let Some(line) = trail[next].target.or(trail[next].line) else { return false };
+        self.reveal_line(line, window, cx);
         true
     }
 
-    /// Adds a `#?` line above the cursor line and puts the cursor on it.
+    /// Adds a `#?` line above the acting line and puts the cursor on it.
     pub(crate) fn add_question(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.state.read(cx).value().to_string();
-        let line = line_of(&text, self.state.read(cx).cursor());
+        let line = self.acting_line(cx);
         let Some(range) = line_range(&text, line) else { return };
         let code = &text[range.clone()];
         let indent = &code[..code.len() - code.trim_start().len()];
@@ -368,34 +426,40 @@ impl EditorPane {
             editor.set_selected_range(range.start..range.start, cx);
             editor.replace(format!("{marker}\n"), window, cx);
             editor.set_selected_range(at..at, cx);
+            editor.clear_hover_state(cx);
             editor.focus(window, cx);
         });
     }
 
-    /// Removes the AI note on the cursor line.
+    /// Removes the AI note on the acting line, or every AI note about the code there.
     pub(crate) fn resolve_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let text = self.state.read(cx).value().to_string();
-        let line = line_of(&text, self.state.read(cx).cursor());
-        if !notes::parse(&text, self.language).iter().any(|note| note.line == line && note.kind.ai()) { return; }
-        let Some(range) = line_range(&text, line) else { return };
-        let range = if range.end < text.len() { range.start..range.end + 1 } else { range.start.saturating_sub(1)..range.end };
-        self.state.update(cx, |editor, cx| { editor.set_selected_range(range, cx); editor.replace("", window, cx); });
+        let line = self.acting_line(cx);
+        let file_line = self.notes.hidden.file_line(line);
+        let file = self.file_text(cx);
+        let parsed = notes::parse(&file, self.language);
+        let on_note = parsed.iter().any(|note| note.line == file_line);
+        let removed: Vec<usize> = parsed.iter().filter(|note| note.kind.ai() && if on_note { note.line == file_line } else { note.target == Some(file_line) }).map(|note| note.line).collect();
+        if removed.is_empty() { return; }
+        self.apply_file(without_lines(&file, &removed), window, cx);
+        self.state.update(cx, |editor, cx| editor.clear_hover_state(cx));
     }
 
     /// Removes every AI note, keeping questions and comments. Returns how many.
     pub(crate) fn clear_ai_notes(&mut self, window: &mut Window, cx: &mut Context<Self>) -> usize {
         let file = self.file_text(cx);
-        let parsed = notes::parse(&file, self.language);
-        let removed: Vec<usize> = parsed.iter().filter(|note| note.kind.ai()).map(|note| note.line).collect();
+        let removed: Vec<usize> = notes::parse(&file, self.language).iter().filter(|note| note.kind.ai()).map(|note| note.line).collect();
         if removed.is_empty() { return 0; }
-        let kept: Vec<&str> = file.split('\n').enumerate().filter(|(index, _)| !removed.contains(index)).map(|(_, line)| line).collect();
-        self.apply_file(kept.join("\n"), window, cx);
+        self.apply_file(without_lines(&file, &removed), window, cx);
         removed.len()
     }
 }
 
+fn without_lines(text: &str, removed: &[usize]) -> String {
+    text.split('\n').enumerate().filter(|(index, _)| !removed.contains(index)).map(|(_, line)| line).collect::<Vec<_>>().join("\n")
+}
+
 impl Workspace {
-    /// The solution file, including notes hidden in the Off view.
+    /// The solution file, including notes the view hides.
     pub fn solution_text(&self, cx: &App) -> String { self.editor_pane.read(cx).file_text(cx) }
 
     /// The solution without `#!` and `#?` lines, for judges.
@@ -439,7 +503,7 @@ impl Workspace {
         self.save_now(cx);
     }
 
-    /// Shows an analysis's per-line costs at the end of those lines.
+    /// Adds an analysis's per-line costs to those lines' hovers.
     pub(crate) fn show_costs(&mut self, slug: &str, language: Language, seen: &str, answer: &practice::assist::Answer, cx: &mut Context<Self>) {
         use practice::assist::Answer;
         let lines = match answer { Answer::Analyze(analysis) => &analysis.lines, Answer::Review(review) => &review.complexity.lines, _ => return };

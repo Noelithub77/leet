@@ -1240,7 +1240,6 @@ impl<M: InputModeKind> InputBaseState<M> {
     /// Set the default value of the input field.
     pub fn default_value(mut self, value: impl Into<SharedString>) -> Self {
         let text: SharedString = value.into();
-        self.extras.clear_line_end_hints();
         self.text = Rope::from(self.normalize_input(&text).as_ref());
         if let Some(diagnostics) = self.mode.diagnostics_mut() {
             diagnostics.reset(&self.text)

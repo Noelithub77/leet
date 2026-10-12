@@ -4,12 +4,15 @@ use gpui::{
     AnyElement, App, AppContext as _, AvailableSpace, Bounds, Element, ElementId, Entity,
     InteractiveElement, IntoElement, MouseDownEvent, MouseMoveEvent, ParentElement as _, Pixels,
     Render, StatefulInteractiveElement as _, StyleRefinement, Styled, Window, deferred, div, point,
-    px,
+    px, rems,
 };
 
 use crate::{
-    StyledExt, ThemeStyled as _,
-    input::{EditorState, popovers::render_markdown},
+    ActiveTheme as _, StyledExt,
+    input::{
+        EditorState,
+        popovers::{popover_card, render_markdown},
+    },
 };
 
 pub struct HoverPopover {
@@ -95,7 +98,7 @@ impl Popover {
             editor,
             range,
             style: StyleRefinement::default(),
-            width_limit: px(200.)..px(500.),
+            width_limit: px(200.)..px(460.),
             content_builder: Box::new(move |window, cx| (f)(window, cx).into_any_element()),
         }
     }
@@ -157,17 +160,16 @@ impl Element for Popover {
             .end
             .min(window.bounds().size.width - SNAP_TO_EDGE * 2)
             .max(px(200.));
-        let max_height = (window.bounds().size.height - SNAP_TO_EDGE * 2).min(px(320.));
+        let max_height = (window.bounds().size.height - SNAP_TO_EDGE * 2).min(px(480.));
 
+        let surface = div().id("hover-popover-content").flex_none().occlude();
         let mut popover = deferred(
-            div()
-                .id("hover-popover-content")
-                .flex_none()
-                .occlude()
-                .p_1()
-                .text_xs()
-                .popover_style(cx)
-                .shadow_md()
+            popover_card(surface, px(12.), cx)
+                .px(px(14.))
+                .py(px(12.))
+                .font_family(cx.theme().font_family.clone())
+                .text_size(px(13.))
+                .line_height(rems(1.45))
                 .max_w(max_width)
                 .max_h(max_height)
                 .overflow_y_scroll()

@@ -112,14 +112,6 @@ pub trait InputExtras: Default + 'static {
         None
     }
 
-    /// Drop presentation-only labels when the buffer changes.
-    fn clear_line_end_hints(&mut self) {}
-
-    /// Presentation-only labels following buffer lines.
-    fn line_end_hints(&self) -> &[crate::input::LineEndHint] {
-        &[]
-    }
-
     /// The inline completion to paint as ghost text.
     fn inline_completion_item(&self) -> Option<&lsp_types::InlineCompletionItem> {
         None
@@ -366,7 +358,6 @@ pub struct EditorExtras {
     pub(crate) decorations: DecorationCollections,
     pub(crate) range_decorations: DecorationCollections<RangeDecoration>,
     pub(crate) inline_completion: InlineCompletion,
-    pub(crate) line_end_hints: Vec<crate::input::LineEndHint>,
     pub(crate) context_menu_content: ContextMenuContent,
     pub(crate) hover_popover: Option<HoverPopoverState>,
     pub(crate) hover_definition: HoverDefinition,
@@ -380,7 +371,6 @@ impl Default for EditorExtras {
             decorations: DecorationCollections::default(),
             range_decorations: DecorationCollections::default(),
             inline_completion: InlineCompletion::default(),
-            line_end_hints: Vec::new(),
             context_menu_content: ContextMenuContent::default(),
             hover_popover: None,
             hover_definition: HoverDefinition::default(),

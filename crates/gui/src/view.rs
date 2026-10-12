@@ -369,7 +369,7 @@ impl Workspace {
                 .children(practice::notes::View::ALL.into_iter().map(|view| {
                     crate::theme::selected_choice(Button::new(SharedString::from(format!("notes-{}", view.label()))).ghost().xsmall(), self.config.notes_view == view, cx).label(view.label())
                         .tooltip_with_action(match view {
-                            practice::notes::View::Rich => "Notes styled, with hovers",
+                            practice::notes::View::Rich => "Highlights, details on hover",
                             practice::notes::View::Raw => "Notes as plain comments",
                             practice::notes::View::Off => "Hide AI notes and questions",
                         }, &crate::actions::CycleNotesView, Some(crate::actions::WORKSPACE))

@@ -377,10 +377,12 @@ impl<M: OverlayMode> InputOverlayHost<M> {
             if snapshot.code_action.open {
                 floating.push(lsp.code_actions.clone().into_any_element());
             }
-            if let Some(hover) = lsp.hover.as_ref() {
+            // An open menu takes the place of hovers; their cards would overlap it.
+            let menu_open = snapshot.completion.open || snapshot.code_action.open;
+            if let Some(hover) = lsp.hover.as_ref().filter(|_| !menu_open) {
                 floating.push(hover.clone().into_any_element());
             }
-            if let Some(diagnostic) = lsp.diagnostic.as_ref() {
+            if let Some(diagnostic) = lsp.diagnostic.as_ref().filter(|_| !menu_open) {
                 floating.push(diagnostic.clone().into_any_element());
             }
         }
