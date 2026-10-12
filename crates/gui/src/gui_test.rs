@@ -45,7 +45,7 @@ pub fn run() -> Result<()> {
         match args[i].as_str() {
             "--output" if output.is_none() => { i += 1; output = Some(PathBuf::from(args.get(i).context("--output requires a path")?)); }
             "--statement" if !statement_view => statement_view = true,
-            "--fixture" if fixture.is_none() => { i += 1; let name = args.get(i).context("--fixture requires a name")?.as_str(); ensure!(matches!(name, "snippets" | "copilot" | "chat"), "Supported focused fixtures: snippets, copilot, chat"); fixture = Some(name); }
+            "--fixture" if fixture.is_none() => { i += 1; let name = args.get(i).context("--fixture requires a name")?.as_str(); ensure!(matches!(name, "snippets" | "copilot" | "chat" | "statement"), "Supported focused fixtures: snippets, copilot, chat, statement"); fixture = Some(name); }
             "--video" if !video => video = true,
             "--wayland" if !wayland => wayland = true,
             "--explore" if !explore => { explore = true; wayland = true; }
@@ -66,6 +66,7 @@ pub fn run() -> Result<()> {
     cx.update(init);
     if let Some(name) = fixture {
         let fixture = if name == "chat" { crate::assist::composer_fixture::native(&mut cx, &output, pixels)? }
+            else if name == "statement" { statement::native(&mut cx, &output, pixels)? }
             else if name == "copilot" { crate::copilot::fixture::native(&mut cx, &output, pixels)? }
             else { crate::snippets::fixture::native(&mut cx, &output, pixels)? };
         let report = json!({"command":"gui:test","environment":"isolated-fixtures","backend":"gpui-headless","passed":true,"pixels":pixels,"video":false,"output":output,"fixtures":[fixture]});

@@ -1,6 +1,7 @@
 //! Ordered semantic statement blocks; unknown content remains rendered Markdown.
 use scraper::{ElementRef, Html, Selector};
 use crate::prompts::statement_markdown;
+pub mod media;
 #[derive(Clone, Debug, PartialEq)] pub enum Part { Markdown(String), Field { label: String, value: String } }
 #[derive(Clone, Debug, PartialEq)] pub enum Block { Markdown(String), Example { title: String, parts: Vec<Part> }, Constraints(String) }
 fn plain(element: ElementRef<'_>) -> String {
@@ -33,7 +34,7 @@ fn push(blocks: &mut Vec<Block>, part: Part) {
 pub fn parse(html: &str) -> Vec<Block> {
     fn visit(element: ElementRef<'_>, blocks: &mut Vec<Block>, constraints: &mut bool) {
         let tag = element.value().name();
-        if element.value().classes().any(|class| class == "sample-test") {
+        if element.value().classes().any(|class| class == "sample-test") && !element.html().contains("<img") {
             let selector = |value| Selector::parse(value).expect("static sample selector");
             let inputs: Vec<_> = element.select(&selector(".input pre")).map(plain).collect();
             let outputs: Vec<_> = element.select(&selector(".output pre")).map(plain).collect();
@@ -50,20 +51,22 @@ pub fn parse(html: &str) -> Vec<Block> {
             return;
         }
         let text = plain(element);
-        if text.is_empty() && !element.html().contains("<img") { return; }
-        if (tag == "p" || tag.starts_with('h')) && text.starts_with("Example") && text.len() < 40 {
+        let markup = element.html();
+        let media = markup.contains("<img") || markup.contains("<svg");
+        if text.is_empty() && !media { return; }
+        if !media && (tag == "p" || tag.starts_with('h')) && text.starts_with("Example") && text.len() < 40 {
             *constraints = false; blocks.push(Block::Example { title: text.trim_end_matches(':').into(), parts: vec![] }); return;
         }
         if (tag == "p" || tag.starts_with('h')) && text.trim_end_matches(':').eq_ignore_ascii_case("Constraints") {
             *constraints = true; blocks.push(Block::Constraints(String::new())); return;
         }
-        let markdown = statement_markdown(&element.html());
+        let markdown = statement_markdown(&markup);
         if text.starts_with("Follow-up") { *constraints = false; blocks.push(Block::Markdown(markdown)); return; }
         if *constraints {
             if let Some(Block::Constraints(content)) = blocks.last_mut() { if !content.is_empty() { content.push_str("\n\n"); } content.push_str(&markdown); return; }
         }
         if matches!(blocks.last(), Some(Block::Example { .. })) {
-            if let Some(fields) = fields(&text) {
+            if !media && !markup.contains("href=") && !markup.contains('$') && let Some(fields) = fields(&text) {
                 if tag == "pre" { for field in fields { push(blocks, field); } return; }
                 if tag == "p" {
                     for field in fields {
@@ -85,6 +88,14 @@ pub fn parse(html: &str) -> Vec<Block> {
 }
 #[cfg(test)] mod tests {
     use super::*;
+    #[test] fn diagrams_and_formatted_explanations_survive_examples() {
+        let html = "<p>Given bars.</p><p><strong>Example 1:</strong></p><p><img src='https://example.com/water.png' alt='Water diagram'></p><pre><b>Input:</b> height = [0,2,0]\n<img src='https://example.com/trace.svg'>\n<b>Output:</b> 0</pre><p><b>Explanation:</b> see <img src='https://example.com/result.png'> and <a href='https://example.com/details'>details</a>.</p><table><tr><th>Height</th><td>2</td></tr></table><p><b>Constraints:</b></p><ul><li>n &gt; 0</li></ul>";
+        let blocks = parse(html);
+        let Block::Example { parts, .. } = &blocks[1] else { panic!("Missing example") };
+        let rendered: String = parts.iter().map(|part| match part { Part::Markdown(text) => text.clone(), Part::Field { value, .. } => value.clone() }).collect();
+        for value in ["water.png", "trace.svg", "result.png", "details", "Height", "height = [0,2,0]", "Output:"] { assert!(rendered.contains(value), "Dropped {value}: {rendered}"); }
+        assert!(matches!(blocks.last(), Some(Block::Constraints(text)) if text.contains("n > 0")));
+    }
     #[test] fn structured_examples_preserve_lines_constraints_and_explanations() {
         let blocks = parse("<p>Given <code>nums</code>.</p><p><strong>Example 1:</strong></p><pre><b>Input:</b> nums = [1,2]\n<b>Output:</b> 3\n<b>Explanation:</b> Add both.\nKeep this line.</pre><p><b>Constraints:</b></p><ul><li>1 &lt;= n &lt;= 10<sup>4</sup></li></ul>");
         assert!(matches!(&blocks[0], Block::Markdown(text) if text.contains("`nums`")));

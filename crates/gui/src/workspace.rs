@@ -840,7 +840,7 @@ impl Workspace {
         let path = ws::ensure_solution(&self.config.workspace, &rel, starter)?;
         let code = std::fs::read_to_string(&path)?;
         let mtime = std::fs::metadata(&path).and_then(|meta| meta.modified()).ok();
-        let statement = practice::description::parse(&q.content);
+        let statement = practice::description::parse(&practice::description::media::normalize(&q.content, &practice::description::media::base_url(&q.slug)));
         let saved_cases = self.db.test_cases(&q.slug)?;
         self.apply_loaded(Loaded { q, rel, path, code, mtime, custom: vec![], saved_cases,
             history: vec![], statement, hints: vec![] }, window, cx);
@@ -1223,8 +1223,8 @@ fn load_question(db: &Db, client: &Client, workspace: &std::path::Path, slug: &s
             q
         }
     };
-    if q.meta["statementSource"] == "competitive-companion" {
-        let full = if slug.starts_with("cf:") { practice::codeforces::question(slug) } else { practice::codechef::question(slug) };
+    if q.meta["statementSource"] == "competitive-companion" || q.meta["statementSource"] == "open-r1/codeforces" || q.meta["statementMarkdown"].as_bool() == Some(true) {
+        let full = if slug.starts_with("cf:") { practice::codeforces::question(slug) } else if slug.starts_with("cc:") { practice::codechef::question(slug) } else { client.question(slug) };
         match full {
             Ok(full) => { db.save_question(&full)?; q = full; }
             Err(error) => q.meta["statementFetchError"] = serde_json::json!(error.to_string()),
@@ -1249,7 +1249,7 @@ fn load_question(db: &Db, client: &Client, workspace: &std::path::Path, slug: &s
     let custom = db.custom_tests(&q.slug)?;
     let saved_cases = db.test_cases(&q.slug)?;
     let history = crate::history::local_versions(workspace, q.frontend_id.parse().unwrap_or(0), &q.slug);
-    let statement = if q.meta["statementMarkdown"].as_bool() == Some(true) { vec![practice::description::Block::Markdown(q.content.clone())] } else { practice::description::parse(&q.content) };
+    let statement = if q.meta["statementMarkdown"].as_bool() == Some(true) { vec![practice::description::Block::Markdown(q.content.clone())] } else { practice::description::parse(&practice::description::media::normalize(&q.content, &practice::description::media::base_url(&q.slug))) };
     let hints: Vec<String> = q.hints.iter().map(|h| prompts::statement_markdown(h)).collect();
     anyhow::Ok(Loaded { q, rel, path, code, mtime, custom, saved_cases, history, statement, hints })
 }

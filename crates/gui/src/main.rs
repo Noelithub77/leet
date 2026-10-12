@@ -35,6 +35,7 @@ mod snippets;
 mod agent_question;
 mod statement;
 mod rich_text;
+mod statement_images;
 mod theme;
 mod tour;
 mod update;
@@ -86,6 +87,7 @@ fn main() {
 
     gpui_kit::application().with_assets(assets::Assets).run(move |cx| {
         gpui_kit::init(cx);
+        statement_images::install(cx, practice::config::data_dir().join("statement-images"));
         theme::init(&config.theme, config.zoom, &config.font_family, cx);
         let bindings = cx.key_bindings().borrow().bindings().cloned().collect();
         cx.set_global(actions::ComponentBindings(bindings));

@@ -35,6 +35,7 @@ fn headers(window: &gpui_kit::Window) -> Result<()> {
 }
 
 pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -> Result<serde_json::Value> {
+    media(cx, output, pixels)?;
     for (name, width, height, theme, zoom) in [("regular", 1280., 800., "Vesper", 1.), ("compact", 420., 400., "Vesper", 1.), ("light", 1280., 800., "Solarized Light", 1.), ("zoom", 520., 600., "Vesper", 1.4)] {
         cx.update(|cx| { cx.set_global(Sections::default()); crate::theme::apply(theme, cx); crate::theme::set_zoom(zoom, cx); });
         let (handle, statement) = cx.update(|cx| gpui_kit::open_window(WindowOptions {
@@ -143,7 +144,7 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         cx.run_until_parked();
     }
     cx.update(|cx| { crate::theme::apply("Vesper", cx); crate::theme::set_zoom(1., cx); });
-    Ok(json!({"fixture":"statement-cards","passed":true,"checks":["long description scroll","visible headers at regular and compact sizes","independent expansion and scrolling","faster wheel scrolling","scrollbar thumb dragging","shared persisted flags","natural short content without overflow","PageDown","Tab/Space card activation","all collapsed"],"pixels":pixels}))
+    Ok(json!({"fixture":"statement-cards","passed":true,"checks":["production image HTTP loading and persistent cache", "offline image reopening", "long description scroll","visible headers at regular and compact sizes","independent expansion and scrolling","faster wheel scrolling","scrollbar thumb dragging","shared persisted flags","natural short content without overflow","PageDown","Tab/Space card activation","all collapsed"],"pixels":pixels}))
 }
 
 pub(super) fn explore(output: PathBuf) -> Result<()> {
@@ -161,5 +162,49 @@ pub(super) fn explore(output: PathBuf) -> Result<()> {
             let _ = cx.update(|cx| cx.quit());
         }).detach();
     });
+    Ok(())
+}
+
+fn media(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -> Result<()> {
+    use std::io::{Read, Write};
+    let server = std::net::TcpListener::bind("127.0.0.1:0")?;
+    server.set_nonblocking(true)?;
+    let uri = format!("http://{}/diagram.svg", server.local_addr()?);
+    let worker = std::thread::spawn(move || -> Result<()> {
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        let mut socket = loop {
+            match server.accept() {
+                Ok((socket, _)) => break socket,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock && std::time::Instant::now() < deadline => std::thread::sleep(Duration::from_millis(10)),
+                Err(error) => return Err(error.into()),
+            }
+        };
+        socket.set_read_timeout(Some(Duration::from_secs(2)))?;
+        let mut request = [0; 4096]; socket.read(&mut request)?;
+        let svg = "<svg xmlns='http://www.w3.org/2000/svg' width='320' height='120'><rect width='320' height='120' fill='#80d8f0'/><path d='M0 120V80H60V120H120V40H180V120H240V0H320V120' fill='#202020'/></svg>";
+        write!(socket, "HTTP/1.1 200 OK\r\nContent-Type: image/svg+xml\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{svg}", svg.len())?;
+        Ok(())
+    });
+    let cache = output.join("session/statement-images");
+    cx.update(|cx| { crate::statement_images::install(cx, cache.clone()); cx.set_global(Sections([true; 3])); });
+    let source = format!("<p>Bars trap water between taller neighbours.</p><p><b>Example 1:</b></p><p><img src='{uri}' alt='Elevation diagram'></p><pre><b>Input:</b> height = [1,0,2,0,3]\n<b>Output:</b> 3</pre><p><b>Constraints:</b></p><ul><li>height is nonnegative</li></ul>");
+    let (handle, _) = cx.update(|cx| gpui_kit::open_window(WindowOptions {
+        window_bounds: Some(WindowBounds::Windowed(Bounds { origin: point(px(0.), px(0.)), size: size(px(640.), px(720.)) })),
+        show: false, focus: false, ..Default::default()
+    }, cx, |window, cx| {
+        let statement = cx.new(|_| Statement { slug: "media-fixture".into(), title: "Trapping Rain Water".into(), blocks: practice::description::parse(&source), ..Default::default() });
+        statement.update(cx, |view, cx| view.focus(window, cx)); statement
+    }))?;
+    let handle = handle.into();
+    cx.update_window(handle, |_, window, cx| window.render_frame(cx))?;
+    cx.run_until_parked();
+    worker.join().map_err(|_| anyhow::anyhow!("Image fixture server panicked"))??;
+    ensure!(cache.is_dir() && std::fs::read_dir(&cache)?.count() == 1, "Production TextView did not download and persist its diagram");
+    cx.update_window(handle, |_, window, cx| { window.render_frame(cx); })?;
+    cx.run_until_parked();
+    if pixels { cx.capture_screenshot(handle)?.save(output.join("statement-media.png"))?; }
+    let cached = practice::description::media::cached_image(&cache, &uri)?;
+    ensure!(cached.starts_with(b"<svg"), "Offline image cache lost the original diagram");
+    cx.update_window(handle, |_, window, _| window.remove_window())?;
     Ok(())
 }

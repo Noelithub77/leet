@@ -49,6 +49,7 @@ pub fn url(provider: Provider, prompt: &str) -> String {
 
 static SUP: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)<sup>(.*?)</sup>").unwrap());
 static PRE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?is)<pre[^>]*>(.*?)</pre>").unwrap());
+static IMAGE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?is)<img\b[^>]*>").unwrap());
 static TAG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"<[^>]+>").unwrap());
 
 /// LeetCode statement HTML as Markdown, for display and prompts. Exponents become `^n`.
@@ -57,8 +58,17 @@ pub fn statement_markdown(html: &str) -> String {
     let html = SUP.replace_all(&html, "^$1");
     // Example blocks mix bold labels into preformatted text; keep them as plain code blocks.
     let html = PRE.replace_all(&html, |c: &regex::Captures| {
-        let text = TAG.replace_all(&c[1], "");
-        format!("<pre><code>{}</code></pre>", text.trim_matches('\n'))
+        let mut result = String::new();
+        let mut offset = 0;
+        for image in IMAGE.find_iter(&c[1]) {
+            let text = TAG.replace_all(&c[1][offset..image.start()], "");
+            if !text.trim().is_empty() { result.push_str(&format!("<pre><code>{}</code></pre>", text.trim_matches('\n'))); }
+            result.push_str(image.as_str());
+            offset = image.end();
+        }
+        let text = TAG.replace_all(&c[1][offset..], "");
+        if !text.trim().is_empty() { result.push_str(&format!("<pre><code>{}</code></pre>", text.trim_matches('\n'))); }
+        result
     });
     let mut markdown = htmd::convert(&html).unwrap_or_else(|_| html.to_string());
     for (key, formula) in formulas { markdown = markdown.replace(&key, &formula); }

@@ -9,6 +9,7 @@
 <details>
 <summary>Fix</summary>
 
+- Load and cache question diagrams when opening statements across practice platforms.
 - Replace the running development app when rerunning Dev.
 - Fix a crash when starting an AI run from the workspace.
 - Merge General into Chats while keeping Analysis separate.
