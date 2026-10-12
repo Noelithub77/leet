@@ -104,9 +104,9 @@ impl Action {
             Self::Review => "Review my current solution as written. Return correctness bugs (or explicitly say none found), time and space complexity with line costs, improvements compared with the best approach, and a dry run of my code on the focus test case. Include an animated scene showing the actual changing variables and data structures. Explain the first wrong step if present. Do not modify my solution or supply a replacement solution. You may write native response artifacts. Keep every section concise.",
             Self::Hints => "Give 4 escalating hints that let me solve it myself. Level 1 is a small observation about the problem; level 2 names the useful data structure or pattern; level 3 states the key insight; level 4 outlines the approach in plain words. Never include code. If my attempt is present, aim the first hint at what my attempt misses. Each body is at most 2 sentences.",
             Self::Tests => "Use the requested count and case types from the additional instructions; default to 6 to 10 cases when no count is given. Propose test cases that are most likely to break solutions to this problem: empty and minimum inputs, boundaries from the constraints, duplicates, negatives, sorted and reversed orders, single elements, and one larger stress-style case that is still small enough to read. Compute every expected output carefully by reasoning step by step; it must be exactly what the judge returns. Inputs use the exact LeetCode input format: one argument per line, JSON values.",
-            Self::Bugs => "Review my attempt for correctness bugs only: wrong logic, off-by-one errors, missed edge cases, wrong return values, mutation mistakes, overflow, and exceptions. Cite the 1-based line from the numbered code. Do not rewrite the solution; each fix is the smallest change in words or one short code fragment. If you find no bugs, return an empty list and say so in the summary. Use the failing tests when present.",
+            Self::Bugs => "Review my attempt for correctness bugs only: wrong logic, off-by-one errors, missed edge cases, wrong return values, mutation mistakes, overflow, and exceptions. Cite the 1-based line from the numbered code and copy the exact code fragment it is about into `snippet`. Keep each title under 10 words. Do not rewrite the solution; each fix is the smallest change in words or one short code fragment. If you find no bugs, return an empty list and say so in the summary. Use the failing tests when present.",
             Self::Analyze => "Analyze the time and space complexity of my attempt as written, not of the optimal solution. Explain the dominant term, attribute cost to the lines that create it, and compare with the best known complexity for this problem. Use n, m, k exactly as named in the constraints.",
-            Self::Stuck => "Diagnose exactly where I'm stuck from my attempt and failing tests: the misconception or missing idea, the line where my reasoning goes wrong, and the single next step I should take. Do not give the solution or code. End with one Socratic question that leads me to the insight.",
+            Self::Stuck => "Diagnose exactly where I'm stuck from my attempt and failing tests: the misconception or missing idea, the line where my reasoning goes wrong with its exact code fragment as `snippet`, and the single next step I should take. Add 2 to 4 `steps` that trace my reasoning through specific lines to where it breaks, each quoting its code fragment. Do not give the solution or code. End with one Socratic question that leads me to the insight.",
             Self::Explain => "Explain the problem completely: the intuition, the pattern it belongs to, a brute-force approach and the optimal approach with why it works, an optimal idiomatic solution in the required language that preserves the judge interface, pitfalls, and a short visual walkthrough of the optimal approach on the first example (4 to 10 frames).",
             Self::Visualize => "Create an animated walkthrough of the optimal algorithm on the first example, as 6 to 16 frames. Each frame shows the data structures at that moment using the available structure kinds, marks pointers and windows, and highlights with tones what changed (changed), what is being compared (active), what was visited (visited), and what is final (done). Keep labels equal to variable names. Captions are one short sentence. If my attempt is present and correct, walk my approach and set `line` to my code's lines.",
             Self::Optimize => "Compare the complexity of my attempt with the best known for this problem. Name the bottleneck line, give one nudge toward the faster approach without code, then the idea in two or three sentences (shown only when I ask). If my attempt is already optimal, say so and suggest a constant-factor or space improvement instead.",
@@ -150,7 +150,16 @@ pub struct Tests { pub cases: Vec<TestIdea> }
 pub enum Severity { Bug, Risk, Style }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-pub struct Bug { pub line: u32, pub severity: Severity, pub title: String, pub detail: String, pub fix: String }
+pub struct Bug {
+    pub line: u32,
+    pub severity: Severity,
+    pub title: String,
+    pub detail: String,
+    pub fix: String,
+    /// The exact code fragment on `line` the bug is about, copied verbatim.
+    #[serde(default)]
+    pub snippet: Option<String>,
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Bugs {
@@ -215,10 +224,25 @@ pub struct Analysis {
 pub struct Stuck {
     pub diagnosis: String,
     pub line: Option<u32>,
+    /// The exact code fragment on `line` where the reasoning breaks, copied verbatim.
+    #[serde(default)]
+    pub snippet: Option<String>,
+    /// Two to four short steps that trace the reasoning through specific lines to where it breaks.
+    #[serde(default)]
+    pub steps: Vec<StuckStep>,
     /// The concept to revisit, in a few words.
     pub concept: String,
     pub next_step: String,
     pub question: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct StuckStep {
+    pub line: u32,
+    /// The exact code fragment on `line` this step is about, copied verbatim.
+    pub snippet: Option<String>,
+    /// At most 12 words; no fixes or solution code.
+    pub note: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -545,6 +569,10 @@ fn push_problem(out: &mut String, ctx: &Context) {
         let mut numbered = numbered(ctx.code);
         truncate(&mut numbered, CODE_LIMIT);
         out.push_str(&format!("\n## My attempt (numbered lines)\n```{}\n{numbered}\n```\n", ctx.language.id()));
+        let comment = crate::notes::comment_prefix(ctx.language);
+        if crate::notes::parse(ctx.code, ctx.language).iter().any(|note| note.kind != crate::notes::Kind::Comment) {
+            out.push_str(&format!("Comment lines starting with `{comment}!` are your earlier notes on my code; `{comment}?` lines are my questions. Read them as context, not code.\n"));
+        }
     } else {
         out.push_str("\nI have not written an attempt yet.\n");
     }

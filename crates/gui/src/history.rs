@@ -102,7 +102,7 @@ impl Workspace {
         }).detach();
     }
     fn restore_version_code(&mut self,code:String,language:Language,window:&mut Window,cx:&mut Context<Self>){
-        let Some(session)=&self.session else{return;};let current=self.editor.read(cx).value().to_string();
+        let Some(session)=&self.session else{return;};let current=self.solution_text(cx);
         if let Err(error)=git::stage(&self.config.workspace,&session.rel,&current){self.toast(Notification::error(format!("Could not stage current draft: {error}")),window,cx);return;}
         if session.language!=language{
             let rel=practice::workspace::solution_rel(session.frontend_id,&session.slug,language);let path=self.config.workspace.join(&rel);
@@ -111,7 +111,7 @@ impl Workspace {
             if let Some(session)=self.session.as_mut(){session.language=language;session.rel=rel;session.path=path;}
         }
         self.statement.update(cx,|statement,cx|{ statement.language=language; statement.article=None; statement.reference=None; cx.notify(); });
-        self.editor.update(cx,|editor,cx|editor.replace_all(code,window,cx));self.save_now(cx);self.attach_language_server(window,cx);
+        self.editor_pane.update(cx,|pane,cx|pane.replace_file(code,window,cx));self.save_now(cx);self.attach_language_server(window,cx);
         self.focus_editor(window,cx);self.toast(Notification::success("Version restored · current draft staged"),window,cx);cx.notify();
     }
     pub fn render_versions(&self,cx:&mut Context<Self>)->impl IntoElement{

@@ -181,6 +181,8 @@ pub struct Run {
     request_prompt: String,
     history: String,
     reply: String,
+    /// The `#?` question this run answers in the code.
+    in_place: Option<String>,
 }
 
 impl Run {
@@ -428,6 +430,34 @@ impl Assist {
         });
     }
 
+    /// Asks a `#?` question from the code without disturbing the composer draft.
+    pub fn ask_in_place(&mut self, question: String, prompt: String, snapshot: Snapshot, target: Target, window: &mut Window, cx: &mut Context<Self>) {
+        self.set_problem(Some(snapshot.slug.as_str()), cx);
+        self.sync_composer(window, cx);
+        let draft = self.composer.read(cx).value().to_string();
+        let editing = self.editing.take();
+        let before = self.next_id;
+        self.composer.update(cx, |input, cx| input.set_value(prompt, window, cx));
+        self.ai_tab = 2;
+        self.start(Action::Ask, snapshot, target, window, cx);
+        if self.next_id != before && let Some(run) = self.runs.first_mut() { run.in_place = Some(question); }
+        self.editing = editing;
+        self.composer.update(cx, |input, cx| input.set_value(draft, window, cx));
+    }
+
+    /// The full explanation behind a note's text, from the newest run that wrote it.
+    pub fn note_detail(&self, text: &str) -> Option<String> {
+        self.runs.iter().find_map(|run| {
+            let answer = run.answer.as_ref()?;
+            if run.in_place.is_some() {
+                let Answer::Chat(reply) = answer else { return None };
+                let spec = practice::notes::Spec { line: 0, kind: practice::notes::Kind::Answer, step: None, text: reply.clone(), snippet: None, detail: String::new() };
+                return (practice::notes::body(&spec) == text && reply.len() > text.len()).then(|| reply.clone());
+            }
+            practice::notes::specs(answer).into_iter().find(|spec| practice::notes::body(spec) == text).map(|spec| spec.detail)
+        })
+    }
+
     /// Spawns the agent thread for run `id`, optionally continuing a session with feedback.
     fn launch(&mut self, id: u64, resume: Option<String>, feedback: Option<String>, window: &mut Window, cx: &mut Context<Self>) {
         #[cfg(feature = "gui-test")]
@@ -551,6 +581,19 @@ impl Assist {
                     Ok((answer, _)) => {
                         run.phase = Phase::Done; run.elapsed = Some(run.started.elapsed());
                         run.set_answer(answer);
+                        if let (Some(answer), Some(snapshot)) = (run.answer.clone(), run.snapshot.clone()) {
+                            let (workspace, slug, question) = (self.workspace.clone(), run.slug.clone(), run.in_place.clone());
+                            window.defer(cx, move |window, cx| {
+                                let _ = workspace.update(cx, |ws, cx| match (question, &answer) {
+                                    (Some(question), Answer::Chat(reply)) => ws.answer_question(&slug, snapshot.language, &question, reply, window, cx),
+                                    (Some(_), _) => {}
+                                    (None, answer) => {
+                                        ws.write_notes(&slug, snapshot.language, &snapshot.code, answer, window, cx);
+                                        ws.show_costs(&slug, snapshot.language, &snapshot.code, answer, cx);
+                                    }
+                                });
+                            });
+                        }
                     }
                 }
             }
@@ -671,7 +714,7 @@ impl Assist {
                 let reload = ws.assist.read(cx).runs.iter().find(|run| run.id == id)
                     .filter(|run| run.solve.is_some() && ws.session.as_ref().is_some_and(|session| session.slug == run.slug))
                     .and_then(|run| run.snapshot.as_ref())
-                    .filter(|snapshot| ws.editor.read(cx).value().as_ref() == snapshot.code)
+                    .filter(|snapshot| ws.solution_text(cx) == snapshot.code)
                     .map(|snapshot| snapshot.slug.clone());
                 if let Some(slug) = reload { ws.reload_solution(&slug, window, cx); }
                 ws.save_now(cx);
@@ -805,7 +848,7 @@ impl Run {
     fn new(id: u64, slug: String, action: Action, agent: Option<AgentKind>, model: String, snapshot: Option<Snapshot>, target: Option<Target>) -> Self {
         Self { id, thread_id: 0, message_id: 0, problem_title: String::new(), slug, action, agent, model, started: Instant::now(), elapsed: None, artifact_mtime: None, phase: Phase::Starting, thinking: String::new(), tokens: 0,
             answer: None, cancel: Cancel::default(), hints_shown: 1, playback: Playback::new(0), last_frame: Instant::now(), reveal: false,
-            question: None, snippet_before: None, snippet_undo: None, added: vec![], solve: None, snapshot, target, generation: 0, collapsed: false, instructions: String::new(), request_prompt: action.instructions().to_owned(), history: String::new(), reply: String::new() }
+            question: None, snippet_before: None, snippet_undo: None, added: vec![], solve: None, snapshot, target, generation: 0, collapsed: false, instructions: String::new(), request_prompt: action.instructions().to_owned(), history: String::new(), reply: String::new(), in_place: None }
     }
 
     fn set_answer(&mut self, answer: Option<Answer>) {
@@ -970,17 +1013,23 @@ impl Assist {
         let theme = cx.theme().clone();
         let id = run.id;
         let workspace = self.workspace.clone();
+        let seen: Option<SharedString> = run.snapshot.as_ref().map(|snapshot| snapshot.code.clone().into());
         let jump = move |line: u32| {
-            let workspace = workspace.clone();
+            let (workspace, seen) = (workspace.clone(), seen.clone());
             move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
-                let workspace = workspace.clone();
-                window.defer(cx, move |window, cx| { let _ = workspace.update(cx, |ws, cx| ws.jump_to_line(line, window, cx)); });
+                let (workspace, seen) = (workspace.clone(), seen.clone());
+                window.defer(cx, move |window, cx| { let _ = workspace.update(cx, |ws, cx| ws.jump_to_line(line, seen.as_deref(), window, cx)); });
             }
         };
+        let seen = run.snapshot.as_ref().map(|snapshot| snapshot.code.as_str());
+        let workspace = self.workspace.upgrade();
         let line_badge = |line: u32, key: SharedString| {
+            let shown = workspace.as_ref().map_or(line as usize, |ws| ws.read(cx).cited_line(line, seen, cx) + 1);
+            let peek: Option<SharedString> = seen.and_then(|code| code.split('\n').nth(line.saturating_sub(1) as usize)).map(|code| code.trim().to_owned().into()).filter(|code: &SharedString| !code.is_empty());
             div().id(key).flex_shrink_0().px_1p5().h(px(18.)).flex().items_center().rounded_md().bg(theme.secondary).cursor_pointer()
                 .hover(|s| s.bg(theme.list_hover)).text_size(px(10.)).font_family(theme.mono_font_family.clone()).text_color(theme.info)
-                .child(format!("L{line}")).on_click(jump(line))
+                .child(format!("L{shown}")).on_click(jump(line))
+                .when_some(peek, |el, code| el.tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(code.clone()).build(window, cx)))
         };
         let sequence = std::cell::Cell::new(0usize);
         let rich = |text: &str| {
@@ -1240,7 +1289,7 @@ impl Workspace {
         cx.notify();
     }
 
-    fn assist_snapshot(&self, cx: &App) -> Option<Snapshot> {
+    pub(crate) fn assist_snapshot(&self, cx: &App) -> Option<Snapshot> {
         let session = self.session.as_ref()?;
         let question = session.question.as_ref()?;
         let cases = session.cases.iter().zip(&session.results).map(|(case, result)| {
@@ -1250,7 +1299,7 @@ impl Workspace {
         Some(Snapshot {
             slug: session.slug.clone(), title: question.title.clone(), difficulty: question.difficulty.clone(),
             url: crate::roadmap::problem_url(session.source, &question.slug), statement_html: question.content.clone(),
-            code: self.editor.read(cx).value().to_string(), starter: question.starter(session.language).unwrap_or_default().to_owned(),
+            code: self.solution_text(cx), starter: question.starter(session.language).unwrap_or_default().to_owned(),
             language: session.language, cases, focus_case: session.selected_case,
             solution_path: session.path.clone(), workspace: self.config.workspace.clone(), trace: None,
         })
@@ -1273,13 +1322,24 @@ impl Workspace {
         let Some(session) = self.session.as_mut().filter(|s| s.slug == slug) else { return };
         let Ok(text) = std::fs::read_to_string(&session.path) else { return };
         session.disk_mtime = std::fs::metadata(&session.path).and_then(|m| m.modified()).ok();
-        if self.editor.read(cx).value().as_ref() != text { self.editor.update(cx, |editor, cx| editor.set_value(text, window, cx)); }
+        if self.solution_text(cx) != text { self.load_solution(text, window, cx); }
     }
 
-    pub fn jump_to_line(&mut self, line: u32, window: &mut Window, cx: &mut Context<Self>) {
+    /// The editor line for a 1-based line of the code the AI saw, zero-based.
+    pub fn cited_line(&self, line: u32, seen: Option<&str>, cx: &App) -> usize {
+        let line = line.saturating_sub(1) as usize;
+        let current = self.solution_text(cx);
+        let mut file = seen.and_then(|seen| practice::notes::relocate(seen, &current, line, None)).unwrap_or(line);
+        let lines: Vec<&str> = current.split('\n').collect();
+        while lines.get(file).is_some_and(|code| practice::notes::is_note_line(code)) { file += 1; }
+        self.editor_pane.read(cx).view_line(file)
+    }
+
+    pub fn jump_to_line(&mut self, line: u32, seen: Option<&str>, window: &mut Window, cx: &mut Context<Self>) {
         self.debug_mode = false;
         self.focus_area = crate::workspace::Focus::Editor;
-        self.editor.update(cx, |editor, cx| editor.set_cursor_position(gpui_kit::component::input::Position::new(line.saturating_sub(1), 0), window, cx));
+        let line = self.cited_line(line, seen, cx);
+        self.editor_pane.update(cx, |pane, cx| pane.reveal_line(line, window, cx));
         cx.notify();
     }
 }

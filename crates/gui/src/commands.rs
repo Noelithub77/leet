@@ -205,6 +205,13 @@ impl Workspace {
                 let on = !this.debug_mode;
                 this.set_debug(on, window, cx);
             }))
+            .on_action(cx.listener(|this, _: &CycleNotesView, window, cx| this.set_notes_view(this.config.notes_view.next(), window, cx)))
+            .on_action(cx.listener(|this, _: &NextNoteStep, window, cx| this.step_trail(true, window, cx)))
+            .on_action(cx.listener(|this, _: &PreviousNoteStep, window, cx| this.step_trail(false, window, cx)))
+            .on_action(cx.listener(|this, _: &AskInPlace, window, cx| this.ask_in_place(window, cx)))
+            .on_action(cx.listener(|this, _: &AddQuestion, window, cx| this.editor_pane.update(cx, |pane, cx| pane.add_question(window, cx))))
+            .on_action(cx.listener(|this, _: &ResolveNote, window, cx| this.editor_pane.update(cx, |pane, cx| pane.resolve_note(window, cx))))
+            .on_action(cx.listener(|this, _: &ClearAiNotes, window, cx| this.clear_ai_notes(window, cx)))
             .on_action(cx.listener(|this, _: &ConfigureAi, window, cx| this.ai_chip.update(cx, |chip, cx| chip.open(window, cx))))
             .on_action(cx.listener(|this, _: &CycleAgent, window, cx| {
                 let agents: Vec<Option<practice::agents::AgentKind>> = this.assist.read(cx).agents.iter().map(|a| Some(a.kind)).chain([None]).collect();
@@ -250,7 +257,7 @@ impl Workspace {
                 let language = this.session.as_ref().map_or(practice::language::Language::Python, |session| session.language);
                 let Some(starter) = q.starter(language) else { return; };
                 let starter = format!("{}\n", starter.trim_end());
-                this.editor.update(cx, |e, cx| e.replace_all(starter, window, cx));
+                this.editor_pane.update(cx, |pane, cx| pane.replace_file(starter, window, cx));
                 this.toast(Notification::info("Reset to starter code · ctrl+z undoes"), window, cx);
             }))
             .on_action(cx.listener(|this, _: &ZoomIn, window, cx| this.zoom(0.1, window, cx)))

@@ -37,7 +37,8 @@ pub struct EditorPane {
     session: Option<Session>,
     pub(super) completions: Rc<super::completion::Completions>,
     pub(super) menu: Option<super::menu::Menu>,
-    changing: bool,
+    pub(crate) changing: bool,
+    pub(crate) notes: crate::notes::Notes,
     epoch: u64,
     pub(crate) predictions: Option<Rc<crate::copilot::Predictions>>,
     accepted_prediction: Option<AcceptedPrediction>,
@@ -46,7 +47,7 @@ pub struct EditorPane {
     _subscriptions: Vec<Subscription>,
 }
 impl EditorPane {
-    pub fn new(state: Entity<EditorState>, language: Language, library: Rc<Library>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(state: Entity<EditorState>, language: Language, library: Rc<Library>, notes_view: practice::notes::View, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let completions = Rc::new(super::completion::Completions::new(language, cx.weak_entity(), library.clone()));
         state.update(cx, |editor, _| editor.lsp_mut().completion_provider = Some(completions.clone()));
         let observe = cx.observe(&state, |this, editor, cx| {
@@ -92,13 +93,15 @@ impl EditorPane {
             }
             cx.notify();
         });
-        Self { state, language, library, tab_expand: true, path: None, workspace: None, session: None, completions, menu: None, changing: false, epoch: 0, predictions: None, accepted_prediction: None, language_document: None, detail_task: Task::ready(()), _subscriptions: vec![observe, changes] }
+        let notes = cx.subscribe(&state, |this, _, event, cx| if matches!(event, InputEvent::Change) { this.notes_changed(cx); });
+        Self { state, language, library, tab_expand: true, path: None, workspace: None, session: None, completions, menu: None, changing: false, notes: crate::notes::Notes::new(notes_view, language), epoch: 0, predictions: None, accepted_prediction: None, language_document: None, detail_task: Task::ready(()), _subscriptions: vec![observe, changes, notes] }
     }
 
     pub(crate) fn connect_language_document(&mut self, language: Language, document: std::sync::Arc<practice::lsp::Document>, cx: &mut Context<Self>) {
         self.language = language;
         self.language_document = Some(document);
         self.sync_completions(cx);
+        self.sync_note_providers(cx);
     }
 
     pub(crate) fn connect_predictions(&mut self, connection: Entity<crate::copilot::Connection>, window: &mut Window, cx: &mut Context<Self>) {
@@ -354,6 +357,7 @@ impl Render for EditorPane {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.language = Language::ALL.into_iter().find(|l| l.id()==self.state.read(cx).language_name().as_str()).unwrap_or(self.language);
         self.sync_completions(cx);
+        self.sync_note_providers(cx);
         if self.menu.as_ref().is_some_and(|menu| menu.offset != self.state.read(cx).cursor()) { self.menu = None; }
         if let Some(menu) = &mut self.menu { menu.prepare(self.language, &self.library); }
         let theme = cx.theme().clone();

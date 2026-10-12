@@ -26,7 +26,7 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         show: false, focus: false, ..Default::default()
     }, cx, |window, cx| cx.new(|cx| {
         let state = cx.new(|cx| EditorState::new(window, cx).language("python").line_number(true));
-        let mut pane = crate::snippets::expansion::EditorPane::new(state.clone(), Language::Python, std::rc::Rc::new(practice::snippets::search::Library::new(vec![])), window, cx);
+        let mut pane = crate::snippets::expansion::EditorPane::new(state.clone(), Language::Python, std::rc::Rc::new(practice::snippets::search::Library::new(vec![])), Default::default(), window, cx);
         let connection = cx.new(|_| Connection::new(true));
         pane.connect_predictions(connection, window, cx);
 

@@ -47,7 +47,7 @@ pub fn open_reset_settings(window: &mut Window, cx: &mut Context<Workspace>) {
                             }
                             ws.save_now(cx);
                             if let Some(session) = ws.session.as_ref().filter(|session| session.question.is_some()) {
-                                if std::fs::read_to_string(&session.path).ok().as_deref() != Some(ws.editor.read(cx).value().as_ref()) {
+                                if std::fs::read_to_string(&session.path).ok().as_deref() != Some(ws.solution_text(cx).as_str()) {
                                     ws.toast(Notification::error("Could not save solution; settings reset canceled."), window, cx);
                                     return;
                                 }

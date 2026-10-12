@@ -6,6 +6,7 @@ use anyhow::Result;
 
 /// Whether the buffer contains an attempt beyond the supplied language template.
 pub fn has_attempt(code: &str, starter: &str) -> bool {
+    let code = crate::notes::strip(code);
     let code = code.trim();
     !code.is_empty() && code != starter.trim()
 }

@@ -10,6 +10,31 @@ use super::{EditorMode, InputBaseState, InputModeKind};
 /// exposes them.
 pub type EditorState = InputBaseState<EditorMode>;
 
+/// Presentation-only label following a zero-based buffer line.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LineEndHint {
+    pub line: usize,
+    pub text: gpui::SharedString,
+    pub color: gpui::Hsla,
+}
+
+impl EditorState {
+    /// Replace the presentation-only line-end hints, preserving order within each line.
+    /// Hints containing control characters or line separators are skipped. All hints
+    /// are cleared whenever the text is edited; callers should resend fresh hints.
+    pub fn set_line_end_hints(&mut self, hints: Vec<LineEndHint>, cx: &mut gpui::Context<Self>) {
+        self.extras.line_end_hints = hints.into_iter().filter(|hint| {
+            !hint.text.chars().any(|ch| ch.is_control() || matches!(ch, '\u{2028}' | '\u{2029}'))
+        }).collect();
+        self.extras.line_end_hints.sort_by_key(|hint| hint.line);
+        cx.notify();
+    }
+
+    pub fn line_end_hints(&self) -> &[LineEndHint] {
+        &self.extras.line_end_hints
+    }
+}
+
 impl InputModeKind for EditorMode {
     const MULTI_LINE: bool = true;
     const CODE_EDITOR: bool = true;
@@ -39,6 +64,7 @@ impl InputModeKind for EditorMode {
         state.extras.hover_popover = None;
         state.extras.decorations.clear();
         state.extras.range_decorations.clear();
+        state.extras.line_end_hints.clear();
     }
 
     fn editing_syntax_context(state: &InputBaseState<Self>, offset: usize) -> super::SyntaxContext {
@@ -50,6 +76,7 @@ impl InputModeKind for EditorMode {
         range: &std::ops::Range<usize>,
         new_len: usize,
     ) {
+        state.extras.line_end_hints.clear();
         state.extras.decorations.adjust_for_edit(range, new_len);
         state
             .extras
@@ -262,6 +289,14 @@ impl crate::input::InputExtras for super::EditorExtras {
         self.hover_popover
             .as_ref()
             .map(|session| session.symbol_range.clone())
+    }
+
+    fn clear_line_end_hints(&mut self) {
+        self.line_end_hints.clear();
+    }
+
+    fn line_end_hints(&self) -> &[super::LineEndHint] {
+        &self.line_end_hints
     }
 
     fn inline_completion_item(&self) -> Option<&lsp_types::InlineCompletionItem> {

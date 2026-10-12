@@ -39,6 +39,7 @@ mod statement_images;
 mod theme;
 mod tour;
 mod update;
+mod notes;
 mod view;
 mod workspace;
 

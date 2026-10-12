@@ -23,7 +23,7 @@ pub(crate) fn native(cx:&mut HeadlessAppContext,output:&Path,pixels:bool)->Resul
     cx.update(|cx|{super::bind_keys(cx);crate::snippets::expansion::bind_keys(cx);cx.bind_keys([KeyBinding::new("ctrl-j",crate::actions::InsertSnippet,None)]);});
     let(handle,pane)=cx.update(|cx|gpui_kit::open_window(WindowOptions{window_bounds:Some(WindowBounds::Windowed(Bounds{origin:point(px(0.),px(0.)),size:size(px(1000.),px(700.))})),show:false,focus:false,..Default::default()},cx,|window,cx|cx.new(|cx|{
         let state=cx.new(|cx|EditorState::new(window,cx).language("python"));
-        let mut pane=crate::snippets::expansion::EditorPane::new(state.clone(),Language::Python,std::rc::Rc::new(practice::snippets::search::Library::new(vec![])),window,cx);
+        let mut pane=crate::snippets::expansion::EditorPane::new(state.clone(),Language::Python,std::rc::Rc::new(practice::snippets::search::Library::new(vec![])),Default::default(),window,cx);
         state.update(cx,|editor,_|editor.lsp_mut().completion_provider=Some(std::rc::Rc::new(FixtureCompletions)));
         let mut library=vec![Snippet{name:"Fixture loop".into(),prefixes:vec!["loop".into(),"!loop".into()],body:"for ${1:i} in ${2:range(n)}:\n\tprint($1)\n$0".into(),description:"A fixture".into(),scope:Some(Language::Python),template:false,origin:Origin::User}];
         library.push(Snippet{name:"Wrap selection".into(),prefixes:vec!["wrap".into()],body:"${TM_SELECTED_TEXT}\n$0".into(),description:"Keep selected code".into(),scope:Some(Language::Python),template:false,origin:Origin::User});
@@ -218,7 +218,7 @@ fn cp_autocomplete(cx: &mut HeadlessAppContext) -> Result<()> {
     let (handle, pane) = cx.update(|cx| gpui_kit::open_window(WindowOptions { show:false, focus:false, ..Default::default() }, cx, |window,cx| cx.new(|cx| {
         let state = cx.new(|cx| EditorState::new(window,cx).language("python"));
         let library = std::rc::Rc::new(practice::snippets::search::Library::new(practice::snippets::builtin()));
-        let pane = crate::snippets::expansion::EditorPane::new(state.clone(),Language::Python,library,window,cx);
+        let pane = crate::snippets::expansion::EditorPane::new(state.clone(),Language::Python,library,Default::default(),window,cx);
         state.update(cx, |editor,cx| { editor.lsp_mut().completion_provider=Some(std::rc::Rc::new(CpCompletions)); editor.focus(window,cx); });
         pane
     })))?;
@@ -344,7 +344,7 @@ fn delayed_autocomplete(cx: &mut HeadlessAppContext) -> Result<()> {
     let (handle, pane) = cx.update(|cx| gpui_kit::open_window(WindowOptions { show:false, focus:false, ..Default::default() }, cx, |window,cx| cx.new(|cx| {
         let state = cx.new(|cx| EditorState::new(window,cx).language("python"));
         let library = std::rc::Rc::new(practice::snippets::search::Library::new(practice::snippets::builtin()));
-        let pane = crate::snippets::expansion::EditorPane::new(state.clone(),Language::Python,library,window,cx);
+        let pane = crate::snippets::expansion::EditorPane::new(state.clone(),Language::Python,library,Default::default(),window,cx);
         state.update(cx, |editor,cx| { editor.lsp_mut().completion_provider=Some(std::rc::Rc::new(DelayedCompletions)); editor.focus(window,cx); });
         pane
     })))?;

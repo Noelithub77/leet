@@ -1204,6 +1204,64 @@ impl<M: InputModeKind> TextElement<M> {
         Some(WhitespaceIndicators { space, tab })
     }
 
+    /// Shape labels only for visible, non-folded buffer lines.
+    fn layout_line_end_hints(
+        state: &InputBaseState<M>,
+        layout: &LastLayout,
+        font_size: Pixels,
+        window: &mut Window,
+    ) -> Vec<Option<ShapedLine>> {
+        let hints = state.extras.line_end_hints();
+        if hints.is_empty() {
+            return Vec::new();
+        }
+        let text_style = window.text_style();
+        layout.visible_buffer_lines.iter().map(|&buffer_line| {
+            let start = hints.partition_point(|hint| hint.line < buffer_line);
+            let end = hints.partition_point(|hint| hint.line <= buffer_line);
+            let mut text = String::new();
+            let mut runs = Vec::new();
+            for hint in &hints[start..end] {
+                if hint.text.is_empty() {
+                    continue;
+                }
+                if !text.is_empty() {
+                    text.push_str("  ");
+                    runs.push(text_style.to_run(2));
+                }
+                text.push_str(&hint.text);
+                runs.push(text_style.clone().highlight(HighlightStyle {
+                    color: Some(hint.color),
+                    ..Default::default()
+                }).to_run(hint.text.len()));
+            }
+            if text.is_empty() {
+                None
+            } else {
+                Some(window.text_system().shape_line(text.into(), font_size, &runs, None))
+            }
+        }).collect()
+    }
+
+    fn line_end_hint_position(
+        line: &LineLayout,
+        layout: &LastLayout,
+        empty_buffer: bool,
+    ) -> Option<Point<Pixels>> {
+        // Placeholder rows are presentation, not buffer text.
+        if empty_buffer {
+            return Some(point(layout.alignment_offset(px(0.)) + layout.space_width * 2., px(0.)));
+        }
+        let last = line.wrapped_lines.last()?;
+        let row = line.wrapped_lines.len() - 1;
+        Some(point(
+            layout.alignment_offset(line.longest_width) + last.width
+                + if row > 0 { line.wrap_indent } else { px(0.) }
+                + layout.space_width * 2.,
+            layout.line_height * row as f32,
+        ))
+    }
+
     /// Compute inline completion ghost lines for rendering.
     ///
     /// Returns (first_line, ghost_lines) where:
@@ -2315,6 +2373,7 @@ pub(super) struct PrepaintState {
     ghost_lines: Vec<ShapedLine>,
     /// First line of inline completion (painted after cursor on same line)
     ghost_first_line: Option<ShapedLine>,
+    line_end_hints: Vec<Option<ShapedLine>>,
     ghost_lines_height: Pixels,
 }
 
@@ -2791,6 +2850,7 @@ impl<M: InputModeKind> Element for TextElement<M> {
             window,
             cx,
         );
+        let line_end_hints = Self::layout_line_end_hints(state, &last_layout, text_size, window);
         let ghost_line_count = ghost_lines.len();
         let ghost_lines_height = ghost_line_count as f32 * line_height;
 
@@ -2972,6 +3032,7 @@ impl<M: InputModeKind> Element for TextElement<M> {
             indent_guides_path,
             fold_icon_layout,
             ghost_first_line,
+            line_end_hints,
             ghost_lines,
             ghost_lines_height,
         }
@@ -3141,6 +3202,9 @@ impl<M: InputModeKind> Element for TextElement<M> {
         let ghost_lines = &prepaint.ghost_lines;
         let has_ghost_lines = !ghost_lines.is_empty();
 
+        let mut line_end_hints = prepaint.line_end_hints.iter();
+        let empty_buffer = self.state.read(cx).text.len() == 0;
+
         // Track the y-position of the cursor row for positioning the first line suffix
         let mut cursor_row_y = None;
 
@@ -3166,6 +3230,11 @@ impl<M: InputModeKind> Element for TextElement<M> {
                 window,
                 cx,
             );
+            if let Some(Some(hint)) = line_end_hints.next() {
+                if let Some(offset) = Self::line_end_hint_position(line, &prepaint.last_layout, empty_buffer) {
+                    _ = hint.paint(p + offset, line_height, TextAlign::Left, None, window, cx);
+                }
+            }
             offset_y += line.size(line_height).height;
 
             if Some(row) == prepaint.current_row {
@@ -3620,6 +3689,117 @@ mod tests {
             DecorationHarness(state)
         });
         (editor.unwrap(), window)
+    }
+
+    fn line_end_hint(line: usize, text: &str) -> crate::input::LineEndHint {
+        crate::input::LineEndHint {
+            line,
+            text: text.to_owned().into(),
+            color: gpui::black().opacity(0.3),
+        }
+    }
+
+    #[gpui::test]
+    fn line_end_hints_set_clear_and_reject_invalid_text(cx: &mut TestAppContext) {
+        let (editor, window) = decoration_editor(cx, "one\ntwo", false);
+        let mut cx = VisualTestContext::from_window(window.into(), cx);
+        cx.update(|_, cx| {
+            editor.update(cx, |state, cx| {
+                let mut hints = vec![line_end_hint(1, "lo=1"), line_end_hint(0, "O(n)"), line_end_hint(1, "hi=2")];
+                for text in ["bad\nline", "bad\ttext", "bad\rtext", "bad\0text", "bad\u{7f}text", "bad\u{2028}text", "bad\u{2029}text"] {
+                    hints.push(line_end_hint(0, text));
+                }
+                state.set_line_end_hints(hints, cx);
+                assert_eq!(state.line_end_hints(), &[
+                    line_end_hint(0, "O(n)"), line_end_hint(1, "lo=1"), line_end_hint(1, "hi=2"),
+                ]);
+                assert_eq!(state.value().as_ref(), "one\ntwo");
+                state.set_line_end_hints(Vec::new(), cx);
+                assert!(state.line_end_hints().is_empty());
+            });
+        });
+    }
+
+    #[gpui::test]
+    fn line_end_hints_survive_render_and_preserve_layout(cx: &mut TestAppContext) {
+        let text = "a long buffer line that wraps across several visual rows here\nlast";
+        let (editor, window) = decoration_editor(cx, text, true);
+        let mut cx = VisualTestContext::from_window(window.into(), cx);
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            let before = editor.read(cx).last_layout.clone().unwrap();
+            let scroll_before = editor.read(cx).scroll_handle.offset();
+            editor.update(cx, |state, cx| state.set_line_end_hints(vec![
+                line_end_hint(0, "lo=1"), line_end_hint(0, "hi=2"),
+                line_end_hint(1, "O(n)"), line_end_hint(999, "offscreen"),
+            ], cx));
+            window.draw(cx).clear(cx);
+            let state = editor.read(cx);
+            let layout = state.last_layout.as_ref().unwrap();
+            assert_eq!(state.line_end_hints().len(), 4);
+            assert_eq!(state.value().as_ref(), text);
+            assert_eq!(state.scroll_handle.offset(), scroll_before);
+            assert_eq!(layout.visible_buffer_lines, before.visible_buffer_lines);
+            assert_eq!(layout.content_width, before.content_width);
+            assert!(layout.lines[0].wrapped_lines.len() > 1);
+            for (line, old) in layout.lines.iter().zip(before.lines.iter()) {
+                assert_eq!(line.size(layout.line_height), old.size(before.line_height));
+            }
+            let hints = TextElement::<EditorMode>::layout_line_end_hints(state, layout, px(14.), window);
+            assert_eq!(hints.len(), layout.visible_buffer_lines.len());
+            assert_eq!(hints[0].as_ref().unwrap().text.as_ref(), "lo=1  hi=2");
+            let position = TextElement::<EditorMode>::line_end_hint_position(&layout.lines[0], layout, false).unwrap();
+            let rows = layout.lines[0].wrapped_lines.len();
+            assert_eq!(position.y, layout.line_height * (rows - 1) as f32);
+            assert_eq!(position.x, layout.alignment_offset(layout.lines[0].longest_width)
+                + layout.lines[0].wrapped_lines.last().unwrap().width
+                + layout.lines[0].wrap_indent + layout.space_width * 2.);
+        });
+    }
+
+    #[gpui::test]
+    fn line_end_hints_skip_folded_lines(cx: &mut TestAppContext) {
+        let (editor, window) = decoration_editor(cx, "top\nhidden one\nhidden two\nend", false);
+        let mut cx = VisualTestContext::from_window(window.into(), cx);
+        cx.update(|window, cx| {
+            editor.update(cx, |state, cx| {
+                state.apply_highlighter_fold_candidates(vec![FoldRange::new(0, 3)], cx);
+                state.display_map.set_folded(0, true);
+                state.set_line_end_hints(vec![line_end_hint(1, "hidden"), line_end_hint(3, "visible")], cx);
+            });
+            window.draw(cx).clear(cx);
+            let state = editor.read(cx);
+            let layout = state.last_layout.as_ref().unwrap();
+            assert_eq!(layout.visible_buffer_lines, vec![0, 3]);
+            let hints = TextElement::<EditorMode>::layout_line_end_hints(state, layout, px(14.), window);
+            assert!(hints[0].is_none());
+            assert_eq!(hints[1].as_ref().unwrap().text.as_ref(), "visible");
+            assert_eq!(state.line_end_hints().len(), 2);
+        });
+    }
+
+    #[gpui::test]
+    fn line_end_hints_clear_on_edits_and_history(cx: &mut TestAppContext) {
+        let (editor, window) = decoration_editor(cx, "one\ntwo", false);
+        let mut cx = VisualTestContext::from_window(window.into(), cx);
+        cx.update(|window, cx| {
+            editor.update(cx, |state, cx| {
+                state.set_line_end_hints(vec![line_end_hint(1, "hint")], cx);
+                state.set_selected_range(0..0, cx);
+                state.replace_text_in_range(None, "\n", window, cx);
+                assert!(state.line_end_hints().is_empty());
+                state.set_line_end_hints(vec![line_end_hint(2, "hint")], cx);
+                state.undo(&Undo, window, cx);
+                assert_eq!(state.value().as_ref(), "one\ntwo");
+                assert!(state.line_end_hints().is_empty());
+                state.set_line_end_hints(vec![line_end_hint(1, "hint")], cx);
+                state.redo(&Redo, window, cx);
+                assert!(state.line_end_hints().is_empty());
+                state.set_line_end_hints(vec![line_end_hint(2, "hint")], cx);
+                state.set_value("replacement", window, cx);
+                assert!(state.line_end_hints().is_empty());
+            });
+        });
     }
 
     #[gpui::test]

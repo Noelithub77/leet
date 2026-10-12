@@ -212,6 +212,25 @@ impl Debugger {
     #[cfg(feature = "gui-test")]
     pub(crate) fn fixture_verdict(&self) -> Option<bool> { self.verdict(self.selected) }
 
+    /// The selected case's last values of the variables each line names, by zero-based line.
+    pub(crate) fn line_values(&self) -> Option<(String, Vec<(usize, String)>)> {
+        let snapshot = self.snapshot.as_ref()?;
+        let trace = self.trace()?;
+        let code: Vec<&str> = snapshot.code.split('\n').collect();
+        let mut lines = std::collections::BTreeMap::new();
+        for step in &trace.steps {
+            let Some(text) = step.line.checked_sub(1).and_then(|line| code.get(line as usize)) else { continue };
+            let named = |name: &str| text.match_indices(name).any(|(at, _)| {
+                let word = |c: char| c.is_alphanumeric() || c == '_';
+                !text[..at].ends_with(word) && !text[at + name.len()..].starts_with(word)
+            });
+            let values: Vec<String> = step.locals.iter().filter(|local| named(&local.name))
+                .filter_map(|local| scalar(&local.value, trace.language).map(|value| format!("{}={value}", local.name))).take(3).collect();
+            if !values.is_empty() { lines.insert(step.line as usize - 1, values.join("  ")); }
+        }
+        Some((snapshot.code.clone(), lines.into_iter().collect()))
+    }
+
     fn trace(&self) -> Option<&Trace> {
         match self.traces.get(self.selected) { Some(Recording::Ready(trace)) => Some(trace), _ => None }
     }
@@ -503,6 +522,20 @@ impl Debugger {
     }
 }
 
+/// A short value for a line-end badge; containers are left to the debugger.
+fn scalar(value: &debugger::Value, language: Language) -> Option<String> {
+    let python = language == Language::Python;
+    let text = match value {
+        debugger::Value::None => if python { "None" } else { "null" }.to_owned(),
+        debugger::Value::Bool { v } => if python { if *v { "True" } else { "False" }.to_owned() } else { v.to_string() },
+        debugger::Value::Int { v } => v.clone(),
+        debugger::Value::Float { v } => v.to_string(),
+        debugger::Value::Str { v } | debugger::Value::Char { v } => format!("{v:?}"),
+        _ => return None,
+    };
+    (text.chars().count() <= 16).then_some(text)
+}
+
 fn empty(icon: IconName, title: &str, detail: &str, theme: &gpui_kit::component::Theme) -> AnyElement {
     v_flex().size_full().items_center().justify_center().gap_2().p_6()
         .child(Icon::new(icon).size_8().text_color(theme.muted_foreground.opacity(0.6)))
@@ -531,6 +564,9 @@ impl Workspace {
             self.flash("Debug", cx);
         } else {
             self.debug_mode = false;
+            if let Some((code, values)) = self.debugger.read(cx).line_values() {
+                self.editor_pane.update(cx, |pane, cx| pane.set_badges(crate::notes::BadgeKind::Trace, &code, false, values, cx));
+            }
             self.focus_editor(window, cx);
         }
         cx.notify();

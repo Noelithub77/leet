@@ -45,3 +45,5 @@ pub mod viz;
 pub mod background_process;
 
 pub mod tool_setup;
+
+pub mod notes;

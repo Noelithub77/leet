@@ -39,6 +39,10 @@ impl Workspace {
     pub(crate) fn clear_tab_language_adapters(&self, cx: &mut App) {
         for tab in self.tabs.iter().flatten().chain(self.home.closed_tabs.iter().map(|(_, tab)| tab)) { crate::language_server::clear_editor_adapters(&tab.editor, cx); }
     }
+    /// Editor panes of open, parked, and recently closed tabs, not the active one.
+    pub(crate) fn tab_panes(&self) -> Vec<Entity<EditorPane>> {
+        self.tabs.iter().flatten().chain(self.home.closed_tabs.iter().map(|(_, tab)| tab)).map(|tab| tab.pane.clone()).collect()
+    }
     pub(crate) fn update_tab_snippets(&self, cx: &mut App) {
         for tab in self.tabs.iter().flatten().chain(self.home.closed_tabs.iter().map(|(_, tab)| tab)) {
             tab.pane.update(cx, |pane, cx| { pane.library = self.snippet_library.clone(); pane.tab_expand = self.config.snippets.tab_expand; cx.notify(); });
@@ -70,8 +74,9 @@ impl Workspace {
         self.editor = cx.new(|cx| EditorState::new(window, cx).language(self.config.preferred_language.id())
             .line_number(true).indent_guides(true).folding(true).soft_wrap(false)
             .tab_size(TabSize { tab_size: 4, hard_tabs: false }));
-        self.editor_pane = cx.new(|cx| EditorPane::new(self.editor.clone(), self.config.preferred_language, self.snippet_library.clone(), window, cx));
+        self.editor_pane = cx.new(|cx| EditorPane::new(self.editor.clone(), self.config.preferred_language, self.snippet_library.clone(), self.config.notes_view, window, cx));
         self.editor_pane.update(cx, |pane, cx| pane.connect_predictions(self.copilot.clone(), window, cx));
+        self.connect_notes(cx);
         self.apply_snippet_library(cx);
         self.statement = cx.new(|_| Statement::default());
         self.editor_subscription = Some(cx.subscribe_in(&self.editor, window,
@@ -223,7 +228,7 @@ impl Workspace {
         self.save_now(cx);
         if let Some(session) = &self.session {
             if session.question.is_some() && std::fs::read_to_string(&session.path).ok().as_deref()
-                != Some(self.editor.read(cx).value().as_ref()) {
+                != Some(self.solution_text(cx).as_str()) {
                 self.toast(gpui_kit::component::notification::Notification::error("Solution could not be saved; tab kept open"), window, cx);
                 return false;
             }

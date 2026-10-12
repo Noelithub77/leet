@@ -40,6 +40,8 @@ pub struct Config {
     pub snippets: crate::snippets::Settings,
     /// Opt-in AI predictions are revealed only while Alt is held.
     pub copilot_enabled: bool,
+    /// How `#!` and `#?` comment notes appear in the editor.
+    pub notes_view: crate::notes::View,
 }
 
 impl Default for Config {
@@ -65,6 +67,7 @@ impl Default for Config {
             keybindings: BTreeMap::new(),
             snippets: Default::default(),
             copilot_enabled: false,
+            notes_view: Default::default(),
         }
     }
 }

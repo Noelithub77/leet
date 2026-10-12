@@ -365,6 +365,16 @@ impl Workspace {
             }))
             .when(solved, |el| el.child(div().text_xs().text_color(theme.success).child("✓ Solved")))
             .child(div().flex_1())
+            .when(!self.debug_mode, |el| el.child(h_flex().gap_0p5().p_0p5().rounded_lg().bg(theme.secondary)
+                .children(practice::notes::View::ALL.into_iter().map(|view| {
+                    crate::theme::selected_choice(Button::new(SharedString::from(format!("notes-{}", view.label()))).ghost().xsmall(), self.config.notes_view == view, cx).label(view.label())
+                        .tooltip_with_action(match view {
+                            practice::notes::View::Rich => "Notes styled, with hovers",
+                            practice::notes::View::Raw => "Notes as plain comments",
+                            practice::notes::View::Off => "Hide AI notes and questions",
+                        }, &crate::actions::CycleNotesView, Some(crate::actions::WORKSPACE))
+                        .on_click(cx.listener(move |this, _, window, cx| this.set_notes_view(view, window, cx)))
+                }))))
             .child(h_flex().gap_0p5().p_0p5().rounded_lg().bg(theme.secondary)
                 .child(crate::theme::selected_choice(Button::new("center-code").ghost().xsmall(), !self.debug_mode, cx).icon(IconName::Code).label("Code")
                     .tooltip("Edit code").on_click(cx.listener(|this, _, window, cx| this.set_debug(false, window, cx))))

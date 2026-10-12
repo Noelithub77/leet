@@ -308,7 +308,7 @@ impl Workspace {
             session: None,
             tabs: vec![],
             active_tab: None,
-            editor_pane: cx.new(|cx| EditorPane::new(editor.clone(), config.preferred_language, snippet_library, window, cx)),
+            editor_pane: cx.new(|cx| EditorPane::new(editor.clone(), config.preferred_language, snippet_library, config.notes_view, window, cx)),
             copilot: copilot.clone(),
             editor,
             editor_subscription: Some(editor_sub),
@@ -333,6 +333,7 @@ impl Workspace {
         };
         this.home.sidebar = true;
         this.editor_pane.update(cx, |pane, cx| pane.connect_predictions(copilot, window, cx));
+        this.connect_notes(cx);
         this.restore_layout();
         this.rebuild_library();
         this
@@ -687,7 +688,7 @@ impl Workspace {
             *s = Statement { slug: slug.clone().into(), status: Some("Loading…".into()), ..Default::default() };
             cx.notify();
         });
-        self.editor.update(cx, |e, cx| e.set_value("", window, cx));
+        self.load_solution(String::new(), window, cx);
         cx.notify();
 
         self.load_problem(slug, window, cx);
@@ -730,7 +731,7 @@ impl Workspace {
         let tab = self.active_tab;
         let editor = self.editor.clone();
         self.save_now(cx);
-        if self.session.as_ref().is_some_and(|session| std::fs::read_to_string(&session.path).ok().as_deref() != Some(self.editor.read(cx).value().as_ref())) {
+        if self.session.as_ref().is_some_and(|session| std::fs::read_to_string(&session.path).ok().as_deref() != Some(self.solution_text(cx).as_str())) {
             self.toast(Notification::error("Solution could not be saved; language kept"), window, cx);
             return;
         }
@@ -747,7 +748,7 @@ impl Workspace {
                 match loaded {
                     Ok(loaded) => {
                         this.save_now(cx);
-                        if this.session.as_ref().is_some_and(|session| std::fs::read_to_string(&session.path).ok().as_deref() != Some(this.editor.read(cx).value().as_ref())) {
+                        if this.session.as_ref().is_some_and(|session| std::fs::read_to_string(&session.path).ok().as_deref() != Some(this.solution_text(cx).as_str())) {
                             this.toast(Notification::error("Solution could not be saved; language kept"), window, cx);
                             return;
                         }
@@ -769,7 +770,7 @@ impl Workspace {
 
     pub(crate) fn apply_loaded(&mut self, l: Loaded, window: &mut Window, cx: &mut Context<Self>) {
         let preserve_draft = self.session.as_ref().is_some_and(|session| session.rel == l.rel && session.question.as_ref().is_some_and(|q| q.meta["statementSource"] == "competitive-companion"));
-        let code = if preserve_draft { self.save_now(cx); self.editor.read(cx).value().to_string() } else { l.code };
+        let code = if preserve_draft { self.save_now(cx); self.solution_text(cx) } else { l.code };
         let Some(s) = self.session.as_mut() else { return };
         let q = l.q;
         let statement_error = q.meta["statementFetchError"].as_str().map(str::to_owned);
@@ -816,7 +817,7 @@ impl Workspace {
         });
         let path=self.session.as_ref().map(|s|s.path.clone());
         self.editor_pane.update(cx,|pane,cx|{pane.path=path;cx.notify();});
-        self.editor.update(cx, |e, cx| e.set_value(code, window, cx));
+        self.load_solution(code, window, cx);
         if let Some(session)=&self.session && (session.slug.starts_with("cf:") || session.slug.starts_with("cc:"))
             && let Some(name)=self.config.snippets.templates.get(session.language.id()) {
             let snippet=self.editor_pane.read(cx).library.iter().find(|s|s.name==*name&&s.applies_to(session.language)&&s.template).cloned();
@@ -857,11 +858,11 @@ impl Workspace {
 
     /// Writes the editor to the Solution file when it differs.
     pub fn save_now(&mut self, cx: &mut Context<Self>) {
-        let Some(s) = self.session.as_mut() else { return };
-        if s.question.is_none() {
+        if self.session.as_ref().is_none_or(|s| s.question.is_none()) {
             return;
         }
-        let text = self.editor.read(cx).value().to_string();
+        let text = self.solution_text(cx);
+        let Some(s) = self.session.as_mut() else { return };
         if std::fs::read_to_string(&s.path).ok().as_deref() == Some(text.as_str()) {
             return;
         }
@@ -884,8 +885,8 @@ impl Workspace {
                     }
                     s.disk_mtime = mtime;
                     if let Ok(text) = std::fs::read_to_string(&s.path) {
-                        if this.editor.read(cx).value().as_ref() != text {
-                            this.editor.update(cx, |e, cx| e.set_value(text, window, cx));
+                        if this.solution_text(cx) != text {
+                            this.load_solution(text, window, cx);
                             this.flash("Reloaded from disk", cx);
                         }
                     }
@@ -902,7 +903,7 @@ impl Workspace {
     pub fn has_attempt(&self, cx: &App) -> bool {
         self.session.as_ref().is_some_and(|session| {
             session.question.as_ref().is_some_and(|question| {
-                ws::has_attempt(&self.editor.read(cx).value(), question.starter(session.language).unwrap_or_default())
+                ws::has_attempt(&self.solution_text(cx), question.starter(session.language).unwrap_or_default())
             })
         })
     }
@@ -983,9 +984,21 @@ impl Workspace {
                 let report = match &s.compile_error { Some(error) => error.clone(), None => s.failures().join("\n") };
                 let ok = s.compile_error.is_none() && passed == total;
                 this.assist.update(cx, |assist, cx| assist.tests_finished(&slug, ok, format!("{passed}/{total} local tests passed\n{report}"), window, cx));
+                let notes = this.session.as_ref().is_some_and(|session| session.slug == slug) && this.has_ai_notes(cx);
+                let workspace = cx.weak_entity();
                 let Some(s) = this.session_for_mut(&slug) else { return };
                 let note = if s.compile_error.is_some() {
                     Notification::error("Syntax error")
+                } else if passed == total && notes {
+                    Notification::success(format!("All {total} tests passed · AI notes may be resolved"))
+                        .action(move |_, _, _| {
+                            use gpui_kit::component::Sizable as _;
+                            let workspace = workspace.clone();
+                            gpui_kit::component::button::Button::new("clear-ai-notes").xsmall().label("Clear notes").on_click(move |_, window, cx| {
+                                let _ = workspace.update(cx, |ws, cx| ws.clear_ai_notes(window, cx));
+                            })
+                        })
+                        .autohide(true)
                 } else if passed == total {
                     Notification::success(format!("All {total} tests passed · ctrl+alt+enter to submit"))
                 } else {
@@ -1005,13 +1018,13 @@ impl Workspace {
         if let Some(session) = self.session.as_ref().filter(|session| session.source.is_stdin()) {
             if submission && session.source == Source::CodeChef {
                 if let Ok(url) = practice::codechef::problem_url(&session.slug) {
-                    cx.write_to_clipboard(ClipboardItem::new_string(self.editor.read(cx).value().to_string()));
+                    cx.write_to_clipboard(ClipboardItem::new_string(self.submission_text(cx)));
                     let _ = open::that_detached(url);
                     self.toast(Notification::info("Solution copied · submit in CodeChef"), window, cx);
                 }
             } else if submission {
                 if let Ok((contest, index)) = practice::codeforces::problem_id(&session.slug) {
-                    cx.write_to_clipboard(ClipboardItem::new_string(self.editor.read(cx).value().to_string()));
+                    cx.write_to_clipboard(ClipboardItem::new_string(self.submission_text(cx)));
                     let _ = open::that_detached(format!("https://codeforces.com/contest/{contest}/submit/{index}"));
                     self.toast(Notification::info("Solution copied · submit in Codeforces"), window, cx);
                 }
@@ -1029,6 +1042,7 @@ impl Workspace {
             );
             return;
         }
+        let code = self.submission_text(cx);
         let Some(s) = self.session.as_mut() else { return };
         let Some(q) = s.question.clone() else { return };
         if matches!(s.judge, Some(Judge::Running { .. })) {
@@ -1037,7 +1051,6 @@ impl Workspace {
         s.judge = Some(Judge::Running { submission });
         self.bottom = true;
         let language = s.language;
-        let code = self.editor.read(cx).value().to_string();
         let inputs: Vec<String> = s.cases.iter().map(|c| c.input.clone()).collect();
         let (client, db) = (self.client.clone(), self.db.clone());
         let (workspace, rel, slug) = (self.config.workspace.clone(), s.rel.clone(), s.slug.clone());

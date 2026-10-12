@@ -23,6 +23,8 @@ Run `./ops gui:test --fixture chat --json` for focused chat checks, including th
 
 The chat composer fixture checks Enter sending, Shift+Enter line breaks, removal of Ctrl+Enter, empty and disabled input, and send/stop containment. It renders compact, light, dark, and 140%-zoom variants. It uses the production composer with a dropped fixture workspace, so sends do not start agents or open web chats.
 
+Run `./ops gui:test --fixture notes --json` for code notes in the production editor pane: Rich highlights and hovers, question code actions, the Off view's hidden lines, renumbering and copy, edits that keep hidden notes in place, and one-step undo after clearing AI notes. It saves `notes-rich-hover.png` and `notes-off.png`.
+
 Run `./ops gui:test --fixture statement --json` for focused statement cards and image rendering with an isolated local HTTP fixture and disk cache. No platform accounts or external requests are used.
 
 Native mode also checks long statement cards at regular and compact sizes, in light and dark themes, and at 140% zoom: visible headers, independent expansion and scrolling, increased wheel speed, scrollbar thumb dragging, natural short-content sizing without overflow, shared saved flags across questions and reopened storage, PageDown, and Tab/Space activation. Statement PNGs are saved alongside debugger captures.

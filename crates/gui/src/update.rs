@@ -266,8 +266,8 @@ pub fn restart(this: &mut Workspace, cx: &mut Context<Workspace>) {
     if this.release_update.downloading { return; }
     this.save_now(cx);
     if let Some(session) = this.session.as_ref().filter(|session| session.question.is_some()) {
-        let text = this.editor.read(cx).value();
-        if std::fs::read_to_string(&session.path).ok().as_deref() != Some(text.as_ref()) {
+        let text = this.solution_text(cx);
+        if std::fs::read_to_string(&session.path).ok().as_deref() != Some(text.as_str()) {
             this.release_update.error = Some("Could not save solution; restart canceled".into());
             cx.notify();
             return;
