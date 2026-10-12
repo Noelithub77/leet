@@ -224,6 +224,8 @@ pub struct Assist {
     editing: Option<u64>,
     ai_tab: u8,
     context_key: Option<(Option<String>, bool, bool, bool)>,
+    #[cfg(feature = "gui-test")]
+    fixture_no_transport: bool,
 
 }
 
@@ -251,7 +253,8 @@ impl Assist {
             if matches!(event, InputEvent::Change) { this.thread_query = input.read(cx).value().to_string(); this.thread_selection = 0; this.thread_selection_visible = false; this.refresh_threads(); cx.notify(); }
         }).detach();
         let mut this = Self { workspace, db, agents: vec![], detecting: false, catalogs, catalog_cache, requested_catalogs: HashSet::new(), installing: None,
-            runs: vec![], next_id: 0, slug: None, ticker: None, scroll: ScrollHandle::new(), composer, composer_thread: None, threads: vec![], selected_thread: None, loaded_threads: HashSet::new(), show_threads: true, thread_scroll: UniformListScrollHandle::new(), thread_search, thread_query: String::new(), thread_selection: 0, thread_selection_visible: false, conversation_error: None, editing: None, ai_tab: 2, context_key: None };
+            runs: vec![], next_id: 0, slug: None, ticker: None, scroll: ScrollHandle::new(), composer, composer_thread: None, threads: vec![], selected_thread: None, loaded_threads: HashSet::new(), show_threads: true, thread_scroll: UniformListScrollHandle::new(), thread_search, thread_query: String::new(), thread_selection: 0, thread_selection_visible: false, conversation_error: None, editing: None, ai_tab: 2, context_key: None,
+            #[cfg(feature = "gui-test")] fixture_no_transport: false };
         if let Err(error) = this.db.migrate_chats() { this.conversation_error = Some(error.to_string()); }
         this.refresh_threads();
         this
@@ -414,12 +417,24 @@ impl Assist {
         self.runs.insert(0, run);
         self.save(&snapshot.slug);
         self.scroll.scroll_to_bottom();
-        self.launch(id, None, None, window, cx);
+        let assist = cx.weak_entity();
+        // Launch reads workspace context, so release the caller's workspace update first.
+        window.defer(cx, move |window, cx| {
+            let _ = assist.update(cx, |assist, cx| {
+                if assist.runs.iter().any(|run| run.id == id && run.phase == Phase::Starting) {
+                    assist.launch(id, None, None, window, cx);
+                }
+            });
+        });
     }
 
     /// Spawns the agent thread for run `id`, optionally continuing a session with feedback.
     fn launch(&mut self, id: u64, resume: Option<String>, feedback: Option<String>, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(kind) = self.runs.iter().find(|run| run.id == id).and_then(|run| run.agent) { self.load_catalog(kind, cx); }
+        #[cfg(feature = "gui-test")]
+        let transport = !self.fixture_no_transport;
+        #[cfg(not(feature = "gui-test"))]
+        let transport = true;
+        if transport && let Some(kind) = self.runs.iter().find(|run| run.id == id).and_then(|run| run.agent) { self.load_catalog(kind, cx); }
         let Some(run) = self.runs.iter_mut().find(|run| run.id == id) else { return };
         let (Some(snapshot), Some(Target::Agent(agent, selection))) = (run.snapshot.clone(), run.target.clone()) else { return };
         run.snippet_before = self.workspace.upgrade().map(|ws| { let dir=ws.read(cx).snippet_dir.clone();let loaded=practice::snippets::store::load(&dir);(dir,loaded.snippets) });
@@ -440,6 +455,7 @@ impl Assist {
         let fallback = self.catalog(agent.kind).cloned();
         let cache = self.catalog_cache.clone();
         let (tx, mut rx) = futures::channel::mpsc::unbounded::<Msg>();
+        if !transport { return; }
         std::thread::spawn(move || {
             let selection = match selection {
                 Some(selection) => selection,
