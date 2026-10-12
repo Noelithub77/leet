@@ -7,6 +7,9 @@ use gpui_kit::test::TestWindowExt as _;
 use practice::{config::Config, db::Db};
 use super::Assist;
 
+#[path = "tooltip.rs"]
+mod tooltip;
+
 struct LaunchFixture {
     workspace: Entity<crate::workspace::Workspace>,
     snapshot: super::Snapshot,
@@ -285,5 +288,6 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
     }
     cx.update(|cx| { crate::theme::apply("Vesper", cx); crate::theme::set_zoom(1., cx); });
     launch_inside_workspace(cx, output)?;
-    Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["Enter sends","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","send button input","send and stop containment","compact/light/zoom","neutral history rows and visible keyboard selection","empty chats hidden","Ctrl+T / Ctrl+Shift+O / Ctrl+N","aligned toolbar and search","header Plus and no empty history row","merged Chats quick actions and Analysis navigation"]}))
+    tooltip::native(cx, output, pixels)?;
+    Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["Enter sends","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","send button input","send and stop containment","compact/light/zoom","wrapped tooltip width, viewport containment, shortcuts and dismissal","neutral history rows and visible keyboard selection","empty chats hidden","Ctrl+T / Ctrl+Shift+O / Ctrl+N","aligned toolbar and search","header Plus and no empty history row","merged Chats quick actions and Analysis navigation"]}))
 }

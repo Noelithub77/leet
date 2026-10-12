@@ -19,7 +19,7 @@ remain with the report and screenshots. The operator removes temporary session
 data and bounds the fixture process to 180 seconds. Failure never falls back to
 the user's display.
 
-Run `./ops gui:test --fixture chat --json` for focused chat checks, including the merged Chats empty state and navigation to Analysis.
+Run `./ops gui:test --fixture chat --json` for focused chat checks, including the merged Chats empty state and navigation to Analysis. Shared tooltip checks hover long descriptions, short button labels, and shortcut keycaps in dark, light, compact, and zoomed windows; they assert wrapping, viewport containment, and dismissal, and save `tooltip-*.png`.
 
 The chat composer fixture checks Enter sending, Shift+Enter line breaks, removal of Ctrl+Enter, empty and disabled input, and send/stop containment. It renders compact, light, dark, and 140%-zoom variants. It uses the production composer with a dropped fixture workspace, so sends do not start agents or open web chats.
 
