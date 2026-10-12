@@ -3,6 +3,9 @@
 #[cfg(unix)]
 #[path = "ops/gui_tests.rs"]
 mod gui_tests;
+#[cfg(target_os = "linux")]
+#[path = "ops/dev.rs"]
+mod dev;
 #[cfg(unix)]
 mod unix {
 use std::{path::{Path,PathBuf},process::{Command,Stdio},time::{Instant,SystemTime,UNIX_EPOCH}};
@@ -19,7 +22,7 @@ fn execute()->Result<()> {
     let args:Vec<_>=std::env::args().skip(1).collect();
     let command=args.first().map(String::as_str).unwrap_or("--help");
     if matches!(command,"--help"|"-h"|"help"){
-        println!("./ops <check|build|local:deploy|companion|agents|snapshot|cache:fetch|contests:refresh|workspace:move|release:package|trace|gui:test|toolchain:setup|snippets|copilot> [--json]\n\ncompanion     Login browser-import listener; use ./ops companion --help.\n\nagents        Detect local agents; --catalog lists live models, --smoke runs read-only JSON probes.\ncopilot       Optional native completion server; use ./ops copilot --help.\n\nsnippets      Inspect or change local snippets; use ./ops snippets --help.\ncheck         Rust workspace tests.\nbuild         Release desktop build.\nlocal:deploy  Build/install leet and 1337 commands, desktop entry/icon; verify version and links.\nsnapshot      Public-only SQLite refresh; use ./ops snapshot --help.\ncache:fetch   Cache one Codeforces statement: --slug cf:CONTEST:INDEX.\ncontests:refresh  Refresh both providers; optional --contest ID or --leetcode-contest SLUG.\nworkspace:move Move solutions and Git history: --path /absolute/path; preserve a compatibility link.\nrelease:package  Package a native CI build; use ./ops release:package --help.\ngui:test      Isolated GPUI interaction, PNG and optional video checks; use ./ops gui:test --help.\ntrace         Record one case; use ./ops trace --help.\n\nLocal environment. Preserves settings, credentials, cache, and Solutions. Running windows offer restart.");return Ok(());
+        println!("./ops <dev|check|build|local:deploy|companion|agents|snapshot|cache:fetch|contests:refresh|workspace:move|release:package|trace|gui:test|toolchain:setup|snippets|copilot> [--json]\n\ncompanion     Login browser-import listener; use ./ops companion --help.\n\nagents        Detect local agents; --catalog lists live models, --smoke runs read-only JSON probes.\ncopilot       Optional native completion server; use ./ops copilot --help.\n\nsnippets      Inspect or change local snippets; use ./ops snippets --help.\ndev           Build and replace this checkout's Linux development app; use ./ops dev --help.\ncheck         Rust workspace tests.\nbuild         Release desktop build.\nlocal:deploy  Build/install leet and 1337 commands, desktop entry/icon; verify version and links.\nsnapshot      Public-only SQLite refresh; use ./ops snapshot --help.\ncache:fetch   Cache one Codeforces statement: --slug cf:CONTEST:INDEX.\ncontests:refresh  Refresh both providers; optional --contest ID or --leetcode-contest SLUG.\nworkspace:move Move solutions and Git history: --path /absolute/path; preserve a compatibility link.\nrelease:package  Package a native CI build; use ./ops release:package --help.\ngui:test      Isolated GPUI interaction, PNG and optional video checks; use ./ops gui:test --help.\ntrace         Record one case; use ./ops trace --help.\n\nLocal environment. Preserves settings, credentials, cache, and Solutions. Running windows offer restart.");return Ok(());
     }
     if command == "companion" {
         let status = Command::new("cargo").args(["run", "--quiet", "-p", "practice", "--example", "companion_service", "--"]).args(&args[1..]).status()?;
@@ -29,6 +32,12 @@ fn execute()->Result<()> {
     if command == "snippets" { return practice::snippets::cli::cli(&args[1..]); }
     if command == "copilot" { return practice::copilot::install::cli(&args[1..]); }
     if command == "gui:test" { return super::gui_tests::run(&args[1..]); }
+    if command == "dev" {
+        #[cfg(target_os = "linux")]
+        return super::dev::run(&args[1..]);
+        #[cfg(not(target_os = "linux"))]
+        bail!("Development instance replacement currently supports Linux");
+    }
     if command == "trace" { return trace(&args[1..]); }
     if command == "agents" {
         if args.iter().skip(1).any(|arg| !matches!(arg.as_str(), "--json"|"--catalog"|"--smoke"|"--help")) { bail!("Use ./ops agents [--json] [--catalog] [--smoke]"); }

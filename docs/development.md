@@ -3,14 +3,16 @@
 `leet` is the standalone native desktop app in this repository: the NeetCode roadmap, a code editor, local tests, the LeetCode judge, Solution history, and AI learning prompts in one keyboard-driven window. On Linux it runs beside the Go `verd` TUI and shares its LeetCode session. For downloadable cross-platform builds, see [installation and releases](releases.md).
 
 ```sh
-cargo run --jobs 2 -p gui --bin leet --features gui-test # build and run the development app
+./ops dev                 # build, replace this checkout's dev instance, and run
 ./ops local:deploy --json   # build and install the optimized release app
 ./ops check --json     # cargo test --workspace
 leet                      # open; `leet <dir>` uses <dir> as the workspace for this launch
 leet --version
 ```
 
-Use the development command for quick iterations; it skips release optimization and installation. The `gui-test` feature shares build artifacts with the focused GUI checks; fixture mode runs only with the separate `--gui-test` argument. Re-run the command after source changes; it does not hot-reload Rust code. The `Dev` script in `t3.json` can be imported through T3's **Settings → Project → Actions → Import scripts**. The declaration becomes a saved action only after import.
+Use the development command for quick iterations; it skips release optimization and installation. On Linux, `./ops dev` builds with two jobs at low CPU and idle I/O priority on two allowed CPUs, then terminates matching dev instances from this checkout and starts the new binary. It matches the executable, working directory, user, and process identity, including a previous binary replaced by Cargo. Installed apps, Companion, and GUI fixtures are excluded. If compilation fails, the old app stays running; if it refuses to exit after a termination request, the command fails rather than launching a duplicate. Concurrent restarts are serialized with a file lock.
+
+The `gui-test` feature shares build artifacts with the focused GUI checks; fixture mode runs only with the separate `--gui-test` argument. Re-run the command after source changes; it does not watch or hot-reload Rust code. Snippet library files reload independently without recompilation. The `Dev` script in `t3.json` can be imported through T3's **Settings → Project → Actions → Import scripts**. Re-import the existing Dev action to update its saved command; the repository declaration does not update saved actions by itself.
 
 Agent builds run with low CPU and I/O priority and at most two workers. Keep the same target directory and feature set to reuse cached artifacts. Use the development workflow by default; run `local:deploy` only when the user explicitly requests a release installation. Each install keeps a versioned binary in `~/.local/share/leet/bin` (the newest 3 are kept) and repoints the `leet` symlink. A running window notices the new build and shows **Update ready**; `ctrl+shift+r` restarts into it, opening Home with the saved recent problems and panel layout.
 

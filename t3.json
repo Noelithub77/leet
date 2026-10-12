@@ -3,7 +3,7 @@
   "scripts": [
     {
       "name": "Dev",
-      "command": "cargo run --jobs 2 -p gui --bin leet --features gui-test",
+      "command": "./ops dev",
       "icon": "play"
     },
     {

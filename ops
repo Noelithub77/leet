@@ -10,4 +10,4 @@ if [ "${1:-}" = "snapshot" ]; then
     shift
     exec cargo run --quiet -p practice --example snapshot -- "$@"
 fi
-exec cargo run --quiet -p practice --example ops -- "$@"
+exec cargo run --quiet --jobs 2 -p practice --example ops -- "$@"
