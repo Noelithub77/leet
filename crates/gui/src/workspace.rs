@@ -245,7 +245,7 @@ impl Workspace {
                 .line_number(true)
                 .indent_guides(true)
                 .folding(true)
-                .soft_wrap(false)
+                .soft_wrap(true)
                 .tab_size(TabSize { tab_size: 4, hard_tabs: false })
                 .placeholder("Open a problem with ctrl+p")
         });

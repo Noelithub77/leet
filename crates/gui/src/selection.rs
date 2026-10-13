@@ -173,6 +173,33 @@ pub(crate) fn fixture(cx: &mut HeadlessAppContext, output: &std::path::Path, pix
         }))
     })?;
     let handle = handle.into(); cx.run_until_parked();
+    for (index, view) in [(1usize, practice::notes::View::Raw), (2, practice::notes::View::Off), (0, practice::notes::View::Rich)] {
+        cx.update_window(handle, |_, window, cx| {
+            window.activate_window(); window.render_frame(cx); window.click("notes-view", cx);
+        })?;
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| -> anyhow::Result<()> {
+            window.render_frame(cx); ensure!(window.find("popup-menu").visible(), "Annotation dropdown did not open");
+            window.within("popup-menu").click(index, cx);
+            ensure!(workspace.read(cx).config.notes_view == view, "Dropdown selected the wrong annotation view");
+            Ok(())
+        })??;
+        cx.run_until_parked();
+    }
+    cx.update_window(handle, |_, window, cx| -> anyhow::Result<()> {
+        let source = format!("    def combinationSum2(self, candidates: list[int], target: int) -> list[list[int]]: # {}", "long source annotation ".repeat(12));
+        workspace.read(cx).editor_pane.clone().update(cx, |pane, cx| pane.load_file(source.clone(), window, cx));
+        window.render_frame(cx);
+        let editor = workspace.read(cx).editor.read(cx);
+        let first = editor.range_to_bounds(&(0..1)).context("First code character has no bounds")?;
+        let last = editor.range_to_bounds(&(source.len() - 1..source.len())).context("Last code character has no bounds")?;
+        ensure!(last.top() > first.top(), "Long code did not wrap onto another visual row");
+        ensure!(last.right() <= editor.input_bounds().right(), "Wrapped code extends beyond the editor");
+        ensure!(editor.value().as_str() == source, "Soft wrapping changed the source text");
+        Ok(())
+    })??;
+    if pixels { cx.capture_screenshot(handle)?.save(output.join("wrapped-code.png"))?; }
+    cx.update_window(handle, |_, window, cx| workspace.read(cx).editor_pane.clone().update(cx, |pane, cx| pane.load_file("answer = 42\n".into(), window, cx)))?;
     cx.update_window(handle, |_, window, cx| -> anyhow::Result<()> {
         window.activate_window(); window.render_frame(cx);
         workspace.read(cx).editor.clone().update(cx, |editor, cx| editor.focus(window, cx));

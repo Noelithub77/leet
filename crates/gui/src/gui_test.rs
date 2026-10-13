@@ -15,7 +15,10 @@ const PYTHON: &str = "import sys\n\ndef solve():\n    data = list(map(int, sys.s
 const CPP: &str = "#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t;\n    cin >> t;\n    vector<int> answers;\n    while (t--) {\n        int n;\n        cin >> n;\n        int answer = n * 2;\n        answers.push_back(answer);\n        cout << answer << '\\n' << flush;\n    }\n    return 0;\n}\n";
 
 fn snapshot(slug: &str, language: Language) -> Snapshot {
-    Snapshot { slug: slug.into(), language, python: "python3".into(), code: if language == Language::Python { PYTHON } else { CPP }.into(), starter: language.stdin_template().into(), meta: serde_json::Value::Null,
+    let comment = "long debugger source annotation ".repeat(12);
+    let code = if language == Language::Python { PYTHON.replacen("    data = list(map(int, sys.stdin.buffer.read().split()))", &format!("    data = list(map(int, sys.stdin.buffer.read().split())) # {comment}"), 1) }
+        else { CPP.replacen("    vector<int> answers;", &format!("    vector<int> answers; // {comment}"), 1) };
+    Snapshot { slug: slug.into(), language, python: "python3".into(), code, starter: language.stdin_template().into(), meta: serde_json::Value::Null,
         cases: vec![Case { id: 0, input: "3\n2 4 6\n".into(), expected: Some("4\n8\n12\n".into()), custom: false }, Case { id: 1, input: "2\n3 5\n".into(), expected: Some("6\n10\n".into()), custom: true }], compare: Compare::Exact }
 }
 
@@ -104,6 +107,9 @@ pub fn run() -> Result<()> {
             }
             cx.update_window(handle, |_, window, cx| -> Result<()> {
                 window.render_frame(cx);
+                let line = window.find(("debug-code-line", if language == Language::Python { 4usize } else { 9usize })).bounds();
+                ensure!(line.size.height > px(22.), "Long debugger source did not wrap");
+                ensure!(line.right() <= window.find("debug-code").bounds().right(), "Wrapped debugger row exceeds its pane");
                 check_state(&debugger, cx, 0, Some(0), false)?;
                 ensure!(window.find(("debug-case", 0usize)).visible(), "Case chip not visible");
                 window.click("debugger-next", cx);

@@ -5,7 +5,6 @@ use std::ops::Range;
 use std::time::{Duration, Instant};
 
 use gpui_kit::assets::IconName;
-use gpui_kit::base::{Spring, spring};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::highlighter::SyntaxHighlighter;
@@ -250,7 +249,7 @@ impl Debugger {
     fn control(&mut self, control: player::Control, cx: &mut Context<Self>) {
         if player::apply(&mut self.playback, control) { self.last_frame = Instant::now(); self.ensure_ticker(cx); }
         if let Some(step) = self.trace().and_then(|t| t.steps.get(self.playback.index)) {
-            self.code_scroll.set_offset(point(px(0.), -px(step.line.saturating_sub(4) as f32 * LINE_H)));
+            self.code_scroll.scroll_to_item(step.line.saturating_sub(1) as usize);
         }
         cx.notify();
     }
@@ -265,7 +264,7 @@ impl Debugger {
                         this.last_frame = Instant::now();
                         this.playback.advance();
                         if let Some(step) = this.trace().and_then(|t| t.steps.get(this.playback.index)) {
-                            this.code_scroll.set_offset(point(px(0.), -px(step.line.saturating_sub(4) as f32 * LINE_H)));
+                            this.code_scroll.scroll_to_item(step.line.saturating_sub(1) as usize);
                         }
                         cx.notify();
                     }
@@ -386,9 +385,9 @@ impl Render for Debugger {
                             .border_1().border_color(theme.info.opacity(0.3)).border_l_4()
                             .child(h_flex().gap_2().items_center().text_sm().font_weight(FontWeight::SEMIBOLD).text_color(theme.info)
                                 .child(Icon::new(IconName::FlaskConical).size_4()).child("Input"))
-                            .child(v_flex().id(("debug-input", self.selected)).max_h(px(160.)).overflow_scroll()
+                            .child(v_flex().id(("debug-input", self.selected)).min_w_0().max_h(px(160.)).overflow_y_scroll()
                                 .text_size(px(16.)).font_weight(FontWeight::MEDIUM).text_color(theme.info).font_family(theme.mono_font_family.clone())
-                                .children(case.input.lines().map(|line| div().whitespace_nowrap().child(line.to_owned()))))))
+                                .children(case.input.lines().map(|line| div().w_full().child(line.to_owned()))))))
                 })
                 .child(div().flex().flex_1().min_h_0().child(state)));
         let markers: Vec<player::Marker> = trace.map(|t| {
@@ -433,7 +432,7 @@ impl Render for Debugger {
 }
 
 impl Debugger {
-    fn code(&self, step: Option<&Step>, trace: Option<&Trace>, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+    fn code(&self, step: Option<&Step>, trace: Option<&Trace>, _window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme().clone();
         let mut heat = vec![0u32; self.lines.len() + 1];
         if let Some(trace) = trace {
@@ -444,29 +443,26 @@ impl Debugger {
         let hottest = heat.iter().copied().max().unwrap_or(1).max(1) as f32;
         let current = step.map_or(0, |s| s.line as usize);
         let kind = step.map(|s| s.kind);
-        let top = spring("debug-line", current.saturating_sub(1) as f32 * LINE_H, Spring::new(Duration::from_millis(220)), window, cx);
         let marker = match kind { Some(StepKind::Return) => theme.success, Some(StepKind::Exception) => theme.danger, Some(StepKind::Call) => theme.info, _ => theme.primary };
         div().w(relative(0.46)).h_full().min_w(px(260.)).border_r_1().border_color(theme.border)
-            .child(div().id("debug-code").size_full().overflow_scroll().track_scroll(&self.code_scroll).py_2()
-                .child(div().relative()
-                    .when(current > 0, |el| el.child(div().absolute().left_0().right_0().top(px(top)).h(px(LINE_H)).bg(marker.opacity(0.12))
-                        .border_l_2().border_color(marker)))
+            .child(div().id("debug-code").test_support().size_full().overflow_y_scroll().track_scroll(&self.code_scroll).py_2()
                     .children(self.lines.iter().enumerate().map(|(i, line)| {
                         let n = i + 1;
                         let count = heat.get(n).copied().unwrap_or(0);
                         let ran = count > 0;
-                        h_flex().h(px(LINE_H)).items_center().pr_3()
-                            .child(div().w(px(18.)).h_full().flex().items_center().justify_center()
+                        h_flex().id(("debug-code-line", n)).test_support().min_h(px(LINE_H)).items_start().pr_3().border_l_2().border_color(gpui_kit::transparent_black())
+                            .when(n == current, |el| el.bg(marker.opacity(0.12)).border_color(marker))
+                            .child(div().w(px(18.)).h(px(LINE_H)).flex_shrink_0().flex().items_center().justify_center()
                                 .when(n == current, |el| el.child(Icon::new(match kind { Some(StepKind::Return) => IconName::CornerUpLeft, Some(StepKind::Exception) => IconName::TriangleAlert, Some(StepKind::Call) => IconName::CornerDownRight, _ => IconName::ArrowRight }).size_3().text_color(marker))))
-                            .child(div().w(px(30.)).text_right().pr_2().text_size(px(11.)).font_family(theme.mono_font_family.clone())
+                            .child(div().w(px(30.)).flex_shrink_0().text_right().pr_2().text_size(px(11.)).font_family(theme.mono_font_family.clone())
                                 .text_color(if n == current { theme.foreground } else { theme.muted_foreground.opacity(0.6) }).child(n.to_string()))
-                            .child(div().w(px(4.)).h(px(LINE_H - 6.)).rounded_full().mr_2()
+                            .child(div().w(px(4.)).flex_shrink_0().h(px(LINE_H - 6.)).rounded_full().mr_2()
                                 .bg(if ran { theme.warning.opacity(0.25 + 0.75 * (count as f32).ln_1p() / hottest.ln_1p()) } else { theme.muted.opacity(0.4) }))
-                            .child(div().flex_1().min_w_0().whitespace_nowrap().font_family(theme.mono_font_family.clone()).text_size(px(12.5))
+                            .child(div().flex_1().min_w_0().font_family(theme.mono_font_family.clone()).text_size(px(12.5)).line_height(px(LINE_H))
                                 .text_color(theme.foreground).opacity(if trace.is_none() || ran || n == current { 1. } else { 0.65 })
                                 .child(StyledText::new(line.text.clone()).with_highlights(line_highlights(&self.highlighter, &line.range, &theme.highlight_theme))))
                             .when(ran, |el| el.child(div().text_size(px(10.)).text_color(theme.muted_foreground.opacity(0.7)).child(format!("×{count}"))))
-                    }))))
+                    })))
             .into_any_element()
     }
 

@@ -72,7 +72,7 @@ impl Workspace {
     pub fn new_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.activate_language(self.config.preferred_language, cx);
         self.editor = cx.new(|cx| EditorState::new(window, cx).language(self.config.preferred_language.id())
-            .line_number(true).indent_guides(true).folding(true).soft_wrap(false)
+            .line_number(true).indent_guides(true).folding(true).soft_wrap(true)
             .tab_size(TabSize { tab_size: 4, hard_tabs: false }));
         self.editor_pane = cx.new(|cx| EditorPane::new(self.editor.clone(), self.config.preferred_language, self.snippet_library.clone(), self.config.notes_view, window, cx));
         self.editor_pane.update(cx, |pane, cx| pane.connect_predictions(self.copilot.clone(), window, cx));

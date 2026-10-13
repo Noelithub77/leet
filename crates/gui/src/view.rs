@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use gpui_kit::base::{Disableable as _, Spring, Transition, spring, transition};
 use gpui_kit::component::kbd::Kbd;
+use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::resizable::{h_resizable, v_resizable, resizable_panel, ResizableState};
 use gpui_kit::component::{ActiveTheme as _, Sizable as _, h_flex, v_flex};
@@ -383,16 +384,19 @@ impl Workspace {
             }))
             .when(solved, |el| el.child(div().text_xs().text_color(theme.success).child("✓ Solved")))
             .child(div().flex_1())
-            .when(!self.debug_mode, |el| el.child(h_flex().gap_0p5().p_0p5().rounded_lg().bg(theme.secondary)
-                .children(practice::notes::View::ALL.into_iter().map(|view| {
-                    crate::theme::selected_choice(Button::new(SharedString::from(format!("notes-{}", view.label()))).ghost().xsmall(), self.config.notes_view == view, cx).label(view.label())
-                        .tooltip_with_action(match view {
-                            practice::notes::View::Rich => "Highlights, details on hover",
-                            practice::notes::View::Raw => "Notes as plain comments",
-                            practice::notes::View::Off => "Hide AI notes and questions",
-                        }, &crate::actions::CycleNotesView, Some(crate::actions::WORKSPACE))
-                        .on_click(cx.listener(move |this, _, window, cx| this.set_notes_view(view, window, cx)))
-                }))))
+            .when(!self.debug_mode, |el| {
+                let weak = cx.weak_entity(); let selected = self.config.notes_view;
+                el.child(Button::new("notes-view").ghost().xsmall().label(selected.label()).icon(IconName::ChevronDown)
+                    .tooltip_with_action("Annotation view", &crate::actions::CycleNotesView, Some(crate::actions::WORKSPACE))
+                    .dropdown_menu(move |mut menu, _, _| {
+                        for view in practice::notes::View::ALL {
+                            let weak = weak.clone();
+                            menu = menu.item(PopupMenuItem::new(view.label()).checked(selected == view).on_click(move |_, window, cx| {
+                                let _ = weak.update(cx, |this, cx| this.set_notes_view(view, window, cx));
+                            }));
+                        } menu
+                    }))
+            })
             .child(h_flex().gap_0p5().p_0p5().rounded_lg().bg(theme.secondary)
                 .child(crate::theme::selected_choice(Button::new("center-code").ghost().xsmall(), !self.debug_mode, cx).icon(IconName::Code).label("Code")
                     .tooltip("Edit code").on_click(cx.listener(|this, _, window, cx| this.set_debug(false, window, cx))))

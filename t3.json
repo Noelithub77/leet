@@ -10,6 +10,11 @@
       "name": "Local Deploy",
       "command": "./ops local:deploy --json",
       "icon": "play"
+    },
+    {
+      "name": "Publish release",
+      "command": "printf 'Version (for example 0.4.1): '; IFS= read -r leet_release_version && ./ops release:publish --version \"$leet_release_version\" --json",
+      "icon": "build"
     }
   ]
 }

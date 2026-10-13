@@ -111,7 +111,7 @@ impl SnippetEditor {
         let prefixes=cx.new(|cx|InputState::new(window,cx).placeholder("Prefix, aliases"));
         let description=cx.new(|cx|InputState::new(window,cx).placeholder("Description (optional)"));
         let search=cx.new(|cx|InputState::new(window,cx).placeholder("Search snippets…"));
-        let source=cx.new(|cx|EditorState::new(window,cx).language(language.id()).line_number(true).soft_wrap(false));
+        let source=cx.new(|cx|EditorState::new(window,cx).language(language.id()).line_number(true).soft_wrap(true));
         let preview=cx.new(|cx|EditorState::new(window,cx).language(language.id()).line_number(true));
         let changed=cx.subscribe_in(&source,window,|this,_,event,window,cx|if matches!(event,InputEvent::Change){this.update_preview(window,cx);});
         let mut subscriptions=vec![changed];

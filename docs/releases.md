@@ -79,20 +79,24 @@ On Windows, invoke the same Rust operator directly:
 cargo run --locked --release -p practice --example release --target x86_64-pc-windows-msvc -- --target x86_64-pc-windows-msvc --tag v0.2.0 --output dist
 ```
 
-Push a version tag to release it:
+Prepare and commit the release notes in `docs/changelog.md`, then publish from a clean `main` checkout with Git and an authenticated GitHub CLI:
 
 ```sh
-git tag -a v0.2.0 -m "leet v0.2.0"
-git push origin v0.2.0
+./ops release:publish --version 0.4.1 --dry-run --json
+./ops release:publish --version 0.4.1 --json
 ```
 
-Use the GitHub Actions **Release → Run workflow** button with an existing `vX.Y.Z` tag to retry/rebuild that release. The selected tag must exist; every build checks out that tag. Publishing waits for every target, uploads archives, the executable, installer, and SHA-256 manifest to a draft, and then publishes it. Failed builds do not publish an incomplete release. Workflow tokens need `contents: write` only in the publishing job. Never put personal credentials or data into build artifacts.
+The operator updates the workspace and lockfile versions, commits only those two files, creates an annotated tag, atomically pushes the commit and tag, and starts one Release workflow on `main`. Its result reports queued publication and the workflow URL; publication completes only after CI succeeds. It refuses dirty checkouts, reused tags, older versions, and branches other than `main`. A failed push leaves the version commit and tag local; a failed dispatch reports the exact command to retry without creating another version.
+
+The **Publish release** script in `t3.json` asks for a version in its terminal and calls the same operator. Import it once through **Settings → Project → Actions → Import scripts**. T3's project-file schema has no parameter field, so the terminal prompt supplies the input; the operator itself remains non-interactive.
+
+Use the GitHub Actions **Release → Run workflow** button on `main` with an existing `vX.Y.Z` tag to retry/rebuild that release. The selected tag must exist; every build checks out that tag. Publishing waits for every target, uploads archives, the executable, installer, and SHA-256 manifest to a draft, and then publishes it. Failed builds do not publish an incomplete release. Workflow tokens need `contents: write` only in the publishing job. Never put personal credentials or data into build artifacts.
 
 Rust builds use the maintained `Swatinem/rust-cache` action, pinned to the verified v2.9.2 commit, for Cargo downloads and compiled dependencies. Test and release caches are separate; native caches include Cargo/Rust/compiler flags and the macOS deployment target and are isolated by runner OS/version, target architecture, compiler identity, lockfile, manifests, build configuration, Windows CRT flags, and macOS deployment target. The action removes workspace artifacts, incremental directories, and unused packages before saving, keeping caches focused on reusable dependencies. Cargo still builds the current app sources on every run; a cache hit never skips checks or tests. CI invokes `cargo test --locked --workspace` and `python3 tests/install.py` directly, covering the same tests as `./ops check --json` without first compiling the local deployment operator.
 
-Changes to Rust sources, manifests, native configuration, tests, the operator, or the release workflow on **main** run all five native builds plus Linux tests and warm their caches. Superseded main builds are canceled. Documentation-only and landing-page-only changes do not start native builds. Main builds do not package or publish a release.
+Pushes to `main` and version tags do not start native builds automatically. The release operator explicitly starts one workflow, which tests, builds, packages, and publishes without a second validation run. Concurrent requests for the same release are serialized.
 
-For a manual cache warm-up, select **main** in **Release → Run workflow** and leave **tag** empty. To test release packaging without replacing published assets, enter an existing tag and disable **publish**. GitHub scopes caches to the workflow's branch: caches saved on main are available to future tags; caches saved on one tag cannot be read by another tag. Only main runs save Rust caches to avoid filling storage with redundant tag caches. The first run is cold. New compiler versions or native build changes can require a fresh cache.
+For an optional manual validation, select **main** in **Release → Run workflow** and leave **tag** empty. To test release packaging without replacing published assets, enter an existing tag and disable **publish**. Release dispatches run on `main` while checking out the selected tag, so their caches remain available to subsequent releases. Only workflows dispatched on main save Rust caches. New compiler versions or native build changes can require a fresh cache.
 
 The Vite landing page lives in `site/` and is deployed to Cloudflare Pages at `https://leet.allpyq.in`. Static HTML and inline hero CSS paint the install command first; platform tabs and copying use browser APIs. GSAP, Lenis, and OGL load lazily for motion, with React/Sonner used only for feedback. Titles use Nunito and the page follows Vesper’s peach and mint palette. Videos load near the viewport; reduced motion and Save-Data retain posters. Cloudflare Pages builds the `site/` directory and publishes its `dist/` output from `main`; its build watch paths include the site and its shared logo.
 

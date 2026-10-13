@@ -1,10 +1,7 @@
 name: Release
+run-name: ${{ inputs.tag && format('Release {0}', inputs.tag) || 'Validate native builds' }}
 
 on:
-  push:
-    branches: [main]
-    tags: ['v*.*.*']
-    paths: ['crates/**', 'Cargo.toml', 'Cargo.lock', '.cargo/**', 'tests/**', 'ops', '.github/workflows/release.yml']
   workflow_dispatch:
     inputs:
       tag:
@@ -21,7 +18,7 @@ permissions:
 
 concurrency:
   group: release-${{ inputs.tag || github.ref_name }}
-  cancel-in-progress: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+  cancel-in-progress: false
 
 jobs:
   test:
@@ -188,7 +185,7 @@ jobs:
           retention-days: 3
 
   publish:
-    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && inputs.tag != '' && inputs.publish)
+    if: inputs.tag != '' && inputs.publish
     needs: [test, build]
     runs-on: ubuntu-latest
     permissions:
