@@ -42,7 +42,8 @@ pub struct EditorPane {
     epoch: u64,
     pub(crate) predictions: Option<Rc<crate::copilot::Predictions>>,
     accepted_prediction: Option<AcceptedPrediction>,
-    language_document: Option<std::sync::Arc<practice::lsp::Document>>,
+    pub(super) language_document: Option<std::sync::Arc<practice::lsp::Document>>,
+    pub(super) signature: super::signature_help::Hints,
     detail_task: Task<()>,
     _subscriptions: Vec<Subscription>,
 }
@@ -61,9 +62,12 @@ impl EditorPane {
                 this.resolve_detail(cx);
                 editor.update(cx, |editor, cx| editor.dismiss_completion_overlay(cx));
             }
+            this.refresh_signature(false, cx);
             cx.notify();
         });
         let changes = cx.subscribe_in(&state, window, |this, editor, event, window, cx| {
+            if matches!(event, InputEvent::Focus) { this.signature.focused = true; this.signature.input = None; this.refresh_signature(false, cx); }
+            if matches!(event, InputEvent::Blur) { this.signature.focused = false; this.hide_signature(false, cx); }
             if !matches!(event, InputEvent::Change) || this.changing { return; }
             let text = editor.read(cx).value().to_string();
             if this.accepted_prediction.as_ref().is_some_and(|accepted| accepted.after != text) { this.accepted_prediction = None; }
@@ -94,14 +98,17 @@ impl EditorPane {
             cx.notify();
         });
         let notes = cx.subscribe(&state, |this, _, event, cx| if matches!(event, InputEvent::Change) { this.notes_changed(cx); });
-        Self { state, language, library, tab_expand: true, path: None, workspace: None, session: None, completions, menu: None, changing: false, notes: crate::notes::Notes::new(notes_view, language), epoch: 0, predictions: None, accepted_prediction: None, language_document: None, detail_task: Task::ready(()), _subscriptions: vec![observe, changes, notes] }
+        let focused = state.read(cx).focus_handle(cx).is_focused(window);
+        Self { state, language, library, tab_expand: true, path: None, workspace: None, session: None, completions, menu: None, changing: false, notes: crate::notes::Notes::new(notes_view, language), epoch: 0, predictions: None, accepted_prediction: None, language_document: None, signature: super::signature_help::Hints::new(language, focused), detail_task: Task::ready(()), _subscriptions: vec![observe, changes, notes] }
     }
 
     pub(crate) fn connect_language_document(&mut self, language: Language, document: std::sync::Arc<practice::lsp::Document>, cx: &mut Context<Self>) {
         self.language = language;
         self.language_document = Some(document);
+        self.hide_signature(false, cx); self.signature.input = None;
         self.sync_completions(cx);
         self.sync_note_providers(cx);
+        self.refresh_signature(false, cx);
     }
 
     pub(crate) fn connect_predictions(&mut self, connection: Entity<crate::copilot::Connection>, window: &mut Window, cx: &mut Context<Self>) {
@@ -247,6 +254,8 @@ impl EditorPane {
         else { self.open_completions(window, cx); }
     }
     pub fn open_completions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.signature.focused = self.state.read(cx).focus_handle(cx).is_focused(window);
+        self.refresh_signature(true, cx);
         self.sync_completions(cx);
         let editor = self.state.read(cx);
         let snapshot = editor.value().to_string(); let text = editor.text().clone(); let offset = editor.cursor();
@@ -392,6 +401,9 @@ impl Render for EditorPane {
                 } else if event.keystroke.key == "escape" && (this.menu.is_some() || this.completions.is_pending()) {
                     if this.menu.is_none() { this.session = None; }
                     this.close_completions(window, cx);
+                    this.hide_signature(true, cx);
+                    cx.stop_propagation();
+                } else if event.keystroke.key == "escape" && this.hide_signature(true, cx) {
                     cx.stop_propagation();
                 } else if !event.keystroke.modifiers.control && !event.keystroke.modifiers.platform && !event.keystroke.modifiers.shift
                     && event.keystroke.key == "k" && event.keystroke.modifiers.alt
@@ -414,11 +426,13 @@ impl Render for EditorPane {
             .on_action(cx.listener(|this,_:&crate::actions::InsertSnippet,w,cx|this.open_completions(w,cx)))
             .on_action(cx.listener(|this,_:&NextStop,w,cx| this.navigate(false,w,cx)))
             .on_action(cx.listener(|this,_:&PreviousStop,w,cx| this.navigate(true,w,cx)))
-            .on_action(cx.listener(|this,_:&CancelSnippet,w,cx| { if this.menu.is_none() { this.session=None; } this.close_completions(w,cx); }))
+            .on_action(cx.listener(|this,_:&CancelSnippet,w,cx| { if this.menu.is_none() { this.session=None; } this.close_completions(w,cx); this.hide_signature(true, cx); }))
             .on_action(cx.listener(|this,_:&PickerDown,_,cx| { if let Some(menu) = &mut this.menu { menu.step(1); } this.resolve_detail(cx); cx.notify(); }))
             .on_action(cx.listener(|this,_:&PickerUp,_,cx| { if let Some(menu) = &mut this.menu { menu.step(-1); } this.resolve_detail(cx); cx.notify(); }))
             .on_action(cx.listener(|this,_:&InsertPicked,w,cx| this.accept_completion(w,cx)))
             .on_action(cx.listener(|this,_:&crate::language_server::Complete,w,cx| this.open_completions(w,cx)))
+            .on_action(cx.listener(|this, _: &super::signature_help::PreviousSignature, window, cx| this.step_signature(-1, window, cx)))
+            .on_action(cx.listener(|this, _: &super::signature_help::NextSignature, window, cx| this.step_signature(1, window, cx)))
             .on_mouse_move(cx.listener(|this,_,_,cx|{this.state.update(cx,|e,cx|e.clear_diagnostic_popover(cx));cx.notify();}))
             .when_some(hover,|view,(message,bounds)|view.child(deferred(div().absolute().left((bounds.left()-origin.x).max(px(0.))).top(bounds.bottom()-origin.y+px(8.)).max_w(px(420.)).max_h(px(180.)).id("hovered-diagnostic").overflow_y_scroll().p_3().rounded_lg().bg(theme.popover).border_1().border_color(theme.danger.opacity(0.4)).shadow_md().text_sm().text_color(theme.danger).child(message))))
             .child(Editor::new(&self.state).bordered(false).h_full().context_menu({
@@ -447,6 +461,7 @@ impl Render for EditorPane {
                 }))
             })))))
             .when_some(super::menu::render(self, window, cx), |view, menu| view.child(menu))
+            .when_some(super::signature_help::render_popup(self, window, cx), |view, hints| view.child(hints))
             .when_some(if self.menu.is_none() { crate::copilot::preview_overlay(self, window, cx) } else { None }, |view, hint| view.child(hint))
     }
 }

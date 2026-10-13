@@ -5,6 +5,7 @@ use async_lsp::{MainLoop, ServerSocket, router::Router};
 use futures::future::{Either, select};
 use lsp_types::{self as lsp, notification, request};
 use crate::language::Language;
+pub mod signature;
 
 fn lock<T>(value: &Mutex<T>) -> std::sync::MutexGuard<'_, T> { value.lock().unwrap_or_else(|error| error.into_inner()) }
 struct Stop;
@@ -31,6 +32,7 @@ struct State {
     diagnostics: HashMap<lsp::Url, (u64, lsp::PublishDiagnosticsParams)>,
     sequence: u64,
     completion_resolve: bool,
+    signature_help: Option<lsp::SignatureHelpOptions>,
     subscribers: HashMap<lsp::Url, futures::channel::mpsc::Sender<()>>,
 }
 pub struct Server { socket: ServerSocket, state: Arc<Mutex<State>>, pub name: String }
@@ -83,6 +85,7 @@ impl Server {
     pub fn stop(&self) { let _ = self.socket.emit(Stop); }
 
     pub fn supports_completion_resolve(&self) -> bool { lock(&self.state).completion_resolve }
+    pub fn signature_help_options(&self) -> Option<lsp::SignatureHelpOptions> { lock(&self.state).signature_help.clone() }
 
     pub fn start(language: Language, root: &Path) -> Result<Arc<Self>> {
         let (binary, mut args, name) = command(language)?;
@@ -90,7 +93,7 @@ impl Server {
         if let Some(workspace) = &java_workspace { args.extend(["-data".into(), workspace.0.to_string_lossy().into_owned()]); }
         let root = root.to_path_buf();
         let uri = lsp::Url::from_directory_path(&root).map_err(|_| anyhow::anyhow!("Invalid workspace directory"))?;
-        let state = Arc::new(Mutex::new(State { status: Status::Starting, diagnostics: HashMap::new(), sequence: 0, completion_resolve: false, subscribers: HashMap::new() }));
+        let state = Arc::new(Mutex::new(State { status: Status::Starting, diagnostics: HashMap::new(), sequence: 0, completion_resolve: false, signature_help: None, subscribers: HashMap::new() }));
         let diagnostic_state = state.clone();
         let (main_loop, socket) = MainLoop::new_client(move |_| {
             let mut router = Router::new(diagnostic_state);
@@ -127,7 +130,7 @@ impl Server {
                 let output = child.stdin.take().context("Server stdin")?;
                 let initialize = async {
                     let capabilities = serde_json::from_value(serde_json::json!({
-                        "textDocument": {"completion": {"completionItem": {"snippetSupport": false, "documentationFormat": ["markdown", "plaintext"], "resolveSupport": {"properties": ["documentation", "detail"]}}}, "hover": {"contentFormat": ["markdown", "plaintext"]}, "publishDiagnostics": {"versionSupport": true}, "definition": {"linkSupport": true}, "codeAction": {"codeActionLiteralSupport": {"codeActionKind": {"valueSet": ["quickfix", "refactor", "source", "source.organizeImports"]}}}},
+                        "textDocument": {"signatureHelp": {"contextSupport": true, "signatureInformation": {"documentationFormat": ["markdown", "plaintext"], "parameterInformation": {"labelOffsetSupport": true}, "activeParameterSupport": true}}, "completion": {"completionItem": {"snippetSupport": false, "documentationFormat": ["markdown", "plaintext"], "resolveSupport": {"properties": ["documentation", "detail"]}}}, "hover": {"contentFormat": ["markdown", "plaintext"]}, "publishDiagnostics": {"versionSupport": true}, "definition": {"linkSupport": true}, "codeAction": {"codeActionLiteralSupport": {"codeActionKind": {"valueSet": ["quickfix", "refactor", "source", "source.organizeImports"]}}}},
                         "workspace": {"workspaceFolders": true, "configuration": true}
                     }))?;
                     let params = lsp::InitializeParams { process_id: Some(std::process::id()), capabilities,
@@ -138,6 +141,7 @@ impl Server {
                             socket.notify::<notification::Initialized>(lsp::InitializedParams {})?;
                             let mut state = lock(&state);
                             state.completion_resolve = result.capabilities.completion_provider.and_then(|provider| provider.resolve_provider).unwrap_or(false);
+                            state.signature_help = result.capabilities.signature_help_provider;
                             state.status = Status::Ready;
                         }
                         Err(error) => { lock(&state).status = Status::Failed(error.to_string()); let _ = socket.emit(Stop); }
@@ -174,6 +178,13 @@ impl Server {
 }
 pub struct Document { pub server: Arc<Server>, pub uri: lsp::Url, language: Language, content: Mutex<(i32, String)> }
 impl Document {
+    pub async fn signature_help(&self, text: String, offset: usize, context: lsp::SignatureHelpContext) -> Result<Option<lsp::SignatureHelp>> {
+        if self.server.signature_help_options().is_none() { return Ok(None); }
+        self.sync(text.clone())?;
+        self.server.request::<request::SignatureHelpRequest>(lsp::SignatureHelpParams {
+            text_document_position_params: self.position(&text, offset), context: Some(context), work_done_progress_params: Default::default(),
+        }).await
+    }
     pub fn sync(&self, text: String) -> Result<()> {
         let mut content = lock(&self.content);
         if content.1 == text { return Ok(()); }
@@ -217,6 +228,31 @@ impl Drop for Document { fn drop(&mut self) { let _ = self.server.socket.notify:
 
 #[cfg(test)] mod tests {
     use super::*;
+    #[test]
+    #[ignore = "requires installed basedpyright and clangd; uses temporary solution workspaces"]
+    fn live_python_and_cpp_signature_help() {
+        async_io::block_on(async {
+            let root = tempfile::tempdir().unwrap();
+            for (language, text) in [
+                (Language::Python, "def combine(first: int, second: int) -> int:\n    return first + second\n\nvalue = combine(1, 2)\n"),
+                (Language::Cpp, "int combine(int first, int second) { return first + second; }\nint main() { return combine(1, 2); }\n"),
+            ] {
+                let path = root.path().join(format!("signature.{}", language.extension())); std::fs::write(&path, text).unwrap();
+                let server = Server::start(language, root.path()).unwrap();
+                let doc = server.open(&path, language, text.into()).await.unwrap();
+                assert!(server.signature_help_options().is_some(), "{} does not advertise signatures", language.label());
+                let start = text.rfind("combine(").unwrap() + "combine(".len();
+                for (offset, expected) in [(start, "first"), (start + 3, "second")] {
+                    let help = doc.signature_help(text.into(), offset, lsp::SignatureHelpContext { trigger_kind: lsp::SignatureHelpTriggerKind::INVOKED, trigger_character: None, is_retrigger: false, active_signature_help: None }).await.unwrap().expect("Language server did not return a signature");
+                    let signature = &help.signatures[signature::active_signature(&help)];
+                    let range = signature::parameter_range(&help, signature).expect("Missing parameter range");
+                    assert!(signature.label[range].contains(expected), "{} did not highlight {expected}: {help:?}", language.label());
+                }
+                server.stop();
+                println!("{}: real signature help and active-parameter tracking passed", language.label());
+            }
+        });
+    }
     #[test]
     #[ignore = "requires basedpyright or pyright"]
     fn explicit_stop_terminates_a_server_retained_by_a_document() {

@@ -2,6 +2,7 @@ pub mod expansion;
 mod completion;
 mod symbols;
 mod menu;
+pub(crate) mod signature_help;
 mod editor;
 pub use editor::SnippetEditor;
 

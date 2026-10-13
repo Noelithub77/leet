@@ -87,13 +87,14 @@ pub(super) fn render(pane: &EditorPane, window: &mut Window, cx: &mut Context<Ed
     let preview_width = px(480.).min(input.size.width);
     let hint = crate::copilot::preview_hint(pane, window, cx);
     let hint_height = if hint.is_some() { rems(1.75).to_pixels(window.rem_size()) } else { px(0.) };
+    let signature_height = super::signature_help::height(pane, window);
     let desired_list = px(26. * menu.content.items.len().min(8) as f32 + 8.);
     let available_height = input.size.height.min((window.viewport_size().height - input.origin.y).max(px(0.)));
     let side = width + chrome + preview_width + gap <= input.size.width;
     let selected = menu.content.items.get(menu.selected)?;
     let documentation = selected.documentation.as_ref().map(|doc| match doc { Documentation::String(text) => text.clone(), Documentation::MarkupContent(markup) => markup.value.clone() });
     let has_preview = menu.preview.is_some() || documentation.is_some();
-    let desired_menu = desired_list + chrome + hint_height;
+    let desired_menu = desired_list + chrome + hint_height + signature_height;
     let desired_preview = px(242.);
     let desired_height = if !has_preview { desired_menu } else if side { desired_menu.max(desired_preview) } else { desired_menu + gap + desired_preview };
     let above = (pos.y - px(4.)).max(px(0.)).min(available_height);
@@ -102,12 +103,12 @@ pub(super) fn render(pane: &EditorPane, window: &mut Window, cx: &mut Context<Ed
     let use_below = desired_height <= below_space || (desired_height > above && below_space >= above);
     let budget = if use_below { below_space } else { above };
     // Fit the whole popup on one side of the typing line, including its footer and borders.
-    let minimum_menu = px(26.) + chrome + hint_height;
+    let minimum_menu = px(26.) + chrome + hint_height + signature_height;
     let stacked = has_preview && !side;
     if budget < minimum_menu + if stacked { gap + px(40.) } else { px(0.) } { return None; }
     let menu_budget = if stacked { desired_menu.min((budget * 0.45).max(minimum_menu)) } else { desired_menu.min(budget) };
-    let height = px(((menu_budget - chrome - hint_height).as_f32() / 26.).floor() * 26.);
-    let menu_height = height + chrome + hint_height;
+    let height = px(((menu_budget - chrome - hint_height - signature_height).as_f32() / 26.).floor() * 26.);
+    let menu_height = height + chrome + hint_height + signature_height;
     let preview_height = if stacked { desired_preview.min((budget - menu_height - gap).max(px(0.))) } else { desired_preview.min(budget) };
     let popup_height = if !has_preview { menu_height } else if side { menu_height.max(preview_height) } else { menu_height + gap + preview_height };
     let popup_width = if !has_preview { width + chrome } else if side { width + chrome + preview_width + gap } else { (width + chrome).max(preview_width) };
@@ -147,6 +148,8 @@ pub(super) fn render(pane: &EditorPane, window: &mut Window, cx: &mut Context<Ed
     Some(deferred(anchored().position(input.origin + point(left, top)).child(div().id("source-completions").test_support().flex().gap_1().items_start()
         .when(!side, |popup| popup.flex_col())
         .child(div().p_1().bg(surface).border_1().border_color(theme.border).rounded_md().shadow_md().child(list)
+            .when_some(super::signature_help::render_content(pane, cx), |menu, signature| menu.child(div().id("completion-signature").test_support().w(width).h(signature_height).overflow_hidden().border_t_1().border_color(theme.border)
+                .child(div().id("completion-signature-scroll").size_full().overflow_y_scroll().on_scroll_wheel(|_, _, cx| cx.stop_propagation()).child(signature))))
             .when_some(hint, |menu, hint| menu.child(div().h(hint_height).overflow_hidden().child(hint))))
         .when_some(preview, |popup, preview| popup.child(div().id("source-completion-preview").test_support().relative().overflow_hidden()
             .on_scroll_wheel(|_, _, cx| cx.stop_propagation())

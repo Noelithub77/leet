@@ -3,6 +3,7 @@
 use gpui_kit::*;
 use gpui_kit::component::input::{GoToDefinition, ToggleCodeActions};
 use crate::language_server::Complete;
+use crate::snippets::signature_help::{PreviousSignature, NextSignature};
 
 gpui_kit::actions!(
     workspace_commands,
@@ -146,6 +147,8 @@ pub const COMMANDS: &[Command] = &[
     cmd!("Focus editor", "ctrl-1", FocusEditor),
     cmd!("Focus problem description", "ctrl-2", FocusStatement),
     cmd!("Editor completions", "ctrl-space", Complete),
+    cmd!("Previous parameter signature", "", PreviousSignature),
+    cmd!("Next parameter signature", "", NextSignature),
     cmd!("Go to definition", "ctrl-f12", GoToDefinition),
     cmd!("Editor code actions", "alt-enter", ToggleCodeActions),
     cmd!("Next problem", "ctrl-down|alt-n", NextProblem),
