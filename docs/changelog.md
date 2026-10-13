@@ -22,6 +22,7 @@
 <details>
 <summary>Fix</summary>
 
+- Keep completion menus and full previews clear of the typing line, with subtly translucent backgrounds.
 - Keep tooltips compact, with wrapped descriptions and balanced padding.
 - Show NeetCode’s own descriptions, examples, diagrams, and complexity guidance.
 - Keep CodeChef’s additional samples and explanations in the question view.

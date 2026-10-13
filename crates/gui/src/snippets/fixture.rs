@@ -192,9 +192,64 @@ pub(crate) fn native(cx:&mut HeadlessAppContext,output:&Path,pixels:bool)->Resul
     }
     cx.update(|cx|{crate::theme::apply("Vesper",cx);crate::theme::set_zoom(1.,cx);});
     workspace_tab(cx,output,pixels)?;
+    completion_placement(cx, output, pixels)?;
     delayed_autocomplete(cx)?;
     cp_autocomplete(cx)?;
-    Ok(serde_json::json!({"fixture":"snippets","passed":true,"pixels":pixels,"checks":["prefix Tab expansion","typing mirrors","Tab and Shift+Tab","native cursor completions and Escape","merged language-server suggestions","Enter and Tab accept linked snippet placeholders","manual creation and save","drag cursor drop","compact light and zoom layouts","AI panel without agent startup","staged review edit, Apply and Undo","workspace tab and Explorer","field titles","Ctrl+W close and invalid-save guard","immediate local fuzzy results with delayed LSP","late merge preserves selection","Escape cancels late LSP","safe cached server results while extending and deleting a word","external snippet hot reload and invalid-file recovery"]}))
+    Ok(serde_json::json!({"fixture":"snippets","passed":true,"pixels":pixels,"checks":["prefix Tab expansion","typing mirrors","Tab and Shift+Tab","native cursor completions and Escape","merged language-server suggestions","Enter and Tab accept linked snippet placeholders","manual creation and save","drag cursor drop","compact light and zoom layouts","completion panels avoid the typing line and stay inside narrow panes","AI panel without agent startup","staged review edit, Apply and Undo","workspace tab and Explorer","field titles","Ctrl+W close and invalid-save guard","immediate local fuzzy results with delayed LSP","late merge preserves selection","Escape cancels late LSP","safe cached server results while extending and deleting a word","external snippet hot reload and invalid-file recovery"]}))
+}
+
+fn completion_placement(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -> Result<()> {
+    for (name, width, height, lines, theme, zoom) in [
+        ("top", 480., 420., 0, "Vesper", 1.),
+        ("middle", 480., 420., 9, "Vesper", 1.),
+        ("bottom", 480., 420., 17, "Vesper", 1.),
+        ("wide", 1100., 420., 9, "Vesper", 1.),
+        ("light", 480., 420., 9, "Solarized Light", 1.),
+        ("zoom", 480., 420., 8, "Vesper", 1.4),
+    ] {
+        cx.update(|cx| { crate::theme::apply(theme,cx); crate::theme::set_zoom(zoom,cx); });
+        let (handle, pane) = cx.update(|cx| gpui_kit::open_window(WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(Bounds { origin: point(px(0.),px(0.)), size: size(px(width),px(height)) })),
+            show:false, focus:false, ..Default::default()
+        }, cx, |window,cx| cx.new(|cx| {
+            let state = cx.new(|cx| EditorState::new(window,cx).language("python"));
+            let library = std::rc::Rc::new(practice::snippets::search::Library::new(practice::snippets::builtin()));
+            let pane = crate::snippets::expansion::EditorPane::new(state.clone(),Language::Python,library,Default::default(),window,cx);
+            state.update(cx, |editor,cx| {
+                let source = "water = max(left, right)\n".repeat(lines);
+                editor.set_value(source.clone(),window,cx);
+                editor.set_selected_range(source.len()..source.len(),cx);
+                editor.focus(window,cx);
+            });
+            pane
+        })))?;
+        let handle = handle.into(); cx.run_until_parked();
+        cx.update_window(handle, |_,window,cx| { window.render_frame(cx); window.input("df",cx); })?;
+        cx.run_until_parked();
+        cx.update_window(handle, |_,window,cx| -> Result<()> {
+            window.render_frame(cx);
+            let menu = pane.read(cx).menu.as_ref().ok_or_else(|| anyhow::anyhow!("{name}: completion menu missing"))?;
+            let index = menu.content.items.iter().position(|item| item.label == "dfs").ok_or_else(|| anyhow::anyhow!("{name}: DFS missing"))?;
+            let selected = menu.selected;
+            for _ in 0..selected { window.press("up",cx); }
+            for _ in 0..index { window.press("down",cx); }
+            window.render_frame(cx);
+            let editor = pane.read(cx).state.read(cx);
+            let input = editor.input_bounds();
+            let (cursor, line_height) = editor.cursor_layout().ok_or_else(|| anyhow::anyhow!("{name}: caret missing"))?;
+            let caret_top = cursor.origin.y + editor.scroll_offset().y;
+            let popup = window.find("source-completions").bounds();
+            let preview = window.find("source-completion-preview").bounds();
+            ensure!(popup.bottom() <= caret_top - px(3.) || popup.top() >= caret_top + line_height + px(3.), "{name}: popup covers typing line: {popup:?}, caret {caret_top:?}");
+            ensure!(popup.top() >= input.top() - px(1.) && popup.bottom() <= input.bottom() + px(1.) && popup.left() >= input.left() - px(1.) && popup.right() <= input.right() + px(1.), "{name}: popup escapes editor: {popup:?}, input {input:?}");
+            ensure!(preview.size.height > px(40.), "{name}: full preview became inaccessible");
+            Ok(())
+        })??;
+        if pixels { cx.capture_screenshot(handle)?.save(output.join(format!("completion-placement-{name}.png")))?; }
+        cx.update_window(handle, |_,window,cx| { window.press("escape",cx); window.remove_window(); })?;
+    }
+    cx.update(|cx| { crate::theme::apply("Vesper",cx); crate::theme::set_zoom(1.,cx); });
+    Ok(())
 }
 
 struct CpCompletions;

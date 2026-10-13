@@ -81,19 +81,39 @@ pub(super) fn render(pane: &EditorPane, window: &mut Window, cx: &mut Context<Ed
     let (cursor, line_height) = editor.cursor_layout()?;
     let input = editor.input_bounds();
     let pos = editor.scroll_offset() + cursor.origin - input.origin;
-    let width = px(340.).min(input.size.width.max(px(160.)));
-    let preview_width = px(480.).min((input.size.width - px(8.)).max(px(160.)));
-    let height = px(26. * menu.content.items.len().min(8) as f32 + 8.);
-    let below = pos.y + line_height + px(4.);
+    let gap = rems(0.25).to_pixels(window.rem_size());
+    let chrome = rems(0.5).to_pixels(window.rem_size()) + px(2.);
+    let width = px(340.).min((input.size.width - chrome).max(px(0.)));
+    let preview_width = px(480.).min(input.size.width);
+    let hint = crate::copilot::preview_hint(pane, window, cx);
+    let hint_height = if hint.is_some() { rems(1.75).to_pixels(window.rem_size()) } else { px(0.) };
+    let desired_list = px(26. * menu.content.items.len().min(8) as f32 + 8.);
     let available_height = input.size.height.min((window.viewport_size().height - input.origin.y).max(px(0.)));
-    let side = width + preview_width + px(16.) <= input.size.width;
+    let side = width + chrome + preview_width + gap <= input.size.width;
     let selected = menu.content.items.get(menu.selected)?;
     let documentation = selected.documentation.as_ref().map(|doc| match doc { Documentation::String(text) => text.clone(), Documentation::MarkupContent(markup) => markup.value.clone() });
     let has_preview = menu.preview.is_some() || documentation.is_some();
-    let popup_width = if !has_preview { width } else if side { width + preview_width + px(16.) } else { width.max(preview_width) };
+    let desired_menu = desired_list + chrome + hint_height;
+    let desired_preview = px(242.);
+    let desired_height = if !has_preview { desired_menu } else if side { desired_menu.max(desired_preview) } else { desired_menu + gap + desired_preview };
+    let above = (pos.y - px(4.)).max(px(0.)).min(available_height);
+    let below = (pos.y + line_height + px(4.)).max(px(0.)).min(available_height);
+    let below_space = available_height - below;
+    let use_below = desired_height <= below_space || (desired_height > above && below_space >= above);
+    let budget = if use_below { below_space } else { above };
+    // Fit the whole popup on one side of the typing line, including its footer and borders.
+    let minimum_menu = px(26.) + chrome + hint_height;
+    let stacked = has_preview && !side;
+    if budget < minimum_menu + if stacked { gap + px(40.) } else { px(0.) } { return None; }
+    let menu_budget = if stacked { desired_menu.min((budget * 0.45).max(minimum_menu)) } else { desired_menu.min(budget) };
+    let height = px(((menu_budget - chrome - hint_height).as_f32() / 26.).floor() * 26.);
+    let menu_height = height + chrome + hint_height;
+    let preview_height = if stacked { desired_preview.min((budget - menu_height - gap).max(px(0.))) } else { desired_preview.min(budget) };
+    let popup_height = if !has_preview { menu_height } else if side { menu_height.max(preview_height) } else { menu_height + gap + preview_height };
+    let popup_width = if !has_preview { width + chrome } else if side { width + chrome + preview_width + gap } else { (width + chrome).max(preview_width) };
     let left = pos.x.max(px(0.)).min((input.size.width - popup_width).max(px(0.)));
-    let popup_height = if has_preview { if side { height.max(px(240.)) } else { height + px(244.) } } else { height };
-    let top = if below + popup_height > available_height { (pos.y - popup_height - px(4.)).max(px(0.)) } else { below };
+    let top = if use_below { below } else { above - popup_height };
+    let surface = theme.popover.opacity(0.98);
     let preview: Option<AnyElement> = if let Some((code, highlighter)) = &menu.preview {
         Some(div().font_family(theme.mono_font_family.clone()).text_xs()
             .when_some(documentation.as_ref().and_then(|doc| Some(doc.split_once("```").map_or(doc.as_str(), |(header, _)| header).trim().to_owned())).filter(|header| !header.is_empty()), |view, header|
@@ -124,18 +144,18 @@ pub(super) fn render(pane: &EditorPane, window: &mut Window, cx: &mut Context<Ed
                 })).into_any_element()
         }).collect()
     })).track_scroll(&menu.scroll).w(width).h(height);
-    Some(deferred(div().id("source-completions").test_support().absolute().left(left).top(top).flex().gap_1().items_start()
+    Some(deferred(anchored().position(input.origin + point(left, top)).child(div().id("source-completions").test_support().flex().gap_1().items_start()
         .when(!side, |popup| popup.flex_col())
-        .child(div().p_1().bg(theme.popover).border_1().border_color(theme.border).rounded_md().shadow_md().child(list)
-            .when_some(crate::copilot::preview_hint(pane, window, cx), |menu, hint| menu.child(hint)))
+        .child(div().p_1().bg(surface).border_1().border_color(theme.border).rounded_md().shadow_md().child(list)
+            .when_some(hint, |menu, hint| menu.child(div().h(hint_height).overflow_hidden().child(hint))))
         .when_some(preview, |popup, preview| popup.child(div().id("source-completion-preview").test_support().relative().overflow_hidden()
             .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
-            .w(preview_width).bg(theme.popover).border_1().border_color(theme.border).rounded_md().shadow_md()
-            .child(div().id("source-completion-preview-scroll").overflow_y_scroll().max_h(px(240.)).p_2().pb_8().text_xs().child(preview))
+            .w(preview_width).h(preview_height).bg(surface).border_1().border_color(theme.border).rounded_md().shadow_md()
+            .child(div().id("source-completion-preview-scroll").overflow_y_scroll().h((preview_height - px(2.)).max(px(0.))).p_2().pb_8().text_xs().child(preview))
             .child(deferred(div().id("completion-preview-fade").test_support().absolute().w_full().left_0().bottom_0().h_8().rounded_b_md()
-                .bg(linear_gradient(180., linear_color_stop(theme.popover.opacity(0.), 0.), linear_color_stop(theme.popover, 1.)))))))
+                .bg(linear_gradient(180., linear_color_stop(theme.popover.opacity(0.), 0.), linear_color_stop(surface, 1.)))))))
         .on_mouse_down_out(cx.listener(|pane, _, window, cx| pane.close_completions(window, cx)))
-    ).into_any_element())
+    )).into_any_element())
 }
 
 #[cfg(test)]
