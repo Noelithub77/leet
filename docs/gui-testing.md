@@ -21,7 +21,7 @@ the user's display.
 
 Run `./ops gui:test --fixture chat --json` for focused chat checks, including the merged Chats empty state and navigation to Analysis. Shared tooltip checks hover long descriptions, short button labels, and shortcut keycaps in dark, light, compact, and zoomed windows; they assert wrapping, viewport containment, and dismissal, and save `tooltip-*.png`.
 
-The chat composer fixture checks Enter sending, Shift+Enter line breaks, removal of Ctrl+Enter, empty and disabled input, and send/stop containment. It renders compact, light, dark, and 140%-zoom variants. It uses the production composer with a dropped fixture workspace, so sends do not start agents or open web chats.
+The chat composer fixture checks Enter sending, Shift+Enter line breaks, removal of Ctrl+Enter, empty and disabled input, and send/stop containment. It renders compact, light, dark, and 140%-zoom variants. It uses the production composer with a dropped fixture workspace, so sends do not start agents or open web chats. Its history includes an I'm stuck chat that renders as a colored Stuck tag in `threads-*.png`; asking about that chat's note must open it, unloaded, with the prompt prefilled and focused.
 
 Run `./ops gui:test --fixture notes --json` for code notes in the production editor pane: Rich hiding AI notes behind line highlights, note cards with a step bar, costs and shortcut keys, question and noted-line code actions, the Off view's hidden lines, renumbering and copy, edits that keep hidden notes in place, one-step undo after clearing AI notes in Raw, and resolving the hovered line while the cursor is elsewhere. It saves `notes-rich-hover.png`, `notes-actions.png`, and `notes-off.png`.
 

@@ -7,7 +7,7 @@ use gpui_kit::component::{ActiveTheme as _, Theme};
 use gpui_kit::component::input::{CodeActionProvider, EditorState, HoverProvider, Position, RangeDecoration, RangeDecorationCollection,
     RangeDecorationStyle, Rope, RopeExt as _};
 use practice::{language::Language, notes::{self, Hidden, Kind, Note, View}};
-use crate::actions::{AddQuestion, AskInPlace, ClearAiNotes, ResolveNote};
+use crate::actions::{AskInChat, AskInPlace, ClearAiNotes, ResolveNote};
 use crate::note_card::{Card, Item, Key};
 use crate::snippets::expansion::EditorPane;
 use crate::workspace::Workspace;
@@ -157,7 +157,7 @@ impl CodeActionProvider for Provider {
             Some(_) => {}
             None => if code_range(&text, line).is_some() {
                 if placed.iter().any(|placed| placed.note.kind.ai() && placed.target == Some(line)) { actions.push(action("Resolve note", "resolve")); }
-                actions.push(action("Ask about this line", "question"));
+                actions.push(action("Ask in chat", "chat"));
             },
         }
         if self.ai.get() { actions.push(action("Clear AI notes", "clear")); }
@@ -167,7 +167,7 @@ impl CodeActionProvider for Provider {
         let command: Box<dyn Action> = match action.data.as_ref().and_then(|data| data.as_str()) {
             Some("ask") => Box::new(AskInPlace),
             Some("resolve") => Box::new(ResolveNote),
-            Some("question") => Box::new(AddQuestion),
+            Some("chat") => Box::new(AskInChat),
             Some("clear") => Box::new(ClearAiNotes),
             _ => return Task::ready(Ok(())),
         };
@@ -413,6 +413,18 @@ impl EditorPane {
         true
     }
 
+    /// The acting line's code and the AI notes about it.
+    pub(crate) fn line_question(&self, cx: &App) -> (String, Vec<String>) {
+        let line = self.acting_line(cx);
+        let placed = self.notes.provider.placed.borrow();
+        let target = placed.iter().find(|placed| placed.line == Some(line)).map_or(Some(line), |placed| placed.target);
+        let notes = placed.iter().filter(|placed| placed.note.kind.ai() && (placed.line == Some(line) || target.is_some() && placed.target == target))
+            .map(|placed| placed.note.text.clone()).collect();
+        let text = self.state.read(cx).value().to_string();
+        let code = target.and_then(|line| text.split('\n').nth(line)).map(str::trim).unwrap_or_default().to_owned();
+        (code, notes)
+    }
+
     /// Adds a `#?` line above the acting line and puts the cursor on it.
     pub(crate) fn add_question(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.state.read(cx).value().to_string();
@@ -525,6 +537,22 @@ impl Workspace {
         let Some(written) = notes::answer(&self.solution_text(cx), question, reply, language) else { return };
         self.editor_pane.update(cx, |pane, cx| pane.apply_file(written, window, cx));
         self.save_now(cx);
+    }
+
+    /// Opens the chat that wrote the acting line's notes, ready for a follow-up about that line.
+    pub(crate) fn ask_in_chat(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(slug) = self.session.as_ref().map(|session| session.slug.clone()) else { return };
+        let (code, notes) = self.editor_pane.read(cx).line_question(cx);
+        self.editor_pane.read(cx).state.clone().update(cx, |editor, cx| editor.clear_hover_state(cx));
+        let quote = if code.is_empty() { String::new() } else { format!("About `{code}`: ") };
+        self.right = true;
+        self.save_layout();
+        self.assist.update(cx, |assist, cx| {
+            assist.set_problem(Some(&slug), cx);
+            let thread = assist.note_thread(&notes);
+            assist.ask_in_chat(thread, quote, window, cx);
+        });
+        cx.notify();
     }
 
     /// Sends the `#?` question on the cursor line to the AI; the reply lands below it.

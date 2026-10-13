@@ -165,7 +165,8 @@ impl Assist {
     pub(super) fn thread_header(&self, _window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
         let theme = cx.theme().clone();
-        let title = if self.show_threads { "Chats".into() } else { self.selected_thread.and_then(|id| self.db.chat_thread(id).ok()).filter(|thread| thread.title != "New chat").map(|thread| thread.title).unwrap_or_else(|| "Chats".into()) };
+        let title = if self.show_threads { "Chats".into() } else { self.selected_thread.and_then(|id| self.db.chat_thread(id).ok()).filter(|thread| thread.title != "New chat")
+            .map(|thread| Action::from_title(&thread.title).and_then(Action::tag).map_or(thread.title, str::to_owned)).unwrap_or_else(|| "Chats".into()) };
         let weak = cx.entity().downgrade();
         let has_thread = self.threads.iter().any(|thread| Some(thread.id) == self.selected_thread);
         let has_history = !self.threads.is_empty() || !self.thread_query.trim().is_empty();
@@ -197,7 +198,10 @@ impl Assist {
                             .bg(if this.thread_selection_visible && index == this.thread_selection { theme.list_active } else { theme.background.opacity(0.) })
                             .hover(|el| el.bg(theme.list_hover))
                             .child(Icon::new(if thread.fork_of.is_some() { IconName::GitBranch } else { IconName::MessageCircle }).xsmall().text_color(theme.muted_foreground))
-                            .child(div().flex_1().min_w_0().truncate().text_sm().child(if thread.title == "New chat" { thread.draft.lines().find(|line| !line.trim().is_empty()).unwrap_or("Draft").trim().to_owned() } else { thread.title.clone() }))
+                            .child(match Action::from_title(&thread.title).and_then(|action| Some((action, action.tag()?))) {
+                                Some((action, tag)) => h_flex().flex_1().min_w_0().child(crate::note_card::chip(tag, accent(action, &theme))).into_any_element(),
+                                None => div().flex_1().min_w_0().truncate().text_sm().child(if thread.title == "New chat" { thread.draft.lines().find(|line| !line.trim().is_empty()).unwrap_or("Draft").trim().to_owned() } else { thread.title.clone() }).into_any_element(),
+                            })
                             .on_click(cx.listener(move |this, _, window, cx| this.select_thread(id, window, cx))).into_any_element()
                     })).collect()
                 })).track_scroll(&self.thread_scroll).w_full().h(px(self.threads.len().min(5) as f32 * 40.))))))

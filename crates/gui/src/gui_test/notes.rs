@@ -13,7 +13,7 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
     cx.update(|cx| {
         cx.bind_keys([KeyBinding::new("alt-enter", ToggleCodeActions, None)]);
         // The notes shortcuts the hover card shows as keycaps.
-        let shown = ["ResolveNote", "AddQuestion", "AskInPlace", "NextNoteStep"];
+        let shown = ["ResolveNote", "AskInChat", "AskInPlace", "NextNoteStep"];
         let bindings: Vec<KeyBinding> = crate::actions::COMMANDS.iter().filter(|command| shown.contains(&command.id))
             .filter_map(|command| KeyBinding::load(command.key, (command.action)(), None, false, None, cx.keyboard_mapper().as_ref()).ok()).collect();
         cx.bind_keys(bindings);
@@ -70,7 +70,7 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
     let titles = actions(cx, rich.find("#? why").unwrap_or_default() + 3)?;
     ensure!(titles == ["Ask AI", "Clear AI notes"], "Unexpected question actions: {titles:?}");
     let titles = actions(cx, anchor.start + 2)?;
-    ensure!(titles == ["Resolve note", "Ask about this line", "Clear AI notes"], "Unexpected noted-line actions: {titles:?}");
+    ensure!(titles == ["Resolve note", "Ask in chat", "Clear AI notes"], "Unexpected noted-line actions: {titles:?}");
     if pixels {
         cx.update_window(handle, |_, window, cx| window.render_frame(cx))?;
         cx.capture_screenshot(handle)?.save(output.join("notes-actions.png"))?;

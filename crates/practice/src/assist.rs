@@ -68,6 +68,23 @@ impl Action {
         }
     }
 
+    /// The short tag for a chat this action started; free-form chats have none.
+    pub fn tag(self) -> Option<&'static str> {
+        match self {
+            Self::Ask => None,
+            Self::Stuck => Some("Stuck"),
+            Self::Bugs => Some("Bugs"),
+            Self::Review => Some("Analyse"),
+            action => Some(action.label()),
+        }
+    }
+
+    /// The action that named a chat, for chats titled after a bare quick action.
+    pub fn from_title(title: &str) -> Option<Self> {
+        let title = title.strip_suffix(" · branch").unwrap_or(title);
+        Self::ALL.into_iter().chain([Self::Review]).find(|action| action.label() == title)
+    }
+
     /// One line for the tooltip.
     pub fn summary(self) -> &'static str {
         match self {
@@ -636,6 +653,14 @@ mod tests {
         assert!(prompt.contains("1 | a = 1") && prompt.contains("2 | return a"));
         assert!(prompt.contains("my result: [1,0]") && prompt.contains("10^4") && prompt.contains("dry-run this one"));
         assert!(prompt.contains("Visual structures"));
+    }
+
+    #[test]
+    fn quick_action_chats_get_short_tags() {
+        assert_eq!(Action::from_title("I'm stuck").and_then(Action::tag), Some("Stuck"));
+        assert_eq!(Action::from_title("Analyse my solution · branch").and_then(Action::tag), Some("Analyse"));
+        assert_eq!(Action::from_title("Why is this slow?"), None);
+        assert_eq!(Action::Ask.tag(), None);
     }
 
     #[test]

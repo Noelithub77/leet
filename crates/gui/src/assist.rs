@@ -445,17 +445,51 @@ impl Assist {
         self.composer.update(cx, |input, cx| input.set_value(draft, window, cx));
     }
 
-    /// The full explanation behind a note's text, from the newest run that wrote it.
-    pub fn note_detail(&self, text: &str) -> Option<String> {
+    /// The newest run that wrote a note, with the full explanation behind its text.
+    fn note_run(&self, text: &str) -> Option<(&Run, String)> {
         self.runs.iter().find_map(|run| {
             let answer = run.answer.as_ref()?;
             if run.in_place.is_some() {
                 let Answer::Chat(reply) = answer else { return None };
                 let spec = practice::notes::Spec { line: 0, kind: practice::notes::Kind::Answer, step: None, text: reply.clone(), snippet: None, detail: String::new() };
-                return (practice::notes::body(&spec) == text && reply.len() > text.len()).then(|| reply.clone());
+                return (practice::notes::body(&spec) == text).then(|| (run, if reply.len() > text.len() { reply.clone() } else { String::new() }));
             }
-            practice::notes::specs(answer).into_iter().find(|spec| practice::notes::body(spec) == text).map(|spec| spec.detail)
+            practice::notes::specs(answer).into_iter().find(|spec| practice::notes::body(spec) == text).map(|spec| (run, spec.detail))
         })
+    }
+
+    pub fn note_detail(&self, text: &str) -> Option<String> { self.note_run(text).map(|(_, detail)| detail) }
+
+    /// The chat that wrote any of these notes, searching the problem's unopened chats too.
+    pub fn note_thread(&mut self, texts: &[String]) -> Option<i64> {
+        let find = |assist: &Self| texts.iter().find_map(|text| assist.note_run(text)).map(|(run, _)| run.thread_id);
+        if texts.is_empty() { return None; }
+        if let Some(id) = find(self) { return Some(id); }
+        for thread in self.db.visible_chat_threads(self.slug.as_deref(), "").ok()? {
+            if self.loaded_threads.contains(&thread.id) { continue; }
+            let Ok(messages) = self.db.chat_messages(thread.id) else { continue };
+            for message in messages { self.restore_message(message); }
+            self.loaded_threads.insert(thread.id);
+        }
+        find(self)
+    }
+
+    /// Opens `thread`, or the current chat, with the prompt ready to ask about `quote`.
+    pub fn ask_in_chat(&mut self, thread: Option<i64>, quote: String, window: &mut Window, cx: &mut Context<Self>) {
+        if self.editing.is_some() { self.cancel_edit(window, cx); }
+        match thread {
+            Some(id) => self.select_thread(id, window, cx),
+            None => self.sync_composer(window, cx),
+        }
+        let draft = self.composer.read(cx).value().trim_end().to_owned();
+        let text = if draft.is_empty() { quote } else { format!("{draft}\n\n{quote}") };
+        let end = text.len();
+        self.composer.update(cx, |input, cx| { input.set_value(text, window, cx); input.set_selected_range(end..end, cx); });
+        self.ai_tab = 2;
+        self.show_threads = false;
+        self.composer.focus_handle(cx).focus(window, cx);
+        self.scroll.scroll_to_bottom();
+        cx.notify();
     }
 
     /// Spawns the agent thread for run `id`, optionally continuing a session with feedback.

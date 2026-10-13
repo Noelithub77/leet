@@ -10,6 +10,13 @@ use super::Assist;
 #[path = "tooltip.rs"]
 mod tooltip;
 
+fn stuck_answer() -> practice::assist::Answer {
+    practice::assist::Answer::Stuck(practice::assist::Stuck {
+        diagnosis: "The range never shrinks".into(), line: Some(1), snippet: None, steps: vec![], concept: "Binary search bounds".into(),
+        next_step: "Trace a two-item list".into(), question: "What stops lo from reaching hi?".into(),
+    })
+}
+
 struct LaunchFixture {
     workspace: Entity<crate::workspace::Workspace>,
     snapshot: super::Snapshot,
@@ -171,12 +178,13 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             assist.update(cx, |assist, cx| {
                 assist.slug = Some("composer-fixture".into());
                 if assist.db.visible_chat_threads(assist.slug.as_deref(), "").unwrap().is_empty() {
-                    for title in ["New chat", "Previous conversation", "Maps"] {
+                    for title in ["New chat", "Previous conversation", "Maps", "I'm stuck"] {
                         let thread = assist.db.create_chat(assist.slug.as_deref(), title).unwrap();
+                        let stuck = title == "I'm stuck";
                         if title != "New chat" {
                             assist.db.append_chat(thread.id, &practice::chat::history::SavedTurn {
-                                model: "fixture".into(), agent: None, answer: None, request_prompt: String::new(), instructions: title.into(),
-                                action: Some(practice::assist::Action::Ask), phase: practice::chat::history::SavedPhase::Done,
+                                model: "fixture".into(), agent: None, answer: stuck.then(stuck_answer), request_prompt: String::new(), instructions: if stuck { String::new() } else { title.into() },
+                                action: Some(if stuck { practice::assist::Action::Stuck } else { practice::assist::Action::Ask }), phase: practice::chat::history::SavedPhase::Done,
                                 problem: "composer-fixture".into(), problem_title: String::new(),
                             }).unwrap();
                         }
@@ -194,7 +202,7 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             let search = window.find("chat-thread-search").bounds();
             ensure!(container.left() < toolbar.left() && container.right() > toolbar.right() && container.top() < toolbar.top() && container.bottom() > search.bottom(), "History controls escaped their shared container");
             ensure!(toolbar.left() == search.left() && toolbar.right() == search.right(), "History toolbar and search edges do not align");
-            ensure!(assist.read(cx).threads.len() == 2 && assist.read(cx).threads.iter().all(|thread| thread.title != "New chat"), "Empty New chat leaked into the list");
+            ensure!(assist.read(cx).threads.len() == 3 && assist.read(cx).threads.iter().all(|thread| thread.title != "New chat"), "Empty New chat leaked into the list");
             Ok(())
         })??;
         cx.run_until_parked();
@@ -202,6 +210,19 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         cx.update_window(handle, |_, window, cx| -> Result<()> {
             window.render_frame(cx);
             let assist = fixture.read(cx).assist.clone();
+            // Asking about a noted line continues the unopened chat that wrote the note.
+            let stuck = assist.read(cx).threads.iter().find(|thread| thread.title == "I'm stuck").map(|thread| thread.id);
+            let notes: Vec<String> = practice::notes::specs(&stuck_answer()).iter().map(practice::notes::body).collect();
+            assist.update(cx, |assist, cx| {
+                assist.composer.update(cx, |input, cx| input.set_value("", window, cx));
+                let thread = assist.note_thread(&notes);
+                assist.ask_in_chat(thread, "About `lo = mid`: ".into(), window, cx);
+            });
+            ensure!(stuck.is_some() && assist.read(cx).selected_thread == stuck, "Asking about a note did not open the chat that wrote it");
+            ensure!(assist.read(cx).composer.read(cx).value().as_ref() == "About `lo = mid`: " && assist.read(cx).composer.focus_handle(cx).is_focused(window), "Asking about a note did not prepare the prompt");
+            ensure!(assist.read(cx).ai_tab == 2 && !assist.read(cx).show_threads, "Asking about a note did not show the chat");
+            assist.update(cx, |assist, cx| { assist.composer.update(cx, |input, cx| input.set_value("", window, cx)); assist.open_thread_list(window, cx); });
+            window.render_frame(cx);
             let selected = assist.read(cx).threads[0].id;
             window.press("up", cx);
             ensure!(assist.read(cx).thread_selection_visible && assist.read(cx).thread_selection == 0, "Keyboard navigation lost its visible selection");
@@ -216,7 +237,7 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
                 ensure!(assist.read(cx).db.chat_messages(id)?.is_empty(), "{shortcut} kept the existing conversation");
                 ensure!(assist.read(cx).composer.read(cx).value().is_empty(), "{shortcut} kept the previous prompt");
                 ensure!(assist.read(cx).composer.focus_handle(cx).is_focused(window), "{shortcut} did not focus the prompt");
-                ensure!(assist.read(cx).threads.len() == 2, "{shortcut} added an empty list option");
+                ensure!(assist.read(cx).threads.len() == 3, "{shortcut} added an empty list option");
             }
             assist.update(cx, |assist, cx| {
                 assist.set_problem(Some("empty-fixture"), cx);
@@ -289,5 +310,5 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
     cx.update(|cx| { crate::theme::apply("Vesper", cx); crate::theme::set_zoom(1., cx); });
     launch_inside_workspace(cx, output)?;
     tooltip::native(cx, output, pixels)?;
-    Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["Enter sends","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","send button input","send and stop containment","compact/light/zoom","wrapped tooltip width, viewport containment, shortcuts and dismissal","neutral history rows and visible keyboard selection","empty chats hidden","Ctrl+T / Ctrl+Shift+O / Ctrl+N","aligned toolbar and search","header Plus and no empty history row","merged Chats quick actions and Analysis navigation"]}))
+    Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["Enter sends","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","send button input","send and stop containment","compact/light/zoom","wrapped tooltip width, viewport containment, shortcuts and dismissal","neutral history rows and visible keyboard selection","empty chats hidden","Ctrl+T / Ctrl+Shift+O / Ctrl+N","aligned toolbar and search","header Plus and no empty history row","merged Chats quick actions and Analysis navigation","quick-action tags and note follow-ups"]}))
 }

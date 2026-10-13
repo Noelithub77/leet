@@ -5,7 +5,9 @@
 - Distinguish Copilot suggestions with faint syntax colors.
 - Save AI findings as `#!` comments; Rich hides them and highlights the code, with details on hover.
 - Show note hovers as cards with a kind chip, step bar, labelled detail, and shortcut keys.
-- Resolve notes with Alt+Shift+R and ask about a line with Alt+Q.
+- Resolve notes with Alt+Shift+R.
+- Ask about a line with Alt+Q as a follow-up in the chat that wrote its note.
+- Tag quick-action chats in history with colored chips, like Stuck and Analyse.
 - Ask the AI in place with `#?` questions; answers appear below them.
 - Switch notes between Rich, Raw, and Off; hidden notes stay out of copies.
 - Step through I'm stuck reasoning trails with Alt+] and Alt+[.

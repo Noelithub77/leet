@@ -210,6 +210,7 @@ impl Workspace {
             .on_action(cx.listener(|this, _: &PreviousNoteStep, window, cx| this.step_trail(false, window, cx)))
             .on_action(cx.listener(|this, _: &AskInPlace, window, cx| this.ask_in_place(window, cx)))
             .on_action(cx.listener(|this, _: &AddQuestion, window, cx| this.editor_pane.update(cx, |pane, cx| pane.add_question(window, cx))))
+            .on_action(cx.listener(|this, _: &AskInChat, window, cx| this.ask_in_chat(window, cx)))
             .on_action(cx.listener(|this, _: &ResolveNote, window, cx| this.editor_pane.update(cx, |pane, cx| pane.resolve_note(window, cx))))
             .on_action(cx.listener(|this, _: &ClearAiNotes, window, cx| this.clear_ai_notes(window, cx)))
             .on_action(cx.listener(|this, _: &ConfigureAi, window, cx| this.ai_chip.update(cx, |chip, cx| chip.open(window, cx))))

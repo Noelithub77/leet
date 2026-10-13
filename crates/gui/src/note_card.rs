@@ -8,7 +8,7 @@ use gpui_kit::component::input::PopoverMarkdown;
 use gpui_kit::component::kbd::Kbd;
 use practice::notes::Kind;
 use serde::{Deserialize, Serialize};
-use crate::actions::{AddQuestion, AskInPlace, NextNoteStep, ResolveNote};
+use crate::actions::{AskInChat, AskInPlace, NextNoteStep, ResolveNote};
 
 /// The fenced block a card travels in through the editor's Markdown hover.
 const FENCE: &str = "leet-note";
@@ -35,10 +35,10 @@ pub(crate) enum Key { Resolve, Question, Ask, NextStep }
 
 impl Key {
     fn label(self) -> &'static str {
-        match self { Self::Resolve => "Resolve", Self::Question => "Ask about line", Self::Ask => "Ask AI", Self::NextStep => "Next step" }
+        match self { Self::Resolve => "Resolve", Self::Question => "Ask in chat", Self::Ask => "Ask AI", Self::NextStep => "Next step" }
     }
     fn action(self) -> Box<dyn Action> {
-        match self { Self::Resolve => Box::new(ResolveNote), Self::Question => Box::new(AddQuestion), Self::Ask => Box::new(AskInPlace), Self::NextStep => Box::new(NextNoteStep) }
+        match self { Self::Resolve => Box::new(ResolveNote), Self::Question => Box::new(AskInChat), Self::Ask => Box::new(AskInPlace), Self::NextStep => Box::new(NextNoteStep) }
     }
 }
 
@@ -108,9 +108,7 @@ fn render(card: &Card, window: &mut Window, cx: &App) -> impl IntoElement + use<
 
 fn render_item(item: &Item, index: usize, theme: &Theme) -> impl IntoElement + use<> {
     let color = tint(item.kind, theme);
-    let chip = h_flex().gap(px(6.)).px(px(8.)).py(px(2.)).rounded_full().bg(color.opacity(0.14))
-        .text_size(px(11.5)).font_weight(FontWeight::MEDIUM).text_color(color)
-        .child(div().size(px(6.)).rounded_full().bg(color)).child(label(item.kind));
+    let chip = chip(label(item.kind), color);
     let aside = match item.step {
         Some((step, of)) => h_flex().gap(px(4.)).children((1..=of).map(|at| div().w(px(18.)).h(px(4.)).rounded_full()
             .bg(if at == step { color } else if at < step { color.opacity(0.35) } else { theme.foreground.opacity(0.1) }))).into_any_element(),
@@ -128,11 +126,18 @@ fn render_item(item: &Item, index: usize, theme: &Theme) -> impl IntoElement + u
                 .child(prose(id, text, theme.foreground.opacity(0.88))).into_any_element(),
             Section::Question(text) => h_flex().items_start().gap(px(10.))
                 .child(div().w(px(2.)).h_full().min_h(px(16.)).rounded_full().bg(theme.magenta))
-                .child(div().italic().child(prose(id, text, theme.foreground.opacity(0.88)))).into_any_element(),
+                .child(div().flex_1().min_w_0().italic().child(prose(id, text, theme.foreground.opacity(0.88)))).into_any_element(),
             Section::Plain(text) => prose(id, text, theme.muted_foreground).into_any_element(),
         });
     }
     column
+}
+
+/// A tinted kind label with a dot, shared by note cards and chat tags.
+pub(crate) fn chip(label: impl Into<SharedString>, color: Hsla) -> Div {
+    h_flex().flex_none().gap(px(6.)).px(px(8.)).py(px(2.)).rounded_full().bg(color.opacity(0.14))
+        .text_size(px(11.5)).font_weight(FontWeight::MEDIUM).text_color(color)
+        .child(div().size(px(6.)).rounded_full().bg(color)).child(label.into())
 }
 
 enum Section<'a> { Labelled(&'static str, &'a str), Question(&'a str), Plain(&'a str) }

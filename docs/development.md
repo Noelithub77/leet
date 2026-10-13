@@ -94,7 +94,8 @@ Modifier shortcuts follow the user's VS Code bindings. Bare arrows, `enter` and 
 | `ctrl+shift+e` | Choose the AI agent, model, reasoning, and Fast tier |
 | `ctrl+alt+a` | Switch between detected agents and the web chat |
 | `ctrl+alt+h` | Reveal the next LeetCode hint |
-| `alt+q` / `alt+shift+q` | Add a `#?` question above a line / ask the AI it |
+| `alt+q` | Ask about a line in chat, continuing the chat that wrote its note |
+| `alt+shift+q` | Ask the AI the `#?` question on a line; the answer lands below it |
 | `alt+shift+r` | Resolve the notes on a line; acts on the hovered line while its card is open |
 | `ctrl+alt+l` | Cycle NeetCode 150 → 250 → All |
 | `ctrl+0` / `ctrl+1` | Focus sidebar / editor |
