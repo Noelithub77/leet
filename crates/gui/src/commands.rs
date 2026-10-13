@@ -23,7 +23,7 @@ impl Workspace {
 
     pub fn register(div: Div, cx: &mut Context<Self>) -> Div {
         div.key_context(WORKSPACE)
-            .on_action(cx.listener(|this, _: &ShowHome, window, cx| this.show_home(window, cx)))
+            .on_action(cx.listener(|this, _: &ShowHome, window, cx| this.toggle_home(window, cx)))
             .on_action(cx.listener(|this, _: &GuidedTour, window, cx| this.start_tour(window, cx)))
             .on_action(cx.listener(|this, _: &CycleTabs, window, cx| this.cycle_tab(1, window, cx)))
             .on_action(cx.listener(|this, _: &CloseAllProblems, window, cx| this.close_all_problems(window, cx)))
@@ -206,6 +206,7 @@ impl Workspace {
                 this.set_debug(on, window, cx);
             }))
             .on_action(cx.listener(|this, _: &CycleNotesView, window, cx| this.set_notes_view(this.config.notes_view.next(), window, cx)))
+            .on_action(cx.listener(|this, _: &ToggleNotes, window, cx| this.toggle_notes(window, cx)))
             .on_action(cx.listener(|this, _: &NextNoteStep, window, cx| this.step_trail(true, window, cx)))
             .on_action(cx.listener(|this, _: &PreviousNoteStep, window, cx| this.step_trail(false, window, cx)))
             .on_action(cx.listener(|this, _: &AskInPlace, window, cx| this.ask_in_place(window, cx)))

@@ -10,6 +10,8 @@
 - Tag quick-action chats in history with colored chips, like Stuck and Analyse.
 - Ask the AI in place with `#?` questions; answers appear below them.
 - Switch notes between Rich, Raw, and Off; hidden notes stay out of copies.
+- Toggle notes Off and back with Ctrl+H.
+- Glance at Home with Alt+H and press it again to return.
 - Step through I'm stuck reasoning trails with Alt+] and Alt+[.
 - Show complexity costs and last debugger values in line hovers.
 - Preview and flash cited lines from chat line links, even after edits.

@@ -60,6 +60,7 @@ gpui_kit::actions!(
         AssistSolve,
         ToggleDebug,
         CycleNotesView,
+        ToggleNotes,
         NextNoteStep,
         PreviousNoteStep,
         AskInPlace,
@@ -111,7 +112,7 @@ macro_rules! cmd {
 
 /// Global commands. Keys follow the user's VS Code bindings (modifiers only, no bare letters).
 pub const COMMANDS: &[Command] = &[
-    cmd!("Show Home", "ctrl-h|ctrl-.", ShowHome),
+    cmd!("Toggle Home", "alt-h|ctrl-.", ShowHome),
     cmd!("Close tab", "ctrl-w", CloseProblem),
     cmd!("Close all problem tabs", "ctrl-shift-w", CloseAllProblems),
     cmd!("Reopen closed problem tab", "ctrl-shift-t", ReopenProblem),
@@ -165,6 +166,7 @@ pub const COMMANDS: &[Command] = &[
     cmd!("AI: Stop runs", "", StopAssist),
     cmd!("Debugger", "ctrl-`|alt-b", ToggleDebug),
     cmd!("Notes: cycle Rich, Raw and Off", "ctrl-alt-n", CycleNotesView),
+    cmd!("Notes: toggle Off", "ctrl-h", ToggleNotes),
     cmd!("Notes: next trail step", "alt-]", NextNoteStep),
     cmd!("Notes: previous trail step", "alt-[", PreviousNoteStep),
     cmd!("Notes: ask the AI this question", "alt-shift-q", AskInPlace),
@@ -381,13 +383,15 @@ mod tests {
         let config = practice::config::Config::default();
         let home = COMMANDS.iter().position(|c| c.id == "ShowHome").unwrap();
         let search = COMMANDS.iter().position(|c| c.id == "Search").unwrap();
-        assert_eq!(COMMANDS[home].effective_key(&config), "ctrl-h|ctrl-.");
+        assert_eq!(COMMANDS[home].effective_key(&config), "alt-h|ctrl-.");
         assert!(validate_key(home, COMMANDS[home].key, &config).is_ok());
-        for keys in ["ctrl-h", "ctrl-.", "ctrl-alt-j|ctrl-h"] {
+        for keys in ["alt-h", "ctrl-.", "ctrl-alt-j|alt-h"] {
             assert!(validate_key(search, keys, &config).is_err());
         }
-        assert!(validate_key(home, "ctrl-h|ctrl-h", &config).is_err());
-        assert!(validate_key(home, "ctrl-h|ctrl-h ctrl-j", &config).is_err());
+        let notes = COMMANDS.iter().position(|c| c.id == "ToggleNotes").unwrap();
+        assert!(validate_key(notes, "ctrl-h", &config).is_ok() && validate_key(notes, "alt-h", &config).is_err());
+        assert!(validate_key(home, "alt-h|alt-h", &config).is_err());
+        assert!(validate_key(home, "alt-h|alt-h ctrl-j", &config).is_err());
     }
 
     #[::core::prelude::v1::test]

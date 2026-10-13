@@ -151,7 +151,23 @@ impl Workspace {
         cx.notify();
     }
 
+    /// Glances at Home: from Home, returns to the view it was opened from.
+    pub fn toggle_home(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.center != Center::Home { self.show_home(window, cx); return; }
+        match self.home_return.take() {
+            Some(Center::Editor) if self.session.is_some() => self.back_to_editor(window, cx),
+            Some(Center::Snippets) if self.snippet_editor.is_some() => self.open_snippet_editor(window, cx),
+            Some(center @ (Center::Roadmap | Center::Settings)) => {
+                self.center = center;
+                self.focus_nav(if center == Center::Roadmap { Focus::Roadmap } else { Focus::Settings }, window, cx);
+                cx.notify();
+            }
+            _ => {}
+        }
+    }
+
     pub fn show_home(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !matches!(self.center, Center::Home | Center::Onboarding) { self.home_return = Some(self.center); }
         self.save_now(cx);
         self.refresh_contests(window, cx);
         if let Some(id) = self.contests.selected.clone() { self.refresh_contest_problems(id, window, cx); }

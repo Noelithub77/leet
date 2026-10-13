@@ -182,6 +182,10 @@ pub struct Workspace {
     pub debugger: Entity<crate::debug_view::Debugger>,
     /// The center shows the debugger instead of the editor.
     pub debug_mode: bool,
+    /// The notes view Ctrl+H returns to from Off.
+    pub(crate) notes_before_off: Option<practice::notes::View>,
+    /// The view Home was opened from, which Alt+H returns to.
+    pub(crate) home_return: Option<Center>,
     pub tour: Option<crate::tour::Tour>,
     pub language_picker: crate::language_picker::State,
     pub case_edit: Option<crate::case_editor::Draft>,
@@ -322,6 +326,8 @@ impl Workspace {
             ai_chip,
             debugger,
             debug_mode: false,
+            notes_before_off: None,
+            home_return: None,
             tour: None,
             language_picker: crate::language_picker::State::default(),
             case_edit: None,

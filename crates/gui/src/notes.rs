@@ -482,11 +482,18 @@ impl Workspace {
     }
 
     pub fn set_notes_view(&mut self, view: View, window: &mut Window, cx: &mut Context<Self>) {
+        if view == View::Off && self.config.notes_view != View::Off { self.notes_before_off = Some(self.config.notes_view); }
         self.config.notes_view = view;
         self.save_config(window, cx);
         for pane in self.tab_panes().into_iter().chain([self.editor_pane.clone()]) { pane.update(cx, |pane, cx| pane.set_notes_view(view, window, cx)); }
         self.flash(format!("Notes: {}", view.label()), cx);
         cx.notify();
+    }
+
+    /// Switches notes Off, or back to the view they had before.
+    pub(crate) fn toggle_notes(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let view = if self.config.notes_view == View::Off { self.notes_before_off.unwrap_or_default() } else { View::Off };
+        self.set_notes_view(view, window, cx);
     }
 
     pub(crate) fn step_trail(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {

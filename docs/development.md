@@ -27,7 +27,7 @@ Opening a recent problem uses the cached statement and existing Solution.
 Each problem keeps its own editor, undo history, cursor, and test results.
 Opening an already open problem selects its existing tab. Background runs finish
 in their originating tab. Switching back to Home keeps every problem intact.
-Hover the house icon for its tooltip. Ctrl+H opens Home (Ctrl+. also works); its tooltip shows the current shortcut. Ctrl+Tab and Ctrl+Shift+Tab cycle forward and backward through problem tabs, skipping Home. Typing on Home opens universal search with the typed text. Ctrl+W closes the problem tab after saving;
+Hover the house icon for its tooltip. Alt+H opens Home and, pressed again, returns to the previous view (Ctrl+. also works); its tooltip shows the current shortcut. Ctrl+Tab and Ctrl+Shift+Tab cycle forward and backward through problem tabs, skipping Home. Typing on Home opens universal search with the typed text. Ctrl+W closes the problem tab after saving;
 Home stays pinned. Up/down and Enter navigate the focused recent list.
 
 Every panel has one toggle, and a spring animation shows or hides it. Drag the boundary above Results to resize its height; the app remembers it. Description, Examples, and Constraints expand independently and remember their open state across questions and app restarts. Short cards fit their content; long cards share the remaining height and scroll independently while every header stays accessible.
@@ -71,7 +71,7 @@ Modifier shortcuts follow the user's VS Code bindings. Bare arrows, `enter` and 
 
 | Key | Action |
 | --- | --- |
-| `ctrl+h` / `ctrl+.` | Open the pinned Home view |
+| `alt+h` / `ctrl+.` | Glance at Home; press again to return |
 | `ctrl+tab` / `ctrl+shift+tab` | Next / previous tab |
 | `ctrl+w` | Close current problem tab |
 | `ctrl+shift+t` | Reopen the last closed problem tab |
@@ -94,6 +94,7 @@ Modifier shortcuts follow the user's VS Code bindings. Bare arrows, `enter` and 
 | `ctrl+shift+e` | Choose the AI agent, model, reasoning, and Fast tier |
 | `ctrl+alt+a` | Switch between detected agents and the web chat |
 | `ctrl+alt+h` | Reveal the next LeetCode hint |
+| `ctrl+h` | Toggle notes Off and back to the previous view |
 | `alt+q` | Ask about a line in chat, continuing the chat that wrote its note |
 | `alt+shift+q` | Ask the AI the `#?` question on a line; the answer lands below it |
 | `alt+shift+r` | Resolve the notes on a line; acts on the hovered line while its card is open |

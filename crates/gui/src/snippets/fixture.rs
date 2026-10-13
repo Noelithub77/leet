@@ -286,9 +286,11 @@ fn workspace_tab(cx:&mut HeadlessAppContext,output:&Path,pixels:bool)->Result<()
     cx.advance_clock(std::time::Duration::from_millis(700));cx.run_until_parked();
     cx.update_window(handle,|_,window,cx|window.render_frame(cx))?;
     if pixels{cx.capture_screenshot(handle)?.save(output.join("snippet-prefix-help.png"))?;}
-    cx.update_window(handle,|_,window,cx|{window.press("ctrl-h",cx);})?;cx.run_until_parked();
+    cx.update_window(handle,|_,window,cx|{window.press("alt-h",cx);})?;cx.run_until_parked();
     cx.update_window(handle,|_,window,cx|->Result<()>{
         window.render_frame(cx);ensure!(workspace.read(cx).center==Center::Home&&workspace.read(cx).snippet_editor.is_some(),"Switching tabs closed snippets");
+        window.press("alt-h",cx);ensure!(workspace.read(cx).center==Center::Snippets,"Alt+H on Home did not return to snippets");
+        window.press("alt-h",cx);ensure!(workspace.read(cx).center==Center::Home,"Alt+H did not glance at Home again");
         window.click("snippets-tab",cx);Ok(())
     })??;cx.run_until_parked();
     cx.update_window(handle,|_,window,cx|->Result<()>{
