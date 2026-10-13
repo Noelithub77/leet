@@ -2,6 +2,7 @@
 <summary>Feat</summary>
 
 - Choose Rich, Raw, or Off from a compact annotation dropdown.
+- Enable Vim keybindings for solutions and snippets, with visual blocks, search, repeat, and command help.
 
 </details>
 

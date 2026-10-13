@@ -113,6 +113,8 @@ impl Workspace {
                     this.show_roadmap(window, cx);
                 }
             }))
+            .on_action(cx.listener(|this, _: &ToggleVim, window, cx| this.toggle_vim(window, cx)))
+            .on_action(cx.listener(|_, _: &VimHelp, window, cx| crate::modal_editing::open_help(window, cx)))
             .on_action(cx.listener(|this, _: &OpenSnippetEditor, window, cx| this.open_snippet_editor(window,cx)))
             .on_action(cx.listener(|this, _: &InsertSnippet, window, cx| {
                 if this.center == Center::Editor { this.editor_pane.update(cx, |pane,cx|pane.open_completions(window,cx)); }
