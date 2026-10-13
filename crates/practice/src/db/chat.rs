@@ -107,14 +107,17 @@ impl Db {
         let escaped = query.trim().replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
         let pattern = format!("%{escaped}%");
         let rows = diesel::sql_query(r"SELECT t.* FROM chat_threads t WHERE t.problem IS ? AND
-            (trim(t.draft, char(9) || char(10) || char(13) || ' ') <> '' OR EXISTS (SELECT 1 FROM chat_messages present WHERE present.thread_id = t.id)) AND
-            (t.draft LIKE ? ESCAPE '\' OR t.title LIKE ? ESCAPE '\' OR EXISTS (SELECT 1 FROM chat_messages m WHERE m.thread_id = t.id AND
+            (EXISTS (SELECT 1 FROM kv c WHERE c.key = 'chat:citations:' || t.id AND c.value <> '[]') OR trim(t.draft, char(9) || char(10) || char(13) || ' ') <> '' OR EXISTS (SELECT 1 FROM chat_messages present WHERE present.thread_id = t.id)) AND
+            (t.draft LIKE ? ESCAPE '\' OR t.title LIKE ? ESCAPE '\'
+                OR EXISTS (SELECT 1 FROM kv c, json_tree(c.value) quote WHERE c.key = 'chat:citations:' || t.id AND quote.type = 'text' AND quote.atom LIKE ? ESCAPE '\') OR EXISTS (SELECT 1 FROM chat_messages m WHERE m.thread_id = t.id AND
                 (json_extract(m.body, '$.instructions') LIKE ? ESCAPE '\'
                 OR json_extract(m.body, '$.request_prompt') LIKE ? ESCAPE '\'
                 OR json_extract(m.body, '$.problem_title') LIKE ? ESCAPE '\'
+                OR EXISTS (SELECT 1 FROM json_tree(m.body, '$.citations') quote WHERE quote.type = 'text' AND quote.atom LIKE ? ESCAPE '\')
                 OR EXISTS (SELECT 1 FROM json_tree(m.body, '$.answer.answer') a WHERE a.type = 'text' AND a.atom LIKE ? ESCAPE '\'))))
             ORDER BY t.updated_at DESC, t.id DESC")
             .bind::<diesel::sql_types::Nullable<diesel::sql_types::Text>, _>(problem)
+            .bind::<diesel::sql_types::Text, _>(&pattern).bind::<diesel::sql_types::Text, _>(&pattern)
             .bind::<diesel::sql_types::Text, _>(&pattern).bind::<diesel::sql_types::Text, _>(&pattern)
             .bind::<diesel::sql_types::Text, _>(&pattern).bind::<diesel::sql_types::Text, _>(&pattern)
             .bind::<diesel::sql_types::Text, _>(&pattern).bind::<diesel::sql_types::Text, _>(&pattern)
@@ -138,6 +141,16 @@ impl Db {
     pub fn create_chat(&self, problem: Option<&str>, title: &str) -> Result<Thread> { insert_thread(&mut self.conn(), problem, title, None) }
     pub fn save_chat_draft(&self, id: i64, draft: &str) -> Result<()> {
         diesel::update(chat_threads::table.find(id)).set(chat_threads::draft.eq(draft)).execute(&mut *self.conn())?; Ok(())
+    }
+    pub fn chat_draft_citations(&self, id: i64) -> Result<Vec<crate::chat::history::Citation>> {
+        self.get(&format!("chat:citations:{id}"))?.map(|body| serde_json::from_str(&body).map_err(Into::into)).unwrap_or_else(|| Ok(vec![]))
+    }
+    pub fn save_chat_composer(&self, id: i64, draft: &str, citations: &[crate::chat::history::Citation]) -> Result<()> {
+        self.conn().transaction::<_, anyhow::Error, _>(|conn| {
+            diesel::update(chat_threads::table.find(id)).set(chat_threads::draft.eq(draft)).execute(conn)?;
+            diesel::replace_into(kv::table).values((kv::key.eq(format!("chat:citations:{id}")), kv::value.eq(serde_json::to_string(citations)?))).execute(conn)?;
+            Ok(())
+        })
     }
     pub fn rename_chat(&self, id: i64, title: &str) -> Result<()> {
         diesel::update(chat_threads::table.find(id)).set(chat_threads::title.eq(title)).execute(&mut *self.conn())?; Ok(())
@@ -203,8 +216,26 @@ mod tests {
     use super::*;
     use crate::assist::{Action, Answer};
     fn turn(problem: &str, text: &str) -> SavedTurn {
-        SavedTurn { model: "model".into(), agent: None, answer: Some(Answer::Chat(text.into())), instructions: text.into(), request_prompt: String::new(), action: Some(Action::Ask), phase: Default::default(), problem: problem.into(), problem_title: problem.into() }
+        SavedTurn { citations: vec![], model: "model".into(), agent: None, answer: Some(Answer::Chat(text.into())), instructions: text.into(), request_prompt: String::new(), action: Some(Action::Ask), phase: Default::default(), problem: problem.into(), problem_title: problem.into() }
     }
+    #[test]
+    fn citations_survive_draft_and_message_reopening() {
+        let dir = tempfile::tempdir().unwrap(); let path = dir.path().join("test.db");
+        let db = Db::open_unseeded(&path).unwrap(); let thread = db.create_chat(Some("two-sum"), "New chat").unwrap();
+        let citation = crate::chat::history::Citation { label: "solution.py:1-2".into(), text: "x = 1\ny = 2".into(), preview: "1  x = 1\n2  y = 2".into() };
+        db.save_chat_composer(thread.id, "", &[citation.clone()]).unwrap();
+        assert_eq!(db.visible_chat_threads(Some("two-sum"), "x = 1").unwrap().len(), 1);
+        drop(db); let db = Db::open_unseeded(&path).unwrap();
+        assert_eq!(db.chat_draft_citations(thread.id).unwrap(), [citation.clone()]);
+        let mut message = turn("two-sum", "Why?"); message.citations.push(citation.clone());
+        db.append_chat(thread.id, &message).unwrap();
+        assert_eq!(db.chat_messages(thread.id).unwrap()[0].turn.citations, [citation]);
+        let prompt = crate::chat::history::with_citations(&message.instructions, &message.citations);
+        assert!(prompt.contains("solution.py:1-2") && prompt.contains("x = 1\ny = 2"));
+        db.save_chat_composer(thread.id, "", &[]).unwrap(); assert!(db.chat_draft_citations(thread.id).unwrap().is_empty());
+        assert_eq!(db.visible_chat_threads(Some("two-sum"), "y = 2").unwrap().len(), 1);
+    }
+
     #[test]
     fn first_message_names_hidden_threads_and_repairs_old_titles() {
         let dir = tempfile::tempdir().unwrap(); let db = Db::open_unseeded(&dir.path().join("test.db")).unwrap();

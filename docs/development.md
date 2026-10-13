@@ -183,7 +183,7 @@ Web mode can be selected explicitly even with installed agents. Actions open Cha
 
 OpenCode free-model availability depends on its upstream service; a model appearing in the catalog does not guarantee that it accepts requests through ACP. Gemini and Cursor require their own CLI authentication. Fast mode also depends on account eligibility.
 
-Highlighted text supports Quote (`Alt+L`), Explain (`Alt+E`), and Fix (`Alt+F`) through the selection context menu and configurable shortcuts. Quote appends to the chat composer. Explain and Fix send the selection while preserving an unsent draft; Fix returns a suggested correction in chat. With no editor selection, `Alt+L` still accepts a Copilot prediction.
+Highlighting text opens a selection menu with Quote (`Alt+Q`), Explain (`Alt+E`), and Fix (`Alt+F`). Quote adds a citation pill to the composer; hovering shows the selected source lines. Citations survive drafts and saved messages. Explain and Fix send the selection while preserving the draft and its citations; Fix returns a suggested correction in chat. `Alt+L` accepts Copilot suggestions. With no selection, `Alt+Q` asks about the current noted line.
 
 ## Copilot completions
 

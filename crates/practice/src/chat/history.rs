@@ -20,9 +20,25 @@ pub struct Message {
     pub turn: SavedTurn,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Citation {
+    pub label: String,
+    pub text: String,
+    pub preview: String,
+}
+
+pub fn with_citations(instructions: &str, citations: &[Citation]) -> String {
+    let mut text = instructions.to_owned();
+    for citation in citations {
+        text.push_str(&format!("\n\nQuoted from {}:\n{}", citation.label, citation.text));
+    }
+    text
+}
+
 /// Legacy fields stay compatible with the previous newest-first JSON history.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct SavedTurn {
+    #[serde(default)] pub citations: Vec<Citation>,
     pub model: String,
     pub agent: Option<AgentKind>,
     pub answer: Option<Answer>,
@@ -41,7 +57,7 @@ impl SavedTurn {
     pub fn chat_title(&self) -> String {
         self.instructions.lines().find(|line| !line.trim().is_empty())
             .map(|line| line.trim().chars().take(60).collect())
-            .unwrap_or_else(|| self.action().label().to_owned())
+            .unwrap_or_else(|| self.citations.first().map_or_else(|| self.action().label().to_owned(), |citation| citation.label.clone()))
     }
 
     pub fn action(&self) -> Action {

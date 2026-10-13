@@ -1,6 +1,5 @@
 //! Native resizable sidebars and editor layout; results reveal with a short stagger.
 
-use gpui_kit::component::menu::ContextMenuExt as _;
 use std::time::Duration;
 
 use gpui_kit::base::{Disableable as _, Spring, Transition, spring, transition};
@@ -207,6 +206,23 @@ impl Render for Workspace {
             .on_action(cx.listener(|this, _: &crate::tour::Next, window, cx| this.tour_move(1, window, cx)))
             .on_action(cx.listener(|this, _: &crate::tour::Back, window, cx| this.tour_move(-1, window, cx)))
             .on_action(cx.listener(|this, _: &crate::tour::Skip, window, cx| this.end_tour(window, cx)))
+            .on_mouse_up(MouseButton::Left, cx.listener(|ws, event: &MouseUpEvent, window, cx| {
+                let workspace = cx.weak_entity(); let position = event.position; let epoch = ws.selection_epoch;
+                window.defer(cx, move |window, cx| { let _ = workspace.update(cx, |ws, cx| if ws.selection_epoch == epoch { ws.open_selection_menu(position, window, cx); }); });
+            }))
+            .capture_key_down(cx.listener(|ws, event: &KeyDownEvent, window, cx| {
+                if ws.selection_menu.is_some() {
+                    if event.keystroke.key == "escape" { ws.dismiss_selection_menu(window, cx); cx.stop_propagation(); }
+                    else if matches!(event.keystroke.key.as_str(), "left" | "right" | "up" | "down" | "home" | "end") { ws.selection_menu = None; ws.selection_epoch += 1; cx.notify(); }
+                }
+            }))
+            .on_key_up(cx.listener(|ws, event: &KeyUpEvent, window, cx| {
+                let stroke = &event.keystroke;
+                if (stroke.modifiers.shift && matches!(stroke.key.as_str(), "left" | "right" | "up" | "down" | "home" | "end")) || (stroke.modifiers.control && stroke.key == "a") {
+                    let workspace = cx.weak_entity(); let position = window.mouse_position(); let epoch = ws.selection_epoch;
+                    window.defer(cx, move |window, cx| { let _ = workspace.update(cx, |ws, cx| if ws.selection_epoch == epoch { ws.open_selection_menu(position, window, cx); }); });
+                }
+            }))
             .on_key_down(cx.listener(|this, event, window, cx| this.home_type(event, window, cx))).child(tabs).child(
             h_flex().flex_1().min_h_0().mx_2().gap_2().track_focus(&self.nav_focus)
                 .when(self.nav_focus.is_focused(window), |view| Workspace::register_nav(view, cx))
@@ -214,24 +230,7 @@ impl Render for Workspace {
             .child(body),
         )
         .child(self.render_status(window, cx))
-        .context_menu({
-            let workspace = cx.weak_entity();
-            move |menu, window, cx| {
-                let text = gpui_kit::base::TextSelection::selected_text(window, cx);
-                if text.trim().is_empty() { return menu; }
-                [None, Some("Explain"), Some("Fix")].into_iter().fold(menu, |menu, command| {
-                    let workspace = workspace.clone(); let text = text.clone();
-                    let action: Box<dyn gpui_kit::Action> = match command {
-                        Some("Explain") => Box::new(crate::actions::ExplainSelection),
-                        Some("Fix") => Box::new(crate::actions::FixSelection),
-                        _ => Box::new(crate::actions::QuoteSelection),
-                    };
-                    menu.item(gpui_kit::component::menu::PopupMenuItem::new(command.unwrap_or("Quote")).action(action).on_click(move |_, window, cx| {
-                        let _ = workspace.update(cx, |ws, cx| ws.selection_ai_text(command, text.clone(), window, cx));
-                    }))
-                })
-            }
-        })
+        .children(crate::assist::selection::render_menu(self))
         .children(omnibar)
         .children(crate::update::panel(self, window, cx))
         .children(crate::tour::panel(self, window, cx))

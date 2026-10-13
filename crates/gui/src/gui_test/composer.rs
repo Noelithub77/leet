@@ -183,7 +183,7 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
                         let thread = assist.db.create_chat(assist.slug.as_deref(), title).unwrap();
                         let stuck = title == "I'm stuck";
                         if title != "New chat" {
-                            assist.db.append_chat(thread.id, &practice::chat::history::SavedTurn {
+                            assist.db.append_chat(thread.id, &practice::chat::history::SavedTurn { citations: vec![],
                                 model: "fixture".into(), agent: None, answer: stuck.then(stuck_answer), request_prompt: String::new(), instructions: if stuck { String::new() } else { title.into() },
                                 action: Some(if stuck { practice::assist::Action::Stuck } else { practice::assist::Action::Ask }), phase: practice::chat::history::SavedPhase::Done,
                                 problem: "composer-fixture".into(), problem_title: String::new(),
@@ -312,5 +312,5 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
     launch_inside_workspace(cx, output)?;
     super::selection::fixture(cx, output, pixels)?;
     tooltip::native(cx, output, pixels)?;
-    Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["Enter sends","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","send button input","send and stop containment","compact/light/zoom","wrapped tooltip width, viewport containment, shortcuts and dismissal","neutral history rows and visible keyboard selection","empty chats hidden","Ctrl+T / Ctrl+Shift+O / Ctrl+N","aligned toolbar and search","header Plus and no empty history row","merged Chats quick actions and Analysis navigation","quick-action tags and note follow-ups","first message names hidden chats","Alt+L quotes selection without sending","selection menu Quote preserves the draft","Alt+E and Alt+F send selection prompts and preserve drafts","selection actions preserve editor content"]}))
+    Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["Enter sends","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","send button input","send and stop containment","compact/light/zoom","wrapped tooltip width, viewport containment, shortcuts and dismissal","neutral history rows and visible keyboard selection","empty chats hidden","Ctrl+T / Ctrl+Shift+O / Ctrl+N","aligned toolbar and search","header Plus and no empty history row","merged Chats quick actions and Analysis navigation","quick-action tags and note follow-ups","first message names hidden chats","Alt+Q adds citation pills without sending","automatic selection menu Quote preserves the draft","Alt+E and Alt+F send selection prompts and preserve drafts","selection actions preserve editor content","citation source previews","normal replacement typing dismisses selection menu","workspace Alt+L accepts Copilot without quoting"]}))
 }

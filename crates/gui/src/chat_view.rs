@@ -24,6 +24,10 @@ impl Assist {
         if self.composer_thread == self.selected_thread { return; }
         self.persist_draft(cx);
         let draft = self.selected_thread.and_then(|id| self.db.chat_thread(id).ok()).map(|thread| thread.draft).unwrap_or_default();
+        self.composer_citations = match self.selected_thread {
+            Some(id) => match self.db.chat_draft_citations(id) { Ok(citations) => citations, Err(error) => { self.conversation_error = Some(error.to_string()); vec![] } },
+            None => vec![],
+        };
         self.composer_thread = self.selected_thread;
         self.composer.update(cx, |input, cx| input.set_value(draft, window, cx));
         self.scroll.scroll_to_bottom();
@@ -35,7 +39,7 @@ impl Assist {
     }
 
     pub(super) fn send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.composer.read(cx).value().trim().is_empty() && self.editing.is_none() { return; }
+        if self.composer.read(cx).value().trim().is_empty() && self.composer_citations.is_empty() && self.editing.is_none() { return; }
         if self.runs.iter().any(|run| Some(run.thread_id) == self.selected_thread && (run.phase.active() || run.phase == Phase::Confirm)) { return; }
         self.ai_tab = 2;
         self.run_action(Action::Ask, window, cx);
@@ -114,6 +118,12 @@ impl Assist {
                     .child(Button::new("cancel-chat-edit").ghost().xsmall().icon(IconName::X).tooltip("Cancel edit").on_click(cx.listener(|this, _, window, cx| this.cancel_edit(window, cx))))))
                 .child(InputGroup::new("chat-composer").disabled(!has_problem)
                     .input(Textarea::new(&self.composer).aria_label("Message or action instructions"))
+                    .when(!self.composer_citations.is_empty(), |group| group.addon(InputGroupAddon::new("chat-citations").align(InputGroupAddonAlignment::BlockStart)
+                        .child(h_flex().gap_1().flex_wrap().children(self.composer_citations.iter().enumerate().map(|(index, citation)| {
+                            h_flex().gap_0p5().items_center().child(super::selection::citation_pill(("draft-citation", super::selection::citation_key(citation)), citation, &theme))
+                                .child(Button::new(("remove-citation", super::selection::citation_key(citation))).ghost().xsmall().icon(IconName::X).accessibility_label("Remove citation")
+                                    .on_click(cx.listener(move |this, _, _, cx| { this.composer_citations.remove(index); this.persist_draft(cx); cx.notify(); })))
+                        })))))
                     .addon(InputGroupAddon::new("chat-composer-action").align(InputGroupAddonAlignment::InlineEnd).self_end().pb_2().pr_2()
                     .child(if busy {
                         Button::new("chat-send-stop").ghost().small().icon(IconName::CircleStop).tooltip("Stop current run").accessibility_label("Stop current run")
@@ -121,7 +131,7 @@ impl Assist {
                     } else {
                         Button::new("chat-send").primary().small().icon(if web { IconName::ExternalLink } else { IconName::ArrowUp })
                             .tooltip(if web { "Open question in web chat" } else { "Send question" }).accessibility_label("Send question")
-                            .disabled((!has_problem) || (self.editing.is_none() && self.composer.read(cx).value().trim().is_empty()))
+                            .disabled((!has_problem) || (self.editing.is_none() && self.composer.read(cx).value().trim().is_empty() && self.composer_citations.is_empty()))
                             .on_click(cx.listener(|this, _, window, cx| this.send(window, cx))).into_any_element()
                     })))
     }

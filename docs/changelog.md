@@ -1,9 +1,8 @@
 <details open>
 <summary>Feat</summary>
 
-- Quote highlighted text with Alt+L, explain it with Alt+E, or request a fix with Alt+F.
-- Revert accepted Copilot suggestions with Alt+K.
-- Distinguish Copilot suggestions with faint syntax colors.
+- Open AI tools automatically when highlighting text: Quote with Alt+Q, Explain with Alt+E, and Fix with Alt+F.
+- Show quoted text as citation pills with source-line previews on hover.
 - Save AI findings as `#!` comments; Rich hides them and highlights the code, with details on hover.
 - Show note hovers as cards with a kind chip, step bar, labelled detail, and shortcut keys.
 - Resolve notes with Alt+Shift+R.
@@ -23,6 +22,7 @@
 <details>
 <summary>Fix</summary>
 
+- Keep Alt+L dedicated to accepting Copilot suggestions.
 - Keep completion menus and full previews clear of the typing line, with subtly translucent backgrounds.
 - Name chats on their first message and repair older chats labelled Draft.
 - Keep tooltips compact, with wrapped descriptions and balanced padding.
@@ -30,12 +30,5 @@
 - Keep CodeChef’s additional samples and explanations in the question view.
 - Preserve nested statement sections and sample notes across providers.
 - Load and cache question diagrams when opening statements across practice platforms.
-- Replace the running development app when rerunning Dev.
-- Fix a crash when starting an AI run from the workspace.
-- Merge General into Chats while keeping Analysis separate.
-- Group chat history and search in one container with separated rows.
-- Keep chat rows neutral until hover or keyboard navigation.
-- Give the assistant header balanced spacing, with New chat beside Close.
-- Prioritize your own declarations and keep CP-relevant Python auto-imports last.
 
 </details>

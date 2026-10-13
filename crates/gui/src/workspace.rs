@@ -178,6 +178,8 @@ pub struct Workspace {
     pub update_ready: bool,
     pub release_update: crate::update::State,
     pub assist: Entity<crate::assist::Assist>,
+    pub(crate) selection_menu: Option<crate::assist::selection::SelectionMenu>,
+    pub(crate) selection_epoch: u64,
     pub ai_chip: Entity<crate::ai::Chip>,
     pub debugger: Entity<crate::debug_view::Debugger>,
     /// The center shows the debugger instead of the editor.
@@ -249,6 +251,7 @@ impl Workspace {
         });
         let editor_sub = cx.subscribe_in(&editor, window, |this, editor, event: &InputEvent, window, cx| {
             if *editor == this.editor && matches!(event, InputEvent::Change) {
+                this.selection_menu = None; this.selection_epoch += 1;
                 this.schedule_save(window, cx);
             }
         });
@@ -316,6 +319,7 @@ impl Workspace {
             copilot: copilot.clone(),
             editor,
             editor_subscription: Some(editor_sub),
+            selection_menu: None, selection_epoch: 0,
             statement: cx.new(|_| Statement::default()),
             omni,
             settings: SettingsState::new(),

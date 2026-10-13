@@ -8,7 +8,7 @@ use gpui_kit::component::input::PopoverMarkdown;
 use gpui_kit::component::kbd::Kbd;
 use practice::notes::Kind;
 use serde::{Deserialize, Serialize};
-use crate::actions::{AskInChat, AskInPlace, NextNoteStep, ResolveNote};
+use crate::actions::{QuoteSelection, AskInPlace, NextNoteStep, ResolveNote};
 
 /// The fenced block a card travels in through the editor's Markdown hover.
 const FENCE: &str = "leet-note";
@@ -38,7 +38,7 @@ impl Key {
         match self { Self::Resolve => "Resolve", Self::Question => "Ask in chat", Self::Ask => "Ask AI", Self::NextStep => "Next step" }
     }
     fn action(self) -> Box<dyn Action> {
-        match self { Self::Resolve => Box::new(ResolveNote), Self::Question => Box::new(AskInChat), Self::Ask => Box::new(AskInPlace), Self::NextStep => Box::new(NextNoteStep) }
+        match self { Self::Resolve => Box::new(ResolveNote), Self::Question => Box::new(QuoteSelection), Self::Ask => Box::new(AskInPlace), Self::NextStep => Box::new(NextNoteStep) }
     }
 }
 

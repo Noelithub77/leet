@@ -27,7 +27,7 @@ use crate::gen_ui::player::{self, Playback};
 use crate::workspace::Workspace;
 
 #[path = "selection.rs"]
-mod selection;
+pub(crate) mod selection;
 
 gpui_kit::actions!(chat, [SendChat, NewChat, NextThread, PreviousThread, OpenThread, CloseThreadList]);
 
@@ -180,6 +180,7 @@ pub struct Run {
     target: Option<Target>,
     generation: u64,
     collapsed: bool,
+    citations: Vec<practice::chat::history::Citation>,
     instructions: String,
     request_prompt: String,
     history: String,
@@ -216,6 +217,7 @@ pub struct Assist {
     scroll: ScrollHandle,
     pub(crate) composer: Entity<TextareaState>,
     composer_thread: Option<i64>,
+    composer_citations: Vec<practice::chat::history::Citation>,
     threads: Vec<practice::chat::history::Thread>,
     selected_thread: Option<i64>,
     loaded_threads: HashSet<i64>,
@@ -238,7 +240,7 @@ use practice::chat::history::{SavedTurn as Saved, SavedPhase};
 
 impl Run {
     fn saved(&self) -> Saved {
-        Saved { model: self.model.clone(), agent: self.agent, answer: self.answer.clone(), instructions: self.instructions.clone(), request_prompt: self.request_prompt.clone(), action: Some(self.action), problem: self.slug.clone(), problem_title: self.problem_title.clone(),
+        Saved { citations: self.citations.clone(), model: self.model.clone(), agent: self.agent, answer: self.answer.clone(), instructions: self.instructions.clone(), request_prompt: self.request_prompt.clone(), action: Some(self.action), problem: self.slug.clone(), problem_title: self.problem_title.clone(),
             phase: match &self.phase { Phase::Done => SavedPhase::Done, Phase::Failed(error) => SavedPhase::Failed(error.clone()), _ => SavedPhase::Stopped } }
     }
 }
@@ -258,7 +260,7 @@ impl Assist {
             if matches!(event, InputEvent::Change) { this.thread_query = input.read(cx).value().to_string(); this.thread_selection = 0; this.thread_selection_visible = false; this.refresh_threads(); cx.notify(); }
         }).detach();
         let mut this = Self { workspace, db, agents: vec![], detecting: false, catalogs, catalog_cache, requested_catalogs: HashSet::new(), installing: None,
-            runs: vec![], next_id: 0, slug: None, ticker: None, scroll: ScrollHandle::new(), composer, composer_thread: None, threads: vec![], selected_thread: None, loaded_threads: HashSet::new(), show_threads: true, thread_scroll: UniformListScrollHandle::new(), thread_search, thread_query: String::new(), thread_selection: 0, thread_selection_visible: false, conversation_error: None, editing: None, ai_tab: 2, context_key: None,
+            runs: vec![], next_id: 0, slug: None, ticker: None, scroll: ScrollHandle::new(), composer, composer_thread: None, composer_citations: vec![], threads: vec![], selected_thread: None, loaded_threads: HashSet::new(), show_threads: true, thread_scroll: UniformListScrollHandle::new(), thread_search, thread_query: String::new(), thread_selection: 0, thread_selection_visible: false, conversation_error: None, editing: None, ai_tab: 2, context_key: None,
             #[cfg(feature = "gui-test")] fixture_no_transport: false };
         if let Err(error) = this.db.migrate_chats() { this.conversation_error = Some(error.to_string()); }
         this.refresh_threads();
@@ -370,10 +372,12 @@ impl Assist {
         self.set_problem((!snapshot.slug.is_empty()).then_some(snapshot.slug.as_str()), cx);
         self.sync_composer(window, cx);
         let instructions = self.composer.read(cx).value().trim().to_string();
+        let citations = self.composer_citations.clone();
+        let prompt_instructions = practice::chat::history::with_citations(&instructions, &citations);
         let editing = self.editing.is_some();
         let action = self.editing.and_then(|id| self.runs.iter().find(|run| run.id == id)).map_or(action, |run| run.action);
-        if action == Action::Ask && instructions.is_empty() { return; }
-        if instructions.chars().count() > practice::chat::INSTRUCTIONS_LIMIT {
+        if action == Action::Ask && instructions.is_empty() && citations.is_empty() { return; }
+        if prompt_instructions.chars().count() > practice::chat::INSTRUCTIONS_LIMIT {
             use gpui_kit::component::WindowExt as _;
             window.push_notification(gpui_kit::component::notification::Notification::warning("Keep the prompt under 8,000 characters"), cx);
             return;
@@ -387,18 +391,19 @@ impl Assist {
         }
         let thread_id = match self.ensure_thread() { Ok(id) => id, Err(error) => { self.conversation_error = Some(error.to_string()); cx.notify(); return; } };
         let history = practice::chat::context(self.runs.iter().filter(|run| run.thread_id == thread_id).filter_map(|run|
-            Some(practice::chat::Turn { action: run.action, instructions: format!("{}\n{}\nProblem: {}\nNative artifact: {}", run.request_prompt, run.instructions, run.problem_title, practice::chat::artifacts::path(run.message_id).display()), answer: run.answer.clone()? })));
+            Some(practice::chat::Turn { action: run.action, instructions: format!("{}\n{}\nProblem: {}\nNative artifact: {}", run.request_prompt, practice::chat::history::with_citations(&run.instructions, &run.citations), run.problem_title, practice::chat::artifacts::path(run.message_id).display()), answer: run.answer.clone()? })));
         if let Target::Web(provider) = target {
-            let prompt = practice::chat::prompt(assist::web_prompt(action, &snapshot.context(None)), &history, &instructions);
+            let prompt = practice::chat::prompt(assist::web_prompt(action, &snapshot.context(None)), &history, &prompt_instructions);
             cx.write_to_clipboard(ClipboardItem::new_string(prompt.clone()));
             let _ = open::that_detached(practice::prompts::url(provider, &prompt));
             use gpui_kit::component::WindowExt as _;
             window.push_notification(gpui_kit::component::notification::Notification::info(format!("{} opened in {} · prompt copied", action.label(), provider.label())), cx);
             let id = self.next_id();
             let mut run = Run::new(id, snapshot.slug.clone(), action, None, provider.label().to_owned(), None, None);
-            run.thread_id = thread_id; run.problem_title = snapshot.title.clone(); run.instructions = instructions;
+            run.thread_id = thread_id; run.problem_title = snapshot.title.clone(); run.instructions = instructions; run.citations = citations.clone();
             run.phase = Phase::Done; run.elapsed = Some(Duration::ZERO);
             match self.db.append_chat(thread_id, &run.saved()) { Ok(message) => { run.message_id = message; self.runs.insert(0, run); }, Err(error) => self.conversation_error = Some(error.to_string()) }
+            self.composer_citations.clear();
             self.composer.update(cx, |input, cx| input.set_value("", window, cx)); self.refresh_threads(); cx.notify();
             return;
         }
@@ -411,9 +416,11 @@ impl Assist {
         if action == Action::Solve { run.solve = Some(SolveState { attempt: 1, session: None, log: vec![], accepted: false }); }
         run.thread_id = thread_id; run.problem_title = snapshot.title.clone();
         run.request_prompt = if editing && action != Action::Ask { instructions.clone() } else { action.instructions().to_owned() };
+        run.citations = citations;
         run.instructions = if editing && action != Action::Ask { String::new() } else { instructions }; run.history = history;
         match self.db.append_chat(thread_id, &run.saved()) { Ok(message) => run.message_id = message, Err(error) => { self.conversation_error = Some(error.to_string()); cx.notify(); return; } }
         self.refresh_threads();
+        self.composer_citations.clear();
         self.composer.update(cx, |input, cx| input.set_value("", window, cx));
         self.runs.insert(0, run);
         self.save(&snapshot.slug);
@@ -512,7 +519,7 @@ impl Assist {
         let action = run.action;
         let message_id = run.message_id;
         let request_prompt = run.request_prompt.clone();
-        let instructions = run.instructions.clone();
+        let instructions = practice::chat::history::with_citations(&run.instructions, &run.citations);
         let history = run.history.clone();
         run.reply.clear();
         let fallback = self.catalog(agent.kind).cloned();
@@ -881,7 +888,7 @@ impl Run {
     fn new(id: u64, slug: String, action: Action, agent: Option<AgentKind>, model: String, snapshot: Option<Snapshot>, target: Option<Target>) -> Self {
         Self { id, thread_id: 0, message_id: 0, problem_title: String::new(), slug, action, agent, model, started: Instant::now(), elapsed: None, artifact_mtime: None, phase: Phase::Starting, thinking: String::new(), tokens: 0,
             answer: None, cancel: Cancel::default(), hints_shown: 1, playback: Playback::new(0), last_frame: Instant::now(), reveal: false,
-            question: None, snippet_before: None, snippet_undo: None, added: vec![], solve: None, snapshot, target, generation: 0, collapsed: false, instructions: String::new(), request_prompt: action.instructions().to_owned(), history: String::new(), reply: String::new(), in_place: None }
+            question: None, snippet_before: None, snippet_undo: None, added: vec![], solve: None, snapshot, target, generation: 0, collapsed: false, citations: vec![], instructions: String::new(), request_prompt: action.instructions().to_owned(), history: String::new(), reply: String::new(), in_place: None }
     }
 
     fn set_answer(&mut self, answer: Option<Answer>) {
@@ -991,6 +998,7 @@ impl Assist {
             .border_color(if active { color.opacity(0.45) } else { theme.border })
             .child(v_flex().gap_1().pb_2().border_b_1().border_color(theme.border)
                 .child(div().text_xs().text_color(theme.muted_foreground).child("You"))
+                .children(run.citations.iter().map(|citation| selection::citation_pill(ElementId::NamedInteger(SharedString::from(format!("sent-citation-{id}")), selection::citation_key(citation)), citation, &theme)))
                 .when(run.action != Action::Ask, |el| el.child(h_flex().id(("chat-action-prompt", id)).gap_2().items_center().child(Icon::new(icon(run.action)).small().text_color(color)).child(div().text_sm().child(run.action.label()))
                     .tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(request_prompt.clone()).build(window, cx))))
                 .when(!run.instructions.is_empty(), |el| el.child(crate::rich_text::markdown(SharedString::from(format!("chat-request-{id}")), run.instructions.clone()).selectable(true))))

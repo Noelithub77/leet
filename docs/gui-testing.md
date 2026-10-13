@@ -21,7 +21,7 @@ the user's display.
 
 Run `./ops gui:test --fixture chat --json` for focused chat checks, including the merged Chats empty state and navigation to Analysis. Shared tooltip checks hover long descriptions, short button labels, and shortcut keycaps in dark, light, compact, and zoomed windows; they assert wrapping, viewport containment, and dismissal, and save `tooltip-*.png`.
 
-The chat fixture also checks Alt+L quoting selected code and rendered answers without sending, the selection context menu, Alt+E and Alt+F sending selection-scoped prompts, draft preservation, and unchanged editor content. It saves `selection-menu.png` and `selection-ai.png`.
+The chat fixture also checks Alt+Q quoting selected code and rendered answers as citation pills without sending, the automatic selection menu, Alt+E and Alt+F sending selection-scoped prompts, draft preservation, normal replacement typing, and workspace Alt+L accepting Copilot without quoting. It saves `selection-menu.png`, `citation-hover.png`, and `selection-ai.png`.
 
 The chat composer fixture checks Enter sending, Shift+Enter line breaks, removal of Ctrl+Enter, empty and disabled input, and send/stop containment. It renders compact, light, dark, and 140%-zoom variants. It uses the production composer with a dropped fixture workspace, so sends do not start agents or open web chats. Its history includes an I'm stuck chat that renders as a colored Stuck tag in `threads-*.png`; asking about that chat's note must open it, unloaded, with the prompt prefilled and focused.
 

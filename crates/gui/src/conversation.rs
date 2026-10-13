@@ -33,7 +33,7 @@ impl Assist {
         let mut run = Run::new(run_id, turn.problem, action, turn.agent, turn.model, None, None);
         run.thread_id = message.thread_id; run.message_id = message.id; run.problem_title = turn.problem_title;
         run.request_prompt = if turn.request_prompt.is_empty() { action.instructions().to_owned() } else { turn.request_prompt };
-        run.instructions = turn.instructions; run.elapsed = Some(Duration::ZERO);
+        run.citations = turn.citations; run.instructions = turn.instructions; run.elapsed = Some(Duration::ZERO);
         run.phase = match turn.phase { practice::chat::history::SavedPhase::Done => Phase::Done, practice::chat::history::SavedPhase::Stopped => Phase::Stopped, practice::chat::history::SavedPhase::Failed(error) => Phase::Failed(error) };
         run.set_answer(turn.answer); self.runs.push(run);
         self.runs.sort_by_key(|run| std::cmp::Reverse(run.message_id));
@@ -61,12 +61,12 @@ impl Assist {
     pub(super) fn persist_draft(&mut self, cx: &App) {
         if self.editing.is_some() { return; }
         if let Some(id) = self.composer_thread {
-            if let Err(error) = self.db.save_chat_draft(id, self.composer.read(cx).value().as_ref()) { self.conversation_error = Some(error.to_string()); }
+            if let Err(error) = self.db.save_chat_composer(id, self.composer.read(cx).value().as_ref(), &self.composer_citations) { self.conversation_error = Some(error.to_string()); }
         }
     }
     pub(super) fn new_thread(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.slug.is_none() { return; }
-        if self.editing.is_none() && self.composer.read(cx).value().trim().is_empty()
+        if self.editing.is_none() && self.composer.read(cx).value().trim().is_empty() && self.composer_citations.is_empty()
             && self.selected_thread.is_some_and(|id| self.db.chat_messages(id).is_ok_and(|messages| messages.is_empty())) {
             self.ai_tab = 2; self.show_threads = false; self.composer.focus_handle(cx).focus(window, cx); cx.notify(); return;
         }
@@ -88,7 +88,8 @@ impl Assist {
         let Some(run) = self.runs.iter().find(|run| run.id == id) else { return };
         if run.phase.active() || run.phase == Phase::Confirm { return; }
         let text = if run.action == Action::Ask { run.instructions.clone() } else { format!("{}{}", run.request_prompt, if run.instructions.is_empty() { String::new() } else { format!("\n\n{}", run.instructions) }) };
-        self.persist_draft(cx); self.editing = Some(id); self.composer.update(cx, |input, cx| input.set_value(text, window, cx));
+        let citations = run.citations.clone();
+        self.persist_draft(cx); self.composer_citations = citations; self.editing = Some(id); self.composer.update(cx, |input, cx| input.set_value(text, window, cx));
         self.composer.focus_handle(cx).focus(window, cx); cx.notify();
     }
     pub(super) fn cancel_edit(&mut self, window: &mut Window, cx: &mut Context<Self>) {

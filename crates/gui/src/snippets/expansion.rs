@@ -398,7 +398,6 @@ impl Render for EditorPane {
                     && this.revert_prediction(window, cx) { cx.stop_propagation(); }
                 else if !event.keystroke.modifiers.control && !event.keystroke.modifiers.platform && !event.keystroke.modifiers.shift
                     && event.keystroke.key == "l" && event.keystroke.modifiers.alt
-                    && this.state.read(cx).selected_range().is_empty()
                     && this.accept_prediction(window, cx) { cx.stop_propagation(); }
                 else if this.menu.is_some() && !event.keystroke.modifiers.control && !event.keystroke.modifiers.platform && !event.keystroke.modifiers.shift && !event.keystroke.modifiers.alt {
                     match event.keystroke.key.as_str() {
