@@ -38,6 +38,12 @@ pub struct SavedTurn {
 pub enum SavedPhase { #[default] Done, Stopped, Failed(String) }
 
 impl SavedTurn {
+    pub fn chat_title(&self) -> String {
+        self.instructions.lines().find(|line| !line.trim().is_empty())
+            .map(|line| line.trim().chars().take(60).collect())
+            .unwrap_or_else(|| self.action().label().to_owned())
+    }
+
     pub fn action(&self) -> Action {
         self.action.unwrap_or_else(|| match &self.answer {
             Some(Answer::Hints(_)) => Action::Hints, Some(Answer::Tests(_)) => Action::Tests,

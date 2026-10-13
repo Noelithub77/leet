@@ -60,6 +60,7 @@ fn launch_inside_workspace(cx: &mut HeadlessAppContext, output: &Path) -> Result
         let ws = fixture.read(cx).workspace.read(cx);
         let assist = ws.assist.read(cx);
         let run = assist.runs.first().ok_or_else(|| anyhow::anyhow!("AI run was not created"))?;
+        ensure!(ws.db.chat_thread(run.thread_id)?.title == "Hints", "First quick action remained an unnamed draft");
         ensure!(run.generation == 1, "Deferred launch did not prepare the run");
         ensure!(run.snippet_before.as_ref().is_some_and(|(dir, _)| dir == &ws.snippet_dir), "Launch did not capture workspace context");
         window.remove_window(); Ok(())
@@ -309,6 +310,7 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
     }
     cx.update(|cx| { crate::theme::apply("Vesper", cx); crate::theme::set_zoom(1., cx); });
     launch_inside_workspace(cx, output)?;
+    super::selection::fixture(cx, output, pixels)?;
     tooltip::native(cx, output, pixels)?;
-    Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["Enter sends","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","send button input","send and stop containment","compact/light/zoom","wrapped tooltip width, viewport containment, shortcuts and dismissal","neutral history rows and visible keyboard selection","empty chats hidden","Ctrl+T / Ctrl+Shift+O / Ctrl+N","aligned toolbar and search","header Plus and no empty history row","merged Chats quick actions and Analysis navigation","quick-action tags and note follow-ups"]}))
+    Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["Enter sends","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","send button input","send and stop containment","compact/light/zoom","wrapped tooltip width, viewport containment, shortcuts and dismissal","neutral history rows and visible keyboard selection","empty chats hidden","Ctrl+T / Ctrl+Shift+O / Ctrl+N","aligned toolbar and search","header Plus and no empty history row","merged Chats quick actions and Analysis navigation","quick-action tags and note follow-ups","first message names hidden chats","Alt+L quotes selection without sending","selection menu Quote preserves the draft","Alt+E and Alt+F send selection prompts and preserve drafts","selection actions preserve editor content"]}))
 }

@@ -398,6 +398,7 @@ impl Render for EditorPane {
                     && this.revert_prediction(window, cx) { cx.stop_propagation(); }
                 else if !event.keystroke.modifiers.control && !event.keystroke.modifiers.platform && !event.keystroke.modifiers.shift
                     && event.keystroke.key == "l" && event.keystroke.modifiers.alt
+                    && this.state.read(cx).selected_range().is_empty()
                     && this.accept_prediction(window, cx) { cx.stop_propagation(); }
                 else if this.menu.is_some() && !event.keystroke.modifiers.control && !event.keystroke.modifiers.platform && !event.keystroke.modifiers.shift && !event.keystroke.modifiers.alt {
                     match event.keystroke.key.as_str() {
@@ -421,7 +422,23 @@ impl Render for EditorPane {
             .on_action(cx.listener(|this,_:&crate::language_server::Complete,w,cx| this.open_completions(w,cx)))
             .on_mouse_move(cx.listener(|this,_,_,cx|{this.state.update(cx,|e,cx|e.clear_diagnostic_popover(cx));cx.notify();}))
             .when_some(hover,|view,(message,bounds)|view.child(deferred(div().absolute().left((bounds.left()-origin.x).max(px(0.))).top(bounds.bottom()-origin.y+px(8.)).max_w(px(420.)).max_h(px(180.)).id("hovered-diagnostic").overflow_y_scroll().p_3().rounded_lg().bg(theme.popover).border_1().border_color(theme.danger.opacity(0.4)).shadow_md().text_sm().text_color(theme.danger).child(message))))
-            .child(Editor::new(&self.state).bordered(false).h_full())
+            .child(Editor::new(&self.state).bordered(false).h_full().context_menu({
+                let capabilities = self.state.read(cx).context_menu_capabilities();
+                move |menu, _, _| {
+                    use gpui_kit::base::input::{GoToDefinition, ToggleCodeActions, Cut, Copy, Paste, SelectAll};
+                    let editable = capabilities.is_editable();
+                    let menu = menu.menu_with_disabled("Go to definition", !(!capabilities.is_disabled() && capabilities.has_definition()), Box::new(GoToDefinition))
+                        .menu_with_disabled("Show code actions", !(editable && capabilities.has_code_actions()), Box::new(ToggleCodeActions))
+                        .separator().menu_with_disabled("Cut", !(editable && capabilities.is_copyable()), Box::new(Cut))
+                        .menu_with_disabled("Copy", !capabilities.is_copyable(), Box::new(Copy))
+                        .menu_with_disabled("Paste", !editable, Box::new(Paste)).separator().menu("Select all", Box::new(SelectAll));
+                    if !capabilities.has_selection() { menu } else {
+                        menu.separator().menu("Quote", Box::new(crate::actions::QuoteSelection))
+                            .menu("Explain", Box::new(crate::actions::ExplainSelection))
+                            .menu("Fix", Box::new(crate::actions::FixSelection))
+                    }
+                }
+            }))
             .when_some(bounds, |view,bounds| view.child(div().absolute().left(bounds.left()-origin.x).top(bounds.top()-origin.y).w(bounds.size.width.max(px(3.))).h(bounds.size.height).rounded_sm().border_1().border_color(theme.primary).bg(theme.primary.opacity(0.08))
                 .with_animation(("snippet-stop-glide",self.epoch), Animation::new(Duration::from_millis(100)), |view,t|view.opacity(0.35+0.65*t))))
             .when_some(glide, |view,(x,y,height)|view.child(div().absolute().left(px(x)).top(px(y)).w(px(2.)).h(height).bg(theme.primary)))

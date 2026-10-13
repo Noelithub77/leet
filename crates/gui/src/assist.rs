@@ -26,6 +26,9 @@ use practice::viz::Tone;
 use crate::gen_ui::player::{self, Playback};
 use crate::workspace::Workspace;
 
+#[path = "selection.rs"]
+mod selection;
+
 gpui_kit::actions!(chat, [SendChat, NewChat, NextThread, PreviousThread, OpenThread, CloseThreadList]);
 
 pub fn bind_keys(cx: &mut App) {
@@ -410,10 +413,6 @@ impl Assist {
         run.request_prompt = if editing && action != Action::Ask { instructions.clone() } else { action.instructions().to_owned() };
         run.instructions = if editing && action != Action::Ask { String::new() } else { instructions }; run.history = history;
         match self.db.append_chat(thread_id, &run.saved()) { Ok(message) => run.message_id = message, Err(error) => { self.conversation_error = Some(error.to_string()); cx.notify(); return; } }
-        if self.threads.iter().any(|thread| thread.id == thread_id && thread.title == "New chat") {
-            let title = if run.instructions.is_empty() { action.label().to_owned() } else { run.instructions.lines().next().unwrap_or(action.label()).chars().take(60).collect() };
-            let _ = self.db.rename_chat(thread_id, &title);
-        }
         self.refresh_threads();
         self.composer.update(cx, |input, cx| input.set_value("", window, cx));
         self.runs.insert(0, run);
@@ -1083,7 +1082,8 @@ impl Assist {
                 .child(self.body(run, &Answer::Analyze(review.complexity.clone()), window, cx))
                 .child(self.body(run, &Answer::Optimize(review.improvements.clone()), window, cx))
                 .child(self.body(run, &Answer::DryRun(review.dry_run.clone()), window, cx)).into_any_element(),
-            Answer::Chat(text) => crate::rich_text::markdown(SharedString::from(format!("chat-answer-{id}")), text.clone()).selectable(true).into_any_element(),
+            Answer::Chat(text) => div().id(("chat-answer", id)).test_support()
+                .child(crate::rich_text::markdown(SharedString::from(format!("chat-answer-{id}")), text.clone()).selectable(true)).into_any_element(),
             Answer::Hints(hints) => {
                 let shown = run.hints_shown.min(hints.hints.len());
                 v_flex().gap_2()

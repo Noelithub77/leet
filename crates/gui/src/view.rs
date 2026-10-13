@@ -1,5 +1,6 @@
 //! Native resizable sidebars and editor layout; results reveal with a short stagger.
 
+use gpui_kit::component::menu::ContextMenuExt as _;
 use std::time::Duration;
 
 use gpui_kit::base::{Disableable as _, Spring, Transition, spring, transition};
@@ -213,6 +214,24 @@ impl Render for Workspace {
             .child(body),
         )
         .child(self.render_status(window, cx))
+        .context_menu({
+            let workspace = cx.weak_entity();
+            move |menu, window, cx| {
+                let text = gpui_kit::base::TextSelection::selected_text(window, cx);
+                if text.trim().is_empty() { return menu; }
+                [None, Some("Explain"), Some("Fix")].into_iter().fold(menu, |menu, command| {
+                    let workspace = workspace.clone(); let text = text.clone();
+                    let action: Box<dyn gpui_kit::Action> = match command {
+                        Some("Explain") => Box::new(crate::actions::ExplainSelection),
+                        Some("Fix") => Box::new(crate::actions::FixSelection),
+                        _ => Box::new(crate::actions::QuoteSelection),
+                    };
+                    menu.item(gpui_kit::component::menu::PopupMenuItem::new(command.unwrap_or("Quote")).action(action).on_click(move |_, window, cx| {
+                        let _ = workspace.update(cx, |ws, cx| ws.selection_ai_text(command, text.clone(), window, cx));
+                    }))
+                })
+            }
+        })
         .children(omnibar)
         .children(crate::update::panel(self, window, cx))
         .children(crate::tour::panel(self, window, cx))

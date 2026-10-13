@@ -72,6 +72,15 @@ impl Db {
                 }
                 diesel::delete(kv::table.find(&key)).execute(conn)?;
             }
+            let unnamed: Vec<i64> = chat_threads::table.filter(chat_threads::title.eq("New chat")).select(chat_threads::id).load(conn)?;
+            for id in unnamed {
+                let first: Option<String> = chat_messages::table.filter(chat_messages::thread_id.eq(id))
+                    .order(chat_messages::id.asc()).select(chat_messages::body).first(conn).optional()?;
+                if let Some(body) = first {
+                    let first: SavedTurn = serde_json::from_str(&body)?;
+                    diesel::update(chat_threads::table.find(id)).set(chat_threads::title.eq(first.chat_title())).execute(conn)?;
+                }
+            }
             Ok(())
         })
     }
@@ -135,7 +144,10 @@ impl Db {
     }
     pub fn append_chat(&self, id: i64, turn: &SavedTurn) -> Result<i64> {
         self.conn().transaction::<_, anyhow::Error, _>(|conn| {
-            thread(conn, id)?;
+            let current = thread(conn, id)?;
+            if current.title == "New chat" {
+                diesel::update(chat_threads::table.find(id)).set(chat_threads::title.eq(turn.chat_title())).execute(conn)?;
+            }
             let message = insert_message(conn, id, turn)?;
             diesel::update(chat_threads::table.find(id)).set(chat_threads::updated_at.eq(now())).execute(conn)?;
             Ok(message)
@@ -193,6 +205,26 @@ mod tests {
     fn turn(problem: &str, text: &str) -> SavedTurn {
         SavedTurn { model: "model".into(), agent: None, answer: Some(Answer::Chat(text.into())), instructions: text.into(), request_prompt: String::new(), action: Some(Action::Ask), phase: Default::default(), problem: problem.into(), problem_title: problem.into() }
     }
+    #[test]
+    fn first_message_names_hidden_threads_and_repairs_old_titles() {
+        let dir = tempfile::tempdir().unwrap(); let db = Db::open_unseeded(&dir.path().join("test.db")).unwrap();
+        let chat = db.create_chat(Some("two-sum"), "New chat").unwrap();
+        assert!(db.visible_chat_threads(Some("two-sum"), "").unwrap().is_empty());
+        db.append_chat(chat.id, &turn("two-sum", "  Explain this map\nMore context")).unwrap();
+        assert_eq!(db.chat_thread(chat.id).unwrap().title, "Explain this map");
+        db.append_chat(chat.id, &turn("two-sum", "Follow-up")).unwrap();
+        assert_eq!(db.chat_thread(chat.id).unwrap().title, "Explain this map");
+        db.rename_chat(chat.id, "New chat").unwrap();
+        db.migrate_chats().unwrap(); db.migrate_chats().unwrap();
+        assert_eq!(db.chat_thread(chat.id).unwrap().title, "Explain this map");
+        db.rename_chat(chat.id, "My title").unwrap(); db.migrate_chats().unwrap();
+        assert_eq!(db.chat_thread(chat.id).unwrap().title, "My title");
+        let quick = db.create_chat(Some("two-sum"), "New chat").unwrap();
+        let mut action = turn("two-sum", ""); action.action = Some(Action::Review);
+        db.append_chat(quick.id, &action).unwrap();
+        assert_eq!(db.chat_thread(quick.id).unwrap().title, "Analyse my solution");
+    }
+
     #[test]
     fn migration_is_atomic_idempotent_and_preserves_old_answers() {
         let dir = tempfile::tempdir().unwrap(); let db = Db::open_unseeded(&dir.path().join("test.db")).unwrap();

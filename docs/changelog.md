@@ -1,6 +1,7 @@
 <details open>
 <summary>Feat</summary>
 
+- Quote highlighted text with Alt+L, explain it with Alt+E, or request a fix with Alt+F.
 - Revert accepted Copilot suggestions with Alt+K.
 - Distinguish Copilot suggestions with faint syntax colors.
 - Save AI findings as `#!` comments; Rich hides them and highlights the code, with details on hover.
@@ -23,6 +24,7 @@
 <summary>Fix</summary>
 
 - Keep completion menus and full previews clear of the typing line, with subtly translucent backgrounds.
+- Name chats on their first message and repair older chats labelled Draft.
 - Keep tooltips compact, with wrapped descriptions and balanced padding.
 - Show NeetCode’s own descriptions, examples, diagrams, and complexity guidance.
 - Keep CodeChef’s additional samples and explanations in the question view.
