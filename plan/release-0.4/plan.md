@@ -7,4 +7,5 @@
 - Complete: version bumped to 0.4.0 and categorized release notes prepared.
 - Complete: v0.4.0 published from 3afe201; all five platform builds, CI tests, and ten release assets verified.
 - Complete: soft wrapping in editors and debugger, annotation dropdown, version-input release operator/action, and one manual workflow. Full isolated GUI suite passes with long Python and C++ source rows.
-- Pending: publish these later additions as v0.4.1 through the new operator and verify one workflow and complete assets. T3 action declaration needs the one-time UI import; the automation preview reaches an unpaired session.
+- Complete: v0.4.1 published from 505776a through the new operator. Exactly one workflow passed all five builds and CI tests; all ten assets are uploaded and their checksum manifest matches release metadata.
+- T3 action declaration is ready for the one-time UI import; the automation preview reaches an unpaired session.
