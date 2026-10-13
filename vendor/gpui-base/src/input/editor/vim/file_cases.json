@@ -1,0 +1,250 @@
+[
+  {
+    "source": "x (a(b)c) y",
+    "commands": "di("
+  },
+  {
+    "source": "x (a(b)c) y",
+    "commands": "da("
+  },
+  {
+    "source": "before \"a\\\"b\" after",
+    "commands": "9ldi\""
+  },
+  {
+    "source": "before \"a\\\"b\" after",
+    "commands": "9lda\""
+  },
+  {
+    "source": "before \"a\\\"b\" after",
+    "commands": "di\""
+  },
+  {
+    "source": "before \"a\\\"b\" after",
+    "commands": "da\""
+  },
+  {
+    "source": "before \"a\" \"b\" after",
+    "commands": "11l2di\""
+  },
+  {
+    "source": "before 'a\\'b' after",
+    "commands": "9ldi'"
+  },
+  {
+    "source": "before 'a\\'b' after",
+    "commands": "9lda'"
+  },
+  {
+    "source": "one   two  ",
+    "commands": "3ldaw"
+  },
+  {
+    "source": "one   two  ",
+    "commands": "$daw"
+  },
+  {
+    "source": "one   two  ",
+    "commands": "3lcawX\u001b"
+  },
+  {
+    "source": "one\ntwo\n",
+    "commands": "Gdd"
+  },
+  {
+    "source": "one\ntwo\n",
+    "commands": "GccX\u001b"
+  },
+  {
+    "source": "one\ntwo\n",
+    "commands": "GyyP"
+  },
+  {
+    "source": "one\ntwo\n",
+    "commands": "Gddp"
+  },
+  {
+    "source": "one\n",
+    "commands": "dd"
+  },
+  {
+    "source": "one\n",
+    "commands": "ddp"
+  },
+  {
+    "source": "one\n",
+    "commands": "Vd"
+  },
+  {
+    "source": "one",
+    "commands": "ddp"
+  },
+  {
+    "source": "one\r\ntwo\r\n",
+    "commands": "Gdd"
+  },
+  {
+    "source": "one\r\ntwo\r\n",
+    "commands": "GccX\u001b"
+  },
+  {
+    "source": "one\r\ntwo\r\n",
+    "commands": "GyyP"
+  },
+  {
+    "source": "one   \ntwo",
+    "commands": "wdw"
+  },
+  {
+    "source": "one\n\ntwo",
+    "commands": "2dw"
+  },
+  {
+    "source": "one\n  two\n\nthree",
+    "commands": "3J"
+  },
+  {
+    "source": "one\n  two\n\nthree",
+    "commands": "4J"
+  },
+  {
+    "source": "one\n  two\n\nthree",
+    "commands": "jJ"
+  },
+  {
+    "source": "one.\ntwo",
+    "commands": "J"
+  },
+  {
+    "source": "a\n b\n  c\n    d",
+    "commands": ">>3."
+  },
+  {
+    "source": "a\n b\n  c\n    d",
+    "commands": "G2<<"
+  },
+  {
+    "source": "one   two  ",
+    "commands": "2diw"
+  },
+  {
+    "source": "one   two  ",
+    "commands": "3l2daw"
+  },
+  {
+    "source": "one\t two\nthree",
+    "commands": "2diw"
+  },
+  {
+    "source": "one\t two\nthree",
+    "commands": "3ldaw"
+  },
+  {
+    "source": "one\t two\nthree",
+    "commands": "3l2daw"
+  },
+  {
+    "source": "one\n  two",
+    "commands": "2diw"
+  },
+  {
+    "source": "xx \"one\" yy",
+    "commands": "2diw"
+  },
+  {
+    "source": "aa (b(c)d) ee",
+    "commands": "2diw"
+  },
+  {
+    "source": "x [a[b]c] y",
+    "commands": "2diw"
+  },
+  {
+    "source": "x [a[b]c] y",
+    "commands": "di["
+  },
+  {
+    "source": "x [a[b]c] y",
+    "commands": "da["
+  },
+  {
+    "source": "x {a{b}c} y",
+    "commands": "di{"
+  },
+  {
+    "source": "x {a{b}c} y",
+    "commands": "da{"
+  },
+  {
+    "source": "one\r\ntwo\r\n",
+    "commands": "lx"
+  },
+  {
+    "source": "one\r\ntwo\r\n",
+    "commands": "$x"
+  },
+  {
+    "source": "one\r\ntwo\r\n",
+    "commands": "dw"
+  },
+  {
+    "source": "one\r\ntwo\r\n",
+    "commands": "D"
+  },
+  {
+    "source": "one\r\ntwo\r\n",
+    "commands": "J"
+  },
+  {
+    "source": "one\r\n",
+    "commands": "ddp"
+  },
+  {
+    "source": "one.two three four",
+    "commands": "cWX\u001b"
+  },
+  {
+    "source": "a b c",
+    "commands": "yiwwvpP"
+  },
+  {
+    "source": "a b c",
+    "commands": "yiwwvPP"
+  },
+  {
+    "source": "one\ntwo\n",
+    "commands": "50%"
+  },
+  {
+    "source": "one\ntwo\n",
+    "commands": "100G"
+  },
+  {
+    "source": "one\ntwo\n",
+    "commands": "GJ"
+  },
+  {
+    "source": "one\ntwo\n",
+    "commands": "ji\u001b"
+  },
+  {
+    "source": "one",
+    "commands": "o\u001b"
+  },
+  {
+    "source": "one",
+    "commands": "o\u001bGdd"
+  },
+  {
+    "source": "abcdef",
+    "commands": "r\r"
+  },
+  {
+    "source": "abcdef",
+    "commands": "3r\r"
+  },
+  {
+    "source": "abcdef",
+    "commands": "v2lr\r"
+  }
+]

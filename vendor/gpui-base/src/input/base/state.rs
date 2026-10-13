@@ -125,9 +125,16 @@ actions!(
 #[derive(Clone)]
 pub enum InputEvent {
     Change,
-    PressEnter { secondary: bool, shift: bool },
+    PressEnter {
+        secondary: bool,
+        shift: bool,
+    },
     Focus,
     Blur,
+    /// A modal editor command that the application must execute.
+    VimCommand(super::VimHostCommand),
+    /// Modal mode, pending input or status changed.
+    VimChanged,
 }
 
 pub(super) const CONTEXT: &str = "Input";
@@ -335,6 +342,7 @@ impl ColumnarPoint {
 struct PasteTarget {
     document_revision: u64,
     selections: Vec<CursorSelection>,
+    vim_mode: Option<super::VimMode>,
 }
 
 /// The shared text-editing engine behind [`crate::input::InputState`],
@@ -355,6 +363,12 @@ pub struct InputBaseState<M: InputModeKind> {
     pub(super) text: Rope,
     pub(super) display_map: DisplayMap,
     pub(super) undo_manager: UndoManager,
+    pub(super) vim: Option<super::vim::VimEngine>,
+    pub(super) vim_shared: Option<Rc<std::cell::RefCell<super::VimShared>>>,
+    pub(super) vim_cursor: Option<usize>,
+    pub(super) vim_message: Option<String>,
+    pub(super) vim_applying: bool,
+    pub(super) vim_insert_transaction: bool,
     pub(super) inline_tokens: Option<Box<super::inline_tokens::InlineTokenStore>>,
     pub(super) pending_token: Option<super::InlineToken>,
     pub(super) replaying_history: bool,
@@ -679,6 +693,7 @@ impl<M: InputModeKind> InputBaseState<M> {
         let focus_handle = cx.focus_handle().tab_stop(true);
         let blink_cursor = cx.new(|_| BlinkCursor::new());
         let undo_manager = UndoManager::new();
+        let vim_entity = cx.entity().downgrade();
 
         let _subscriptions = vec![
             // Key bindings can consume events before on_key_down. Observe input
@@ -689,6 +704,21 @@ impl<M: InputModeKind> InputBaseState<M> {
                 move |_, window, cx| {
                     if focus_handle.is_focused(window) {
                         _ = blink_cursor.update(cx, |cursor, cx| cursor.pause(cx));
+                    }
+                }
+            }),
+            // Modal keys must run before keybindings and platform text insertion.
+            cx.intercept_keystrokes({
+                let entity = vim_entity;
+                let handle = window.window_handle();
+                let focus_handle = focus_handle.clone();
+                move |event, window, cx| {
+                    if M::CODE_EDITOR
+                        && window.window_handle() == handle
+                        && focus_handle.is_focused(window)
+                    {
+                        let _ =
+                            entity.update(cx, |state, cx| state.intercept_vim(event, window, cx));
                     }
                 }
             }),
@@ -726,6 +756,12 @@ impl<M: InputModeKind> InputBaseState<M> {
             cursor_surrounding_lines: None,
             blink_cursor,
             undo_manager,
+            vim: None,
+            vim_shared: None,
+            vim_cursor: None,
+            vim_message: None,
+            vim_applying: false,
+            vim_insert_transaction: false,
             inline_tokens: None,
             pending_token: None,
             replaying_history: false,
@@ -2170,7 +2206,7 @@ impl<M: InputModeKind> InputBaseState<M> {
     /// the first/last display row) or that would duplicate an existing cursor
     /// are skipped.
     fn add_cursor_vertical(&mut self, move_lines: isize, cx: &mut Context<Self>) {
-        if !self.is_multi_line() {
+        if !self.is_multi_line() || self.vim.is_some() {
             return;
         }
 
@@ -2218,7 +2254,7 @@ impl<M: InputModeKind> InputBaseState<M> {
     /// Rejected when `offset` lands inside an existing selection or exactly on
     /// an existing cursor.
     pub(super) fn add_cursor_at(&mut self, offset: usize, cx: &mut Context<Self>) {
-        if !self.is_multi_line() {
+        if !self.is_multi_line() || self.vim.is_some() {
             return;
         }
 
@@ -2305,6 +2341,10 @@ impl<M: InputModeKind> InputBaseState<M> {
         if window.default_prevented() {
             return;
         }
+        if !self.vim_accepts_text() {
+            self.finish_modal_input(window, cx);
+        }
+        self.vim_cursor = None;
         self.undo_manager.break_transaction_coalescing();
         // Input has its own text selection; suppress the window-level text
         // selection (Root) so it does not start a drag from here.
@@ -2368,7 +2408,7 @@ impl<M: InputModeKind> InputBaseState<M> {
         }
 
         // Multi-cursor placement, multi-line only.
-        if self.is_multi_line() && event.button == MouseButton::Left {
+        if self.is_multi_line() && self.vim.is_none() && event.button == MouseButton::Left {
             if event.modifiers.alt
                 && (event.modifiers.shift || (cfg!(target_os = "linux") && event.modifiers.control))
             {
@@ -2721,6 +2761,7 @@ impl<M: InputModeKind> InputBaseState<M> {
         PasteTarget {
             document_revision: self.document_revision,
             selections: self.selections.iter().copied().collect(),
+            vim_mode: self.vim.as_ref().map(super::vim::VimEngine::mode),
         }
     }
 
@@ -2981,6 +3022,7 @@ impl<M: InputModeKind> InputBaseState<M> {
     /// Collapses the active selection to a cursor at the given offset,
     /// clearing `reversed`.
     pub(super) fn set_cursor_to(&mut self, offset: usize) {
+        self.vim_cursor = None;
         let offset = self.token_boundary(offset, Bias::Right);
         let active = self.active_selection_mut();
         active.start = offset;
@@ -3034,6 +3076,7 @@ impl<M: InputModeKind> InputBaseState<M> {
     /// Non-empty ranges expand to character boundaries. Empty ranges remain empty and are
     /// clipped to the preceding character boundary.
     pub fn set_selected_range(&mut self, range: Range<usize>, cx: &mut Context<Self>) {
+        self.vim_cursor = None;
         let range = self.normalize_token_range(range);
         let end_bias = if range.start == range.end {
             Bias::Left
@@ -3395,6 +3438,7 @@ impl<M: InputModeKind> InputBaseState<M> {
     }
 
     fn on_blur(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.blur_modal_input(window, cx);
         if M::is_context_menu_open(self, cx) {
             return;
         }
@@ -3747,6 +3791,7 @@ impl<M: InputModeKind> InputBaseState<M> {
             self.undo_manager.begin_transaction();
         }
 
+        let vim_before = self.vim_native_snapshot();
         let auto_closed_pairs_before = self.mode.auto_closed_pairs().clone();
         let mut recorded = false;
         // Several edits reach the highlighter as one batch, so it reparses
@@ -3878,6 +3923,7 @@ impl<M: InputModeKind> InputBaseState<M> {
         if self.is_multi_line() {
             self.mode.update_auto_grow(&self.display_map);
         }
+        self.record_vim_native_edit(vim_before);
         if self.emit_events {
             cx.emit(InputEvent::Change);
         }
@@ -3981,7 +4027,7 @@ impl<M: InputModeKind> EntityInputHandler for InputBaseState<M> {
         cx: &mut Context<Self>,
     ) {
         let requested_intent = self.undo_manager.take_pending_intent();
-        if !self.is_editable() {
+        if !self.is_editable() || (!self.silent_replace_text && !self.vim_accepts_text()) {
             return;
         }
         let selection_before = *self.active_selection();
@@ -4221,9 +4267,10 @@ impl<M: InputModeKind> EntityInputHandler for InputBaseState<M> {
         cx: &mut Context<Self>,
     ) {
         let requested_intent = self.undo_manager.take_pending_intent();
-        if !self.is_editable() {
+        if !self.is_editable() || (!self.silent_replace_text && !self.vim_accepts_text()) {
             return;
         }
+        let vim_before = self.vim_native_snapshot();
         let selection_before = *self.active_selection();
 
         let starts_composition = self.ime_marked_range.is_none();
@@ -4339,6 +4386,7 @@ impl<M: InputModeKind> EntityInputHandler for InputBaseState<M> {
         if new_text.is_empty() {
             self.undo_manager.commit_transaction();
         }
+        self.record_vim_native_edit(vim_before);
         cx.notify();
     }
 

@@ -1,0 +1,436 @@
+[
+  {
+    "name": "file-0",
+    "source": "x (a(b)c) y",
+    "commands": "di(",
+    "text": "x () y",
+    "cursor": 3
+  },
+  {
+    "name": "file-1",
+    "source": "x (a(b)c) y",
+    "commands": "da(",
+    "text": "x  y",
+    "cursor": 2
+  },
+  {
+    "name": "file-2",
+    "source": "before \"a\\\"b\" after",
+    "commands": "9ldi\"",
+    "text": "before \"\" after",
+    "cursor": 8
+  },
+  {
+    "name": "file-3",
+    "source": "before \"a\\\"b\" after",
+    "commands": "9lda\"",
+    "text": "before after",
+    "cursor": 7
+  },
+  {
+    "name": "file-4",
+    "source": "before \"a\\\"b\" after",
+    "commands": "di\"",
+    "text": "before \"\" after",
+    "cursor": 8
+  },
+  {
+    "name": "file-5",
+    "source": "before \"a\\\"b\" after",
+    "commands": "da\"",
+    "text": "before after",
+    "cursor": 7
+  },
+  {
+    "name": "file-6",
+    "source": "before \"a\" \"b\" after",
+    "commands": "11l2di\"",
+    "text": "before \"a\"  after",
+    "cursor": 11
+  },
+  {
+    "name": "file-7",
+    "source": "before 'a\\'b' after",
+    "commands": "9ldi'",
+    "text": "before '' after",
+    "cursor": 8
+  },
+  {
+    "name": "file-8",
+    "source": "before 'a\\'b' after",
+    "commands": "9lda'",
+    "text": "before after",
+    "cursor": 7
+  },
+  {
+    "name": "file-9",
+    "source": "one   two  ",
+    "commands": "3ldaw",
+    "text": "one  ",
+    "cursor": 3
+  },
+  {
+    "name": "file-10",
+    "source": "one   two  ",
+    "commands": "$daw",
+    "text": "one   two  ",
+    "cursor": 10
+  },
+  {
+    "name": "file-11",
+    "source": "one   two  ",
+    "commands": "3lcawX\u001b",
+    "text": "oneX  ",
+    "cursor": 3
+  },
+  {
+    "name": "file-12",
+    "source": "one\ntwo\n",
+    "commands": "Gdd",
+    "text": "one\n",
+    "cursor": 0
+  },
+  {
+    "name": "file-13",
+    "source": "one\ntwo\n",
+    "commands": "GccX\u001b",
+    "text": "one\nX\n",
+    "cursor": 4
+  },
+  {
+    "name": "file-14",
+    "source": "one\ntwo\n",
+    "commands": "GyyP",
+    "text": "one\ntwo\ntwo\n",
+    "cursor": 4
+  },
+  {
+    "name": "file-15",
+    "source": "one\ntwo\n",
+    "commands": "Gddp",
+    "text": "one\ntwo\n",
+    "cursor": 4
+  },
+  {
+    "name": "file-16",
+    "source": "one\n",
+    "commands": "dd",
+    "text": "",
+    "cursor": 0
+  },
+  {
+    "name": "file-17",
+    "source": "one\n",
+    "commands": "ddp",
+    "text": "\none\n",
+    "cursor": 1
+  },
+  {
+    "name": "file-18",
+    "source": "one\n",
+    "commands": "Vd",
+    "text": "",
+    "cursor": 0
+  },
+  {
+    "name": "file-19",
+    "source": "one",
+    "commands": "ddp",
+    "text": "\none",
+    "cursor": 1
+  },
+  {
+    "name": "file-20",
+    "source": "one\r\ntwo\r\n",
+    "commands": "Gdd",
+    "text": "one\r\n",
+    "cursor": 0
+  },
+  {
+    "name": "file-21",
+    "source": "one\r\ntwo\r\n",
+    "commands": "GccX\u001b",
+    "text": "one\r\nX\r\n",
+    "cursor": 5
+  },
+  {
+    "name": "file-22",
+    "source": "one\r\ntwo\r\n",
+    "commands": "GyyP",
+    "text": "one\r\ntwo\r\ntwo\r\n",
+    "cursor": 5
+  },
+  {
+    "name": "file-23",
+    "source": "one   \ntwo",
+    "commands": "wdw",
+    "text": "one   \n",
+    "cursor": 7
+  },
+  {
+    "name": "file-24",
+    "source": "one\n\ntwo",
+    "commands": "2dw",
+    "text": "two",
+    "cursor": 0
+  },
+  {
+    "name": "file-25",
+    "source": "one\n  two\n\nthree",
+    "commands": "3J",
+    "text": "one two\nthree",
+    "cursor": 6
+  },
+  {
+    "name": "file-26",
+    "source": "one\n  two\n\nthree",
+    "commands": "4J",
+    "text": "one two three",
+    "cursor": 7
+  },
+  {
+    "name": "file-27",
+    "source": "one\n  two\n\nthree",
+    "commands": "jJ",
+    "text": "one\n  two\nthree",
+    "cursor": 8
+  },
+  {
+    "name": "file-28",
+    "source": "one.\ntwo",
+    "commands": "J",
+    "text": "one.  two",
+    "cursor": 4
+  },
+  {
+    "name": "file-29",
+    "source": "a\n b\n  c\n    d",
+    "commands": ">>3.",
+    "text": "        a\n     b\n      c\n    d",
+    "cursor": 8
+  },
+  {
+    "name": "file-30",
+    "source": "a\n b\n  c\n    d",
+    "commands": "G2<<",
+    "text": "a\n b\n  c\n    d",
+    "cursor": 13
+  },
+  {
+    "name": "file-31",
+    "source": "one   two  ",
+    "commands": "2diw",
+    "text": "two  ",
+    "cursor": 0
+  },
+  {
+    "name": "file-32",
+    "source": "one   two  ",
+    "commands": "3l2daw",
+    "text": "one   two  ",
+    "cursor": 10
+  },
+  {
+    "name": "file-33",
+    "source": "one\t two\nthree",
+    "commands": "2diw",
+    "text": "two\nthree",
+    "cursor": 0
+  },
+  {
+    "name": "file-34",
+    "source": "one\t two\nthree",
+    "commands": "3ldaw",
+    "text": "one\nthree",
+    "cursor": 2
+  },
+  {
+    "name": "file-35",
+    "source": "one\t two\nthree",
+    "commands": "3l2daw",
+    "text": "one",
+    "cursor": 2
+  },
+  {
+    "name": "file-36",
+    "source": "one\n  two",
+    "commands": "2diw",
+    "text": "two",
+    "cursor": 0
+  },
+  {
+    "name": "file-37",
+    "source": "xx \"one\" yy",
+    "commands": "2diw",
+    "text": "\"one\" yy",
+    "cursor": 0
+  },
+  {
+    "name": "file-38",
+    "source": "aa (b(c)d) ee",
+    "commands": "2diw",
+    "text": "(b(c)d) ee",
+    "cursor": 0
+  },
+  {
+    "name": "file-39",
+    "source": "x [a[b]c] y",
+    "commands": "2diw",
+    "text": "[a[b]c] y",
+    "cursor": 0
+  },
+  {
+    "name": "file-40",
+    "source": "x [a[b]c] y",
+    "commands": "di[",
+    "text": "x [] y",
+    "cursor": 3
+  },
+  {
+    "name": "file-41",
+    "source": "x [a[b]c] y",
+    "commands": "da[",
+    "text": "x  y",
+    "cursor": 2
+  },
+  {
+    "name": "file-42",
+    "source": "x {a{b}c} y",
+    "commands": "di{",
+    "text": "x {} y",
+    "cursor": 3
+  },
+  {
+    "name": "file-43",
+    "source": "x {a{b}c} y",
+    "commands": "da{",
+    "text": "x  y",
+    "cursor": 2
+  },
+  {
+    "name": "file-44",
+    "source": "one\r\ntwo\r\n",
+    "commands": "lx",
+    "text": "oe\r\ntwo\r\n",
+    "cursor": 1
+  },
+  {
+    "name": "file-45",
+    "source": "one\r\ntwo\r\n",
+    "commands": "$x",
+    "text": "on\r\ntwo\r\n",
+    "cursor": 1
+  },
+  {
+    "name": "file-46",
+    "source": "one\r\ntwo\r\n",
+    "commands": "dw",
+    "text": "\r\ntwo\r\n",
+    "cursor": 0
+  },
+  {
+    "name": "file-47",
+    "source": "one\r\ntwo\r\n",
+    "commands": "D",
+    "text": "\r\ntwo\r\n",
+    "cursor": 0
+  },
+  {
+    "name": "file-48",
+    "source": "one\r\ntwo\r\n",
+    "commands": "J",
+    "text": "one two\r\n",
+    "cursor": 3
+  },
+  {
+    "name": "file-49",
+    "source": "one\r\n",
+    "commands": "ddp",
+    "text": "\r\none\r\n",
+    "cursor": 2
+  },
+  {
+    "name": "file-50",
+    "source": "one.two three four",
+    "commands": "cWX\u001b",
+    "text": "X three four",
+    "cursor": 0
+  },
+  {
+    "name": "file-51",
+    "source": "a b c",
+    "commands": "yiwwvpP",
+    "text": "a ba c",
+    "cursor": 2
+  },
+  {
+    "name": "file-52",
+    "source": "a b c",
+    "commands": "yiwwvPP",
+    "text": "a aa c",
+    "cursor": 2
+  },
+  {
+    "name": "file-53",
+    "source": "one\ntwo\n",
+    "commands": "50%",
+    "text": "one\ntwo\n",
+    "cursor": 0
+  },
+  {
+    "name": "file-54",
+    "source": "one\ntwo\n",
+    "commands": "100G",
+    "text": "one\ntwo\n",
+    "cursor": 4
+  },
+  {
+    "name": "file-55",
+    "source": "one\ntwo\n",
+    "commands": "GJ",
+    "text": "one\ntwo\n",
+    "cursor": 4
+  },
+  {
+    "name": "file-56",
+    "source": "one\ntwo\n",
+    "commands": "ji\u001b",
+    "text": "one\ntwo\n",
+    "cursor": 4
+  },
+  {
+    "name": "file-57",
+    "source": "one",
+    "commands": "o\u001b",
+    "text": "one\n",
+    "cursor": 4
+  },
+  {
+    "name": "file-58",
+    "source": "one",
+    "commands": "o\u001bGdd",
+    "text": "one",
+    "cursor": 0
+  },
+  {
+    "name": "file-59",
+    "source": "abcdef",
+    "commands": "r\r",
+    "text": "\nbcdef",
+    "cursor": 1
+  },
+  {
+    "name": "file-60",
+    "source": "abcdef",
+    "commands": "3r\r",
+    "text": "\ndef",
+    "cursor": 1
+  },
+  {
+    "name": "file-61",
+    "source": "abcdef",
+    "commands": "v2lr\r",
+    "text": "\r\r\rdef",
+    "cursor": 0
+  }
+]
