@@ -101,8 +101,38 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool, v
         });
         Ok(())
     })??;
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.press("right", cx);
+        window.render_frame(cx);
+        window.press("alt-s", cx);
+        window.press("right", cx);
+    })?;
+    cx.advance_clock(Duration::from_millis(450));
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| -> Result<()> {
+        ensure!(workspace.read(cx).tour.as_ref().is_some_and(|tour| tour.index() == 2 && !tour.confirmed()), "Pending feedback advanced after manual navigation");
+        window.render_frame(cx);
+        window.press("left", cx);
+        window.render_frame(cx);
+        window.press("left", cx);
+        Ok(())
+    })??;
     for step in 0..crate::tour::STEP_COUNT {
         cx.run_until_parked();
+        if step == 7 {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.press("left", cx);
+                assert!(workspace.read(cx).tour.as_ref().is_some_and(|tour| tour.index() == 7 && tour.confirmed()));
+            })?;
+            cx.advance_clock(Duration::from_millis(450));
+            cx.run_until_parked();
+            cx.update(|cx| {
+                assert!(workspace.read(cx).tour.as_ref().is_some_and(|tour| tour.index() == 7 && !tour.confirmed()));
+            });
+        }
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
             assert!(gpui_kit::base::active_focus_trap(window, cx).is_some(), "Tour did not contain keyboard focus");
@@ -146,6 +176,7 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool, v
                 workspace.update(cx, |view, cx| view.focus_editor(window, cx));
                 window.render_frame(cx);
                 window.press("x", cx);
+                ensure!(!workspace.read(cx).tour.as_ref().unwrap().confirmed(), "Wrong key confirmed the shortcut");
                 ensure!(workspace.read(cx).editor.read(cx).value().as_ref() == before, "Tour typing reached the editor");
                 window.press("left", cx);
                 ensure!(workspace.read(cx).tour.as_ref().map(crate::tour::Tour::index) == Some(0), "Editor swallowed tour Prev");
@@ -169,9 +200,30 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool, v
             }
         })?;
         cx.run_until_parked();
+        if matches!(step, 1 | 2 | 3 | 5 | 6 | 7) {
+            cx.update_window(handle, |_, window, cx| -> Result<()> {
+                ensure!(workspace.read(cx).tour.as_ref().is_some_and(|tour| tour.index() == step && tour.confirmed()), "Shortcut feedback missing on step {step}");
+                window.render_frame(cx);
+                if step == 1 {
+                    window.press("alt-s", cx);
+                    ensure!(!workspace.read(cx).left, "Repeated shortcut ran again during confirmation");
+                }
+                Ok(())
+            })??;
+            if pixels { cx.capture_screenshot(handle)?.save(output.join(format!("tour-confirmed-{step}.png")))?; }
+            cx.advance_clock(Duration::from_millis(200));
+            cx.run_until_parked();
+            cx.update(|cx| -> Result<()> {
+                ensure!(workspace.read(cx).tour.as_ref().is_some_and(|tour| tour.index() == step && tour.confirmed()), "Feedback disappeared too soon");
+                Ok(())
+            })?;
+            cx.advance_clock(Duration::from_millis(250));
+            cx.run_until_parked();
+        }
         cx.update_window(handle, |_, window, cx| -> Result<()> {
             if step + 1 < crate::tour::STEP_COUNT {
                 ensure!(workspace.read(cx).tour.as_ref().map(crate::tour::Tour::index) == Some(step + 1), "Tour action did not advance from step {step}");
+                ensure!(!workspace.read(cx).tour.as_ref().unwrap().confirmed(), "Feedback carried into the next step");
                 window.render_frame(cx);
             }
             Ok(())
@@ -280,5 +332,5 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool, v
         cx.run_until_parked();
     }
     cx.update(|cx| { crate::theme::apply("Vesper", cx); crate::theme::set_zoom(1., cx); });
-    Ok(json!({"fixture":"guided-tour","passed":true,"checks":["Explorer and NeetCode 150 defaults","automatic start","problem required","clickable search and editor","Explorer action and shortcut","description and AI keyboard shortcuts","automatic action and shortcut advancement","tour input priority over editor","custom shortcut overrides editor Cut","Left/Right tour navigation","Ctrl+P and Ctrl+Shift+P full search","Skip persistence across workspaces","manual replay","Escape after shortcut reload","eight steps and Done","layout restoration","dark/light, minimum size and zoom bounds"],"pixels":pixels,"video":video}))
+    Ok(json!({"fixture":"guided-tour","passed":true,"checks":["Explorer and NeetCode 150 defaults","automatic start","problem required","clickable search and editor","Explorer action and shortcut","description and AI keyboard shortcuts","shortcut confirmation before automatic advance","wrong keys do not confirm","repeated shortcuts run once","manual navigation cancels pending advance","playback arrow confirmation clears without advancing","automatic action and shortcut advancement","tour input priority over editor","custom shortcut overrides editor Cut","Left/Right tour navigation","Ctrl+P and Ctrl+Shift+P full search","Skip persistence across workspaces","manual replay","Escape after shortcut reload","eight steps and Done","layout restoration","dark/light, minimum size and zoom bounds"],"pixels":pixels,"video":video}))
 }

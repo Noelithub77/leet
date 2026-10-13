@@ -2,7 +2,7 @@
 
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Disableable as _, FocusTrapElement as _};
-use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::button::{Button, ButtonCustomVariant, ButtonVariants as _};
 use gpui_kit::component::{ActiveTheme as _, Sizable as _, ThemeStyled as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
@@ -29,11 +29,13 @@ const STEPS: [Step; STEP_COUNT] = [Step::Problem, Step::Explorer, Step::Descript
 #[derive(Clone, Copy)]
 struct Layout { left: bool, home_sidebar: bool, right: bool, bottom: bool, zen: bool, description: bool, history: bool, debug: bool, center: Center, had_problem: bool }
 
-pub struct Tour { index: usize, layout: Layout, focus: FocusHandle, practicing: bool, _keyboard: Subscription, _focus: [Subscription; 2], pending: Vec<Keystroke> }
+pub struct Tour { index: usize, layout: Layout, focus: FocusHandle, practicing: bool, confirmed: bool, feedback: Option<Task<()>>, _keyboard: Subscription, _focus: [Subscription; 2], pending: Vec<Keystroke> }
 
 impl Tour {
     #[cfg(feature = "gui-test")]
     pub(crate) fn index(&self) -> usize { self.index }
+    #[cfg(feature = "gui-test")]
+    pub(crate) fn confirmed(&self) -> bool { self.confirmed }
 }
 
 impl Step {
@@ -78,7 +80,7 @@ impl Workspace {
                 });
             }),
         ];
-        self.tour = Some(Tour { index: 0, focus, practicing: false, _keyboard: keyboard, _focus: focus_subscriptions, pending: vec![], layout: Layout {
+        self.tour = Some(Tour { index: 0, focus, practicing: false, confirmed: false, feedback: None, _keyboard: keyboard, _focus: focus_subscriptions, pending: vec![], layout: Layout {
             left: self.left, home_sidebar: self.home.sidebar, right: self.right, bottom: self.bottom, zen: self.zen, description: self.description,
             history: self.history_mode, debug: self.debug_mode, center: self.center, had_problem: self.session.is_some(),
         }});
@@ -90,12 +92,12 @@ impl Workspace {
         if delta > 0 && !self.session.as_ref().is_some_and(|session| session.question.is_some()) { return; }
         let next = (tour.index as isize + delta).max(0) as usize;
         if next >= STEPS.len() { self.end_tour(window, cx); return; }
-        if let Some(tour) = self.tour.as_mut() { tour.index = next; tour.practicing = false; tour.pending.clear(); }
+        if let Some(tour) = self.tour.as_mut() { tour.index = next; tour.practicing = false; tour.confirmed = false; tour.feedback = None; tour.pending.clear(); }
         self.tour_step(window, cx);
     }
 
     pub fn practice_tour_step(&mut self, cx: &mut Context<Self>) {
-        if let Some(tour) = self.tour.as_mut() { tour.practicing = true; cx.notify(); }
+        if let Some(tour) = self.tour.as_mut() { if !tour.confirmed { tour.practicing = true; } cx.notify(); }
     }
 
     fn tour_step(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -148,6 +150,13 @@ impl Workspace {
                 self.debugger.update(cx, |debugger, cx| debugger.focus(window, cx));
                 window.dispatch_action(action, cx);
                 self.practice_tour_step(cx);
+                self.confirm_tour_step(false, window, cx);
+                let workspace = cx.entity().downgrade();
+                window.defer(cx, move |window, cx| {
+                    let _ = workspace.update(cx, |this, cx| {
+                        if let Some(tour) = &this.tour { tour.focus.focus(window, cx); }
+                    });
+                });
                 return;
             }
         }
@@ -172,6 +181,7 @@ impl Workspace {
 
     fn try_tour_step(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(tour) = &self.tour else { return };
+        if tour.confirmed { return; }
         let index = tour.index;
         let command = STEPS[index].command();
         let action: Box<dyn Action> = if STEPS[index] == Step::Playback {
@@ -182,16 +192,22 @@ impl Workspace {
             tour.focus.focus(window, cx);
             (action.action)()
         };
+        self.confirm_tour_step(command != "FindProblem", window, cx);
         window.dispatch_action(action, cx);
-        // Dispatch first so the real command runs before the next step sets up its layout.
-        let workspace = cx.entity().downgrade();
-        window.defer(cx, move |window, cx| {
-            let _ = workspace.update(cx, |this, cx| {
-                if command != "FindProblem" && this.tour.as_ref().is_some_and(|tour| tour.index == index) {
-                    this.tour_move(1, window, cx);
-                }
+    }
+
+    fn confirm_tour_step(&mut self, advance: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(tour) = self.tour.as_mut() else { return };
+        tour.confirmed = true;
+        // Keep confirmation visible before advancing; navigation cancels this task.
+        tour.feedback = Some(cx.spawn_in(window, async move |this, cx| {
+            cx.background_executor().timer(Duration::from_millis(400)).await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                if advance { this.tour_move(1, window, cx); }
+                else if let Some(tour) = &mut this.tour { tour.confirmed = false; cx.notify(); }
             });
-        });
+        }));
+        cx.notify();
     }
 
     pub fn resume_tour(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -252,6 +268,13 @@ pub fn panel(workspace: &Workspace, window: &mut Window, cx: &mut Context<Worksp
     let can_next = workspace.session.as_ref().is_some_and(|session| session.question.is_some());
     let index = tour.index;
     let practicing = tour.practicing;
+    let confirmed = tour.confirmed;
+    let feedback_style = ButtonCustomVariant::new(cx).foreground(theme.cyan)
+        .color(theme.cyan.opacity(0.12)).hover(theme.cyan.opacity(0.18)).active(theme.cyan.opacity(0.12));
+    let feedback = |button: Button| if confirmed {
+        button.custom(feedback_style)
+            .border_1().border_color(theme.cyan)
+    } else { button };
     let card = v_flex().id("guided-tour-card").test_support().key_context("TourCard").track_focus(&tour.focus)
         .w(rems(if practicing { 22. } else { 26. })).max_w_full().p_5().gap_4().rounded_lg().bg(theme.popover).text_color(theme.popover_foreground).border_1().border_color(theme.border).shadow_lg()
         .when(tour.focus.contains_focused(window, cx), |card| card.focus_ring_style(window, cx))
@@ -268,12 +291,13 @@ pub fn panel(workspace: &Workspace, window: &mut Window, cx: &mut Context<Worksp
         .when(practicing, |card| card.child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(title)))
         .child(if step == Step::Playback {
             v_flex().gap_2()
+                .when(confirmed, |keys| keys.text_color(theme.cyan))
                 .child(h_flex().justify_between().child(div().text_sm().child("Steps")).child(crate::view::key("left right")))
                 .child(h_flex().justify_between().child(div().text_sm().child("Cases")).child(crate::view::key("up down")))
-                .child(Button::new("tour-play").outline().small().label("Play / pause").child(crate::view::key("space"))
+                .child(feedback(Button::new("tour-play").outline().small().label("Play / pause")).child(crate::view::key("space"))
                     .on_click(cx.listener(|this, _, window, cx| this.try_tour_step(window, cx)))).into_any_element()
         } else {
-            Button::new("tour-try").outline().label(match step { Step::Problem => "Find a problem", Step::Explorer => "Toggle Explorer", Step::Description => "Toggle description", Step::Editor => "Focus editor", Step::Tests => "Run tests", Step::Assist => "Toggle AI", _ => "Switch Code / Debug" })
+            feedback(Button::new("tour-try").outline().label(match step { Step::Problem => "Find a problem", Step::Explorer => "Toggle Explorer", Step::Description => "Toggle description", Step::Editor => "Focus editor", Step::Tests => "Run tests", Step::Assist => "Toggle AI", _ => "Switch Code / Debug" }))
                 .child(crate::view::key(crate::actions::key_for(command, &workspace.config)))
                 .on_click(cx.listener(|this, _, window, cx| this.try_tour_step(window, cx))).into_any_element()
         })

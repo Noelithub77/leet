@@ -35,11 +35,12 @@ Hint controls share the problem toolbar. Statement captures verify their contain
 
 The onboarding fixture renders the production setup view with missing clangd, a missing compiler, and pending tool checks. Hit-tested Continue clicks advance in every case. The retained workspace receives deterministic installer events after leaving setup: progress stays visible, a hit-tested Retry restarts a failed job, and success shows Ready. Prerequisite results are deterministic; this fixture never detects or downloads tools. Setup PNGs are saved alongside the other captures. The ignored `live_private_python_and_cpp_servers` core test verifies completion, hover, definition, and diagnostics against managed tools; isolate its data directory and install the tools there before running it.
 
+Run `./ops gui:test --fixture tour --json` for focused guided-tour checks.
 The guided-tour fixture uses isolated SQLite storage and a bundled public
 question. It checks startup defaults, automatic display, search actions, Skip
 and Done persistence, replay, Escape after shortcut reload, all eight steps,
 Explorer, description and AI toggle actions, automatic advancement from actions and shortcuts,
-editor input isolation, Left/Right tour navigation, full search on Ctrl+P and Ctrl+Shift+P, and layout restoration.
+brief shortcut confirmation, cancellation on navigation, editor input isolation, Left/Right tour navigation, full search on Ctrl+P and Ctrl+Shift+P, and layout restoration.
 It checks minimum window size, a light theme, and 140% zoom.
 Tour PNGs are saved alongside the other captures; no
 account loading, agent detection, language servers, or network jobs run.
