@@ -43,6 +43,9 @@ impl Workspace {
     pub(crate) fn tab_panes(&self) -> Vec<Entity<EditorPane>> {
         self.tabs.iter().flatten().chain(self.home.closed_tabs.iter().map(|(_, tab)| tab)).map(|tab| tab.pane.clone()).collect()
     }
+    pub(crate) fn tab_editors(&self) -> Vec<Entity<EditorState>> {
+        self.tabs.iter().flatten().chain(self.home.closed_tabs.iter().map(|(_, tab)| tab)).map(|tab| tab.editor.clone()).collect()
+    }
     pub(crate) fn update_tab_snippets(&self, cx: &mut App) {
         for tab in self.tabs.iter().flatten().chain(self.home.closed_tabs.iter().map(|(_, tab)| tab)) {
             tab.pane.update(cx, |pane, cx| { pane.library = self.snippet_library.clone(); pane.tab_expand = self.config.snippets.tab_expand; cx.notify(); });
@@ -74,6 +77,7 @@ impl Workspace {
         self.editor = cx.new(|cx| EditorState::new(window, cx).language(self.config.preferred_language.id())
             .line_number(true).indent_guides(true).folding(true).soft_wrap(true)
             .tab_size(TabSize { tab_size: 4, hard_tabs: false }));
+        self.configure_vim_editor(&self.editor, cx);
         self.editor_pane = cx.new(|cx| EditorPane::new(self.editor.clone(), self.config.preferred_language, self.snippet_library.clone(), self.config.notes_view, window, cx));
         self.editor_pane.update(cx, |pane, cx| pane.connect_predictions(self.copilot.clone(), window, cx));
         self.connect_notes(cx);
@@ -81,6 +85,7 @@ impl Workspace {
         self.statement = cx.new(|_| Statement::default());
         self.editor_subscription = Some(cx.subscribe_in(&self.editor, window,
             |this, editor, event: &InputEvent, window, cx| {
+                if *editor == this.editor && let InputEvent::VimCommand(command) = event { this.vim_command(*command, window, cx); }
                 if *editor == this.editor && matches!(event, InputEvent::Change) {
                     this.sync_language_document(&editor, cx);
                     this.schedule_save(window, cx);
@@ -241,7 +246,10 @@ impl Workspace {
             self.toast(gpui_kit::component::notification::Notification::warning("Wait for the current run to finish"), window, cx);
             return false;
         }
-        self.save_now(cx);
+        if let Err(error) = self.save_solution_now(cx) {
+            self.toast(gpui_kit::component::notification::Notification::error(format!("Solution could not be saved; tab kept open: {error}")), window, cx);
+            return false;
+        }
         if let Some(session) = &self.session {
             if session.question.is_some() && std::fs::read_to_string(&session.path).ok().as_deref()
                 != Some(self.solution_text(cx).as_str()) {

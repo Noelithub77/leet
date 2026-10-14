@@ -1,5 +1,8 @@
 //! Full-width snippet library and manual creator. AI works on a reviewable copy.
+use std::cell::RefCell;
 use std::path::PathBuf;
+use std::rc::Rc;
+use gpui_kit::base::input::{VimHostCommand, VimShared};
 use gpui_kit::*;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -90,7 +93,9 @@ impl Workspace {
         if let Some(editor)=&self.snippet_editor { editor.update(cx,|e,cx|{if !e.dirty(cx){e.refresh(window,cx);}}); }
         else {
             let workspace=cx.weak_entity();let dir=self.snippet_dir.clone();let settings=self.config.snippets.clone();let language=self.config.preferred_language;
-            self.snippet_editor=Some(cx.new(|cx|SnippetEditor::new(workspace,dir,settings,language,window,cx)));
+            let editor = cx.new(|cx|SnippetEditor::new(workspace,dir,settings,language,window,cx));
+            editor.update(cx, |editor, cx| editor.configure_vim(self.config.vim_mode, self.vim_shared.clone(), window, cx));
+            self.snippet_editor=Some(editor);
         }
         self.center=Center::Snippets;
         if let Some(editor)=&self.snippet_editor { editor.update(cx,|e,cx|e.search.update(cx,|s,cx|s.focus(window,cx))); }
@@ -106,6 +111,38 @@ impl Workspace {
     }
 }
 impl SnippetEditor {
+    #[cfg(feature = "gui-test")]
+    pub(crate) fn fixture_source(&self) -> Entity<EditorState> { self.source.clone() }
+
+    #[cfg(feature = "gui-test")]
+    pub(crate) fn fixture_preview(&self) -> Entity<EditorState> { self.preview.clone() }
+
+    pub(crate) fn configure_vim(&mut self, enabled: bool, shared: Rc<RefCell<VimShared>>, window: &mut Window, cx: &mut Context<Self>) {
+        for editor in [&self.source, &self.preview] {
+            editor.update(cx, |editor, cx| {
+                if !enabled { editor.finish_vim(window, cx); }
+                editor.set_vim_shared(shared.clone());
+                editor.set_vim_enabled(enabled, cx);
+            });
+        }
+        cx.notify();
+    }
+
+    fn vim_command(&mut self, command: VimHostCommand, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.save(window, cx) { return; }
+        if matches!(command, VimHostCommand::Close | VimHostCommand::SaveClose | VimHostCommand::SaveIfDirtyClose) {
+            let workspace = self.workspace.clone();
+            let editor = cx.weak_entity();
+            window.defer(cx, move |window, cx| {
+                let _ = workspace.update(cx, |workspace, cx| {
+                    if editor.upgrade().is_some_and(|editor| workspace.snippet_editor.as_ref() == Some(&editor)) {
+                        workspace.close_snippet_editor(window, cx);
+                    }
+                });
+            });
+        }
+    }
+
     pub fn new(workspace: WeakEntity<Workspace>, dir:PathBuf, settings:snippets::Settings, language:Language, window:&mut Window,cx:&mut Context<Self>)->Self {
         let name=cx.new(|cx|InputState::new(window,cx).placeholder("Name"));
         let prefixes=cx.new(|cx|InputState::new(window,cx).placeholder("Prefix, aliases"));
@@ -113,8 +150,16 @@ impl SnippetEditor {
         let search=cx.new(|cx|InputState::new(window,cx).placeholder("Search snippets…"));
         let source=cx.new(|cx|EditorState::new(window,cx).language(language.id()).line_number(true).soft_wrap(true));
         let preview=cx.new(|cx|EditorState::new(window,cx).language(language.id()).line_number(true));
-        let changed=cx.subscribe_in(&source,window,|this,_,event,window,cx|if matches!(event,InputEvent::Change){this.update_preview(window,cx);});
-        let mut subscriptions=vec![changed];
+        let changed=cx.subscribe_in(&source,window,|this,_,event,window,cx| {
+            match event {
+                InputEvent::Change => this.update_preview(window,cx),
+                InputEvent::VimCommand(command) => this.vim_command(*command, window, cx),
+                InputEvent::VimChanged => cx.notify(),
+                _ => {}
+            }
+        });
+        let preview_changed = cx.subscribe(&preview, |_, _, event: &InputEvent, cx| { if matches!(event, InputEvent::VimChanged) { cx.notify(); } });
+        let mut subscriptions=vec![changed, preview_changed];
         for input in [&name,&prefixes,&description,&search] {subscriptions.push(cx.subscribe(input,|_,_,_:&InputEvent,cx|cx.notify()));}
         let ai=super::ai::State::new(window,cx);
         let mut this=Self{workspace,dir,user:Vec::new(),library:std::rc::Rc::new(snippets::search::Library::new(vec![])),searcher:practice::search::Searcher::default(),settings,language,selected:None,original:None,name,prefixes,description,search,source,preview,template:false,error:None,status:String::new(),scanning:false,ai,_subscriptions:subscriptions};
@@ -223,6 +268,7 @@ impl Render for SnippetEditor {
             .on_action(cx.listener(|this,_:&SaveSnippet,w,cx|{this.save(w,cx);}))
             .child(h_flex().gap_3().child(div().text_sm().font_weight(FontWeight::SEMIBOLD).flex_1().child("Snippet details"))
                 .child(Button::new("snippet-ai").ghost().small().icon(IconName::Sparkles).tooltip("Create or edit with AI").on_click(cx.listener(|this,_,_,cx|{this.ai.open=!this.ai.open;cx.notify();}))))
+            .when_some(crate::modal_editing::status(self.source.read(cx)), |view, status| view.child(div().id("snippet-vim-status").test_support().min_w_0().truncate().text_xs().text_color(theme.muted_foreground).child(status)))
             .child(h_flex().gap_1().children(Language::ALL.into_iter().map(|language|{
                 crate::theme::selected_choice(Button::new(SharedString::from(format!("snippet-language-{}",language.id()))).ghost().small(),self.language==language,cx).icon(Icon::default().path(format!("languages/{}.svg",language.id())).small()).label(language.label()).on_click(cx.listener(move|this,_,w,cx|{if this.save(w,cx){this.language=language;this.original=None;this.selected=None;this.refresh(w,cx);}}))
             })))
@@ -260,6 +306,7 @@ impl Render for SnippetEditor {
                         .child(v_flex().flex_1().min_w_0().gap_1().child(div().id("snippet-body-label").text_xs().text_color(theme.muted_foreground).child("Snippet code").tooltip(|window,cx|crate::view::help_tooltip("Snippet code", "Write code with ${1:placeholder} for editable stops, repeated $1 for linked values, and $0 for the final cursor.", window, cx)))
                             .child(div().id("snippet-body-drop").test_support().flex_1().min_h_0().on_drop(cx.listener(|this,chip:&StopChip,w,cx|this.insert_chip(chip.0.clone(),Some(w.mouse_position()),w,cx))).child(Editor::new(&self.source).h_full())))
                         .when(!self.ai.open || window.viewport_size().width >= px(1000.), |row|row.child(v_flex().flex_1().min_w_0().gap_1().child(div().id("snippet-preview-label").text_xs().text_color(theme.muted_foreground).child("Expanded preview").tooltip(|window,cx|crate::view::help_tooltip("Expanded preview", "See the inserted code with placeholder defaults filled in. Click a numbered stop below to locate it in the preview.", window, cx)))
+                            .when_some(crate::modal_editing::status(self.preview.read(cx)), |view, status| view.child(div().text_xs().text_color(theme.muted_foreground).child(status)))
                             .child(div().flex_1().min_h_0().child(Editor::new(&self.preview).readonly(true).h_full()))
                             .child(h_flex().gap_1().children(expansion.stops.into_iter().map(|stop|{
                                 let range=stop.range();Button::new(("preview-stop",stop.index as usize)).ghost().xsmall().label(if stop.index==0{"Cursor".into()}else{format!("{}",stop.index)}).tooltip("Highlight in preview").on_click(cx.listener(move|this,_,_,cx|this.preview.update(cx,|e,cx|e.set_selected_range(range.clone(),cx))))

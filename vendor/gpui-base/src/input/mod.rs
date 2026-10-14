@@ -35,8 +35,12 @@ mod indent;
 #[path = "base/inline_tokens.rs"]
 mod inline_tokens;
 mod input;
+#[path = "editor/modal.rs"]
+mod modal;
 #[path = "base/token_presentation.rs"]
 mod token_presentation;
+#[path = "editor/vim.rs"]
+mod vim;
 pub use inline_tokens::{InlineToken, InlineTokenError, InlineTokenSpan, InputContent};
 pub(crate) use token_presentation::InlineTokenPresentation;
 pub use token_presentation::{
@@ -122,3 +126,4 @@ pub use ropey::Rope;
 pub use search::{SearchMatcher, SearchSession};
 pub use state::*;
 pub use textarea::{Textarea, TextareaState};
+pub use vim::{VimHostCommand, VimMode, VimShared};

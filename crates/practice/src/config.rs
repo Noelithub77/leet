@@ -40,6 +40,8 @@ pub struct Config {
     pub snippets: crate::snippets::Settings,
     /// Opt-in AI predictions are revealed only while Alt is held.
     pub copilot_enabled: bool,
+    /// Native Vim keybindings in code editors; ordinary inputs stay conventional.
+    pub vim_mode: bool,
     /// How `#!` and `#?` comment notes appear in the editor.
     pub notes_view: crate::notes::View,
 }
@@ -67,6 +69,7 @@ impl Default for Config {
             keybindings: BTreeMap::new(),
             snippets: Default::default(),
             copilot_enabled: false,
+            vim_mode: false,
             notes_view: Default::default(),
         }
     }
@@ -168,7 +171,7 @@ mod tests {
         std::fs::create_dir_all(workspace.join(".git")).unwrap();
         let protected = [workspace.join("solution.py"), workspace.join(".git/HEAD"), dir.path().join("leet.db"), dir.path().join("credentials.json")];
         for file in &protected { std::fs::write(file, "keep me").unwrap(); }
-        let mut config = Config { workspace: workspace.clone(), codeforces_handle: "tourist".into(), onboarding_completed: true, theme: "Sarah Pink".into(), ..Config::default() };
+        let mut config = Config { workspace: workspace.clone(), codeforces_handle: "tourist".into(), onboarding_completed: true, vim_mode: true, theme: "Sarah Pink".into(), ..Config::default() };
         config.keybindings.insert("Search".into(), "ctrl-alt-k".into());
         config.save_to(&path).unwrap();
         let reset = config.reset_settings_to(&path).unwrap();
@@ -177,6 +180,7 @@ mod tests {
         assert!(!reset.onboarding_completed);
         assert_eq!(reset.theme, "Vesper");
         assert!(reset.keybindings.is_empty());
+        assert!(!reset.vim_mode);
         let saved = Config::load_from(&path).unwrap();
         assert!(!saved.onboarding_completed);
         assert_eq!(saved.workspace, workspace);
@@ -211,7 +215,9 @@ mod tests {
         assert_eq!(config.font_family, "Liberation Sans");
         assert!(!config.show_tags);
         assert!(!config.copilot_enabled);
+        assert!(!config.vim_mode);
         config.copilot_enabled = true;
+        config.vim_mode = true;
         config.show_tags = true;
         config.ai_web = true;
         config.theme = "Ayu Dark".into();
@@ -226,6 +232,7 @@ mod tests {
         config.save_to(&path).unwrap();
         let saved = Config::load_from(&path).unwrap();
         assert!(saved.copilot_enabled);
+        assert!(saved.vim_mode);
         assert_eq!(saved.theme, "Ayu Dark");
         assert!(saved.show_tags);
         assert!(saved.ai_web);
@@ -237,6 +244,9 @@ mod tests {
         assert_eq!(saved.keybindings["Search"], "ctrl-alt-k");
         assert_eq!(saved.agent, Some(AgentKind::Codex));
         assert_eq!(saved.selection(AgentKind::Codex).map(|s| (s.model.as_str(), s.fast)), Some(("gpt-6-luna", true)));
+        config.vim_mode = false;
+        config.save_to(&path).unwrap();
+        assert!(!Config::load_from(&path).unwrap().vim_mode);
     }
 
     #[test]
@@ -246,6 +256,7 @@ mod tests {
         std::fs::write(&path, "python = \"pypy3\"\nchatgpt_model = \"legacy-model\"\nprompt_provider = \"claude\"\nprompt_style = \"hints\"\n").unwrap();
         let config = Config::load_from(&path).unwrap();
         assert_eq!(config.python, "pypy3");
+        assert!(!config.vim_mode);
         assert_eq!(config.workspace, home().join("leet"));
         assert_eq!(config.preferred_language, Language::Python);
         assert!(!config.onboarding_completed);

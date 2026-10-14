@@ -27,6 +27,7 @@ mod language_picker;
 mod sources;
 mod source_menu;
 mod home;
+mod modal_editing;
 mod contests;
 mod history;
 mod omnibar;
