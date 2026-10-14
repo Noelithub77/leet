@@ -70,7 +70,7 @@ impl Workspace {
                 this.zen = false;
                 if !this.right { this.focus_editor(window, cx); }
                 this.save_layout();
-                this.flash(if this.right { "AI" } else { "AI hidden" }, cx);
+                cx.notify();
             }))
             .on_action(cx.listener(|this, _: &ToggleDescription, window, cx| {
                 this.practice_tour_step(cx);
