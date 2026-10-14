@@ -193,10 +193,11 @@ pub(crate) fn native(cx:&mut HeadlessAppContext,output:&Path,pixels:bool)->Resul
     cx.update(|cx|{crate::theme::apply("Vesper",cx);crate::theme::set_zoom(1.,cx);});
     workspace_tab(cx,output,pixels)?;
     completion_placement(cx, output, pixels)?;
+    cpp_highlighting(cx, output, pixels)?;
     delayed_autocomplete(cx)?;
     cp_autocomplete(cx)?;
     crate::snippets::signature_help::fixture::native(cx, output, pixels)?;
-    Ok(serde_json::json!({"fixture":"snippets","passed":true,"pixels":pixels,"checks":["prefix Tab expansion","typing mirrors","Tab and Shift+Tab","native cursor completions and Escape","merged language-server suggestions","Enter and Tab accept linked snippet placeholders","manual creation and save","drag cursor drop","compact light and zoom layouts","completion panels avoid the typing line and stay inside narrow panes","AI panel without agent startup","staged review edit, Apply and Undo","workspace tab and Explorer","field titles","Ctrl+W close and invalid-save guard","immediate local fuzzy results with delayed LSP","Frizbee typo and Unicode local autocomplete","late merge preserves selection","Escape cancels late LSP","safe cached server results while extending and deleting a word","external snippet hot reload and invalid-file recovery","automatic parameter hints","Ctrl+Space combines completion and signatures","overload buttons and configurable commands","signature Escape, focus, selection and late-result dismissal","wrapped hints in compact, dark and light/zoomed windows"]}))
+    Ok(serde_json::json!({"fixture":"snippets","passed":true,"pixels":pixels,"checks":["prefix Tab expansion","typing mirrors","Tab and Shift+Tab","native cursor completions and Escape","merged language-server suggestions","Enter and Tab accept linked snippet placeholders","manual creation and save","drag cursor drop","compact light and zoom layouts","completion panels avoid the typing line and stay inside narrow panes","AI panel without agent startup","staged review edit, Apply and Undo","workspace tab and Explorer","field titles","Ctrl+W close and invalid-save guard","immediate local fuzzy results with delayed LSP","Frizbee typo and Unicode local autocomplete","C++ shared keywords, types, literals and comments in dark and light themes","late merge preserves selection","Escape cancels late LSP","safe cached server results while extending and deleting a word","external snippet hot reload and invalid-file recovery","automatic parameter hints","Ctrl+Space combines completion and signatures","overload buttons and configurable commands","signature Escape, focus, selection and late-result dismissal","wrapped hints in compact, dark and light/zoomed windows"]}))
 }
 
 fn completion_placement(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -> Result<()> {
@@ -258,6 +259,40 @@ fn completion_placement(cx: &mut HeadlessAppContext, output: &Path, pixels: bool
         })??;
     }
     cx.update(|cx| { crate::theme::apply("Vesper",cx); crate::theme::set_zoom(1.,cx); });
+    Ok(())
+}
+
+fn cpp_highlighting(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -> Result<()> {
+    let source = "class Solution {\npublic:\n    vector<int> twoSum(vector<int>& nums, int target) {\n        // Find a pair.\n        const char* label = \"pair\";\n        for (int i = 0; i < nums.size(); i++) {\n            if (nums[i] == target) return {i, 0};\n        }\n        return {};\n    }\n};";
+    for name in ["Vesper", "Solarized Light"] {
+        cx.update(|cx| crate::theme::apply(name, cx));
+        cx.update(|cx| -> Result<()> {
+            let mut highlighter = gpui_kit::component::highlighter::SyntaxHighlighter::new("cpp");
+            ensure!(highlighter.update(None, &ropey::Rope::from_str(source), None), "C++ parse failed");
+            let theme = cx.theme().highlight_theme.clone();
+            let styles = highlighter.styles(&(0..source.len()), theme.as_ref());
+            for (token, role) in [("class", "keyword"), ("public", "keyword"), ("for", "keyword"), ("if", "keyword"), ("return", "keyword"), ("int", "type"), ("0", "number"), ("\"pair\"", "string"), ("// Find", "comment"), ("twoSum", "function")] {
+                let start = source.find(token).unwrap();
+                let color = theme.style(role).and_then(|style| style.color);
+                ensure!(color.is_some() && styles.iter().any(|(range, style)| range.start <= start && range.end >= start + token.len() && style.color == color), "{name}: C++ {token:?} lacks {role} highlighting");
+            }
+            Ok(())
+        })?;
+        let (handle, _) = cx.update(|cx| gpui_kit::open_window(WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(Bounds { origin: point(px(0.),px(0.)), size: size(px(720.),px(380.)) })),
+            show:false, focus:false, ..Default::default()
+        }, cx, |window,cx| cx.new(|cx| {
+            let state = cx.new(|cx| EditorState::new(window,cx).language("cpp"));
+            let pane = crate::snippets::expansion::EditorPane::new(state.clone(),Language::Cpp,std::rc::Rc::new(practice::snippets::search::Library::new(vec![])),Default::default(),window,cx);
+            state.update(cx, |editor,cx| editor.set_value(source,window,cx));
+            pane
+        })))?;
+        let handle = handle.into(); cx.run_until_parked();
+        cx.update_window(handle, |_,window,cx| window.render_frame(cx))?;
+        if pixels { cx.capture_screenshot(handle)?.save(output.join(if name == "Vesper" { "cpp-syntax-dark.png" } else { "cpp-syntax-light.png" }))?; }
+        cx.update_window(handle, |_,window,_| window.remove_window())?;
+    }
+    cx.update(|cx| crate::theme::apply("Vesper",cx));
     Ok(())
 }
 

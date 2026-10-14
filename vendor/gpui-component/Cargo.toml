@@ -85,6 +85,7 @@ tree-sitter-cmake = [
 ]
 tree-sitter-cpp = [
     "tree-sitter",
+    "dep:tree-sitter-c",
     "dep:tree-sitter-cpp",
 ]
 tree-sitter-csharp = [

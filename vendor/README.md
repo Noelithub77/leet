@@ -16,3 +16,5 @@ The workspace excludes this upstream crate from its members and selects it
 through `[patch.crates-io]`. Registry bookkeeping and the upstream lockfile are
 omitted. Keep the source version pinned; remove this patch when an upstream
 release provides the equivalent hook.
+
+The `gpui-component` patch also composes the upstream C highlight query before the C++ extensions, as specified by tree-sitter-cpp. Its feature also enables the existing tree-sitter-c dependency so this works when only C++ is selected. The native snippet fixture checks keyword, type, number, string, comment, and function colors and renders dark/light examples.

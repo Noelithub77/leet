@@ -11,6 +11,7 @@
 <details>
 <summary>Fix</summary>
 
+- Restore C++ highlighting for shared keywords, types, numbers, strings, and comments.
 - Keep completions close to the caret and soften suggestion text changes with a fast transition.
 - Toggle the AI panel without a status toast.
 - Make code text and completion panels smaller, with suggestions positioned farther right.

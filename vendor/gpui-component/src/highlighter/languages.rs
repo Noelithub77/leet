@@ -427,12 +427,17 @@ impl Language {
                 "",
             ),
             #[cfg(feature = "tree-sitter-cpp")]
-            Self::Cpp => (
-                tree_sitter_cpp::LANGUAGE,
-                tree_sitter_cpp::HIGHLIGHT_QUERY,
-                "",
-                "",
-            ),
+            Self::Cpp => {
+                // Upstream C++ queries extend the shared C rules rather than replace them.
+                return GrammarConfig::new(
+                    self.name(),
+                    tree_sitter_cpp::LANGUAGE.into(),
+                    self.injection_languages(),
+                    &format!("{}\n{}", tree_sitter_c::HIGHLIGHT_QUERY, tree_sitter_cpp::HIGHLIGHT_QUERY),
+                    "",
+                    "",
+                );
+            }
             #[cfg(feature = "tree-sitter-javascript")]
             Self::JavaScript => (
                 tree_sitter_javascript::LANGUAGE,

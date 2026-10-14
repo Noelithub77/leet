@@ -117,6 +117,8 @@ To explore the statement cards in a named OmaBox, use the same isolated launch w
 
 Snippet fixtures use production editor input for prefix expansion, linked typing, Tab/Shift+Tab, native cursor completions, merged language-server results, placeholder acceptance, and dismissal, manual save, and cursor drag-and-drop. They render regular, compact, light-theme, zoomed, and assistant-open layouts. Onboarding checks that the snippet step can be skipped, and native agent-question fixtures validate required fields and submit enum/boolean choices. All snippet libraries and solution paths live under the test output's `session/` directory; fixtures do not scan personal editors or launch agents.
 
+C++ highlighting checks assert actual token colors for shared C rules and C++ additions in Vesper and Solarized Light, then render the production source pane in `cpp-syntax-dark.png` and `cpp-syntax-light.png`.
+
 Autocomplete fixtures also type `dijktsra` and `rés`, verify the corresponding local declarations immediately and after delayed language-server results, then accept them.
 
 Completion placement checks type in the production editor at the top, middle, and bottom of a narrow pane, plus wide, light, and zoomed variants. They assert that the full popup stays inside the editor and clear of the typing line, and save `completion-placement-*.png`.
