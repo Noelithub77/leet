@@ -73,15 +73,16 @@ mod tests {
     #[test]
     fn indexed_snippets_match_alias_name_description_typo_and_language() {
         let library = Library::new(super::super::builtin());
-        let mut searcher = Searcher::default();
-        for query in ["bfs", "brfs", "breadth first", "reachable", "dijktsra"] {
-            let hits = library.rank(&mut searcher, query, Language::Python, 64);
-            assert!(!hits.is_empty(), "{query}");
-            assert!(hits.iter().all(|&row| library.row(row).0.scope == Some(Language::Python)));
+        for mut searcher in [Searcher::default(), Searcher::autocomplete()] {
+            for query in ["bfs", "brfs", "breadth first", "reachable", "dijktsra"] {
+                let hits = library.rank(&mut searcher, query, Language::Python, 64);
+                assert!(!hits.is_empty(), "{query}");
+                assert!(hits.iter().all(|&row| library.row(row).0.scope == Some(Language::Python)));
+            }
+            assert_eq!(library.row(library.rank(&mut searcher, "bfs", Language::Python, 64)[0]).1, "bfs");
+            let hits = library.rank(&mut searcher, "", Language::Python, 64);
+            let mut names = HashSet::new();
+            assert!(hits.iter().all(|&row| names.insert(library.row(row).0.name.clone())));
         }
-        assert_eq!(library.row(library.rank(&mut searcher, "bfs", Language::Python, 64)[0]).1, "bfs");
-        let hits = library.rank(&mut searcher, "", Language::Python, 64);
-        let mut names = HashSet::new();
-        assert!(hits.iter().all(|&row| names.insert(library.row(row).0.name.clone())));
     }
 }

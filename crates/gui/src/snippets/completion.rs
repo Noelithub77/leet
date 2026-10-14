@@ -63,7 +63,7 @@ pub(super) struct Completions {
 }
 impl Completions {
     pub fn new(language: Language, pane: WeakEntity<super::expansion::EditorPane>, library: Rc<Library>) -> Self {
-        Self { predictions: RefCell::new(None), catalog: RefCell::new(Catalog { library, language, selection: 0..0 }), upstream: RefCell::new(None), pending: Rc::default(), published: Rc::default(), generation: Rc::default(), in_flight: Rc::default(), pane, searcher: RefCell::default(), task: RefCell::default(), cache: RefCell::default(), symbols: RefCell::new(super::symbols::Symbols::new(language)) }
+        Self { predictions: RefCell::new(None), catalog: RefCell::new(Catalog { library, language, selection: 0..0 }), upstream: RefCell::new(None), pending: Rc::default(), published: Rc::default(), generation: Rc::default(), in_flight: Rc::default(), pane, searcher: RefCell::new(practice::search::Searcher::autocomplete()), task: RefCell::default(), cache: RefCell::default(), symbols: RefCell::new(super::symbols::Symbols::new(language)) }
     }
 }
 

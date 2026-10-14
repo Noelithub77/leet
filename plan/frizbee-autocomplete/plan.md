@@ -1,0 +1,5 @@
+Use the approved Frizbee dependency for editor autocomplete while keeping universal search on Nucleo. Reuse prepared snippet indexes and preserve local declaration priority, exact/prefix ordering, linked snippets, language filtering, late-result guards, and Unicode-aware matching.
+
+Verify typo and abbreviation matching, filters, stable ties, Unicode, and unrelated-query rejection through focused core tests. Exercise autocomplete typing, acceptance, ranking, late results, and dismissal through the isolated native snippet fixture. No throughput benchmarks or live desktop changes.
+
+Completed: Frizbee 0.13 handles basic Latin autocomplete queries with lazily cached search text. Nucleo remains the normalization path for other queries and the default for universal search. Six core search tests passed; native snippet rendering and interaction checks passed, including mistyped and Unicode local declarations, late merges, and same-label snippet priority. No performance benchmark or live desktop launch was performed.

@@ -196,7 +196,7 @@ pub(crate) fn native(cx:&mut HeadlessAppContext,output:&Path,pixels:bool)->Resul
     delayed_autocomplete(cx)?;
     cp_autocomplete(cx)?;
     crate::snippets::signature_help::fixture::native(cx, output, pixels)?;
-    Ok(serde_json::json!({"fixture":"snippets","passed":true,"pixels":pixels,"checks":["prefix Tab expansion","typing mirrors","Tab and Shift+Tab","native cursor completions and Escape","merged language-server suggestions","Enter and Tab accept linked snippet placeholders","manual creation and save","drag cursor drop","compact light and zoom layouts","completion panels avoid the typing line and stay inside narrow panes","AI panel without agent startup","staged review edit, Apply and Undo","workspace tab and Explorer","field titles","Ctrl+W close and invalid-save guard","immediate local fuzzy results with delayed LSP","late merge preserves selection","Escape cancels late LSP","safe cached server results while extending and deleting a word","external snippet hot reload and invalid-file recovery","automatic parameter hints","Ctrl+Space combines completion and signatures","overload buttons and configurable commands","signature Escape, focus, selection and late-result dismissal","wrapped hints in compact, dark and light/zoomed windows"]}))
+    Ok(serde_json::json!({"fixture":"snippets","passed":true,"pixels":pixels,"checks":["prefix Tab expansion","typing mirrors","Tab and Shift+Tab","native cursor completions and Escape","merged language-server suggestions","Enter and Tab accept linked snippet placeholders","manual creation and save","drag cursor drop","compact light and zoom layouts","completion panels avoid the typing line and stay inside narrow panes","AI panel without agent startup","staged review edit, Apply and Undo","workspace tab and Explorer","field titles","Ctrl+W close and invalid-save guard","immediate local fuzzy results with delayed LSP","Frizbee typo and Unicode local autocomplete","late merge preserves selection","Escape cancels late LSP","safe cached server results while extending and deleting a word","external snippet hot reload and invalid-file recovery","automatic parameter hints","Ctrl+Space combines completion and signatures","overload buttons and configurable commands","signature Escape, focus, selection and late-result dismissal","wrapped hints in compact, dark and light/zoomed windows"]}))
 }
 
 fn completion_placement(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -> Result<()> {
@@ -290,6 +290,8 @@ fn cp_autocomplete(cx: &mut HeadlessAppContext) -> Result<()> {
     for (source, query, expected) in [
         ("class Solution:\n    def trap(self, height):\n        water = 0\n        return water\n\n", "tra", "trap"),
         ("def trap(height):\n    water = 0\n    ", "wat", "water"),
+        ("def dijkstra(graph):\n    distance = 0\n    ", "dijktsra", "dijkstra"),
+        ("résultat = 1\n", "rés", "résultat"),
     ] {
         cx.update_window(handle, |_,window,cx| {
             pane.read(cx).state.clone().update(cx, |editor,cx| { editor.set_value(source,window,cx); editor.set_selected_range(source.len()..source.len(),cx); editor.focus(window,cx); });
@@ -298,15 +300,15 @@ fn cp_autocomplete(cx: &mut HeadlessAppContext) -> Result<()> {
         cx.update_window(handle, |_,window,cx| -> Result<()> {
             window.render_frame(cx);
             let menu=pane.read(cx).menu.as_ref().ok_or_else(||anyhow::anyhow!("Document declarations waited for the LSP"))?;
-            ensure!(menu.selected==0 && menu.content.items[0].label==expected,"Defined symbol was not selected immediately: {expected}; query {:?}, rows {:?}, source {:?}", menu.content.query, menu.content.items.iter().map(|item| &item.label).collect::<Vec<_>>(), pane.read(cx).state.read(cx).value().as_str());
+            ensure!(menu.selected==0 && menu.content.items[0].label==expected && menu.content.items[0].kind!=Some(lsp_types::CompletionItemKind::SNIPPET),"Defined symbol was not selected immediately: {expected}; query {:?}, rows {:?}, source {:?}", menu.content.query, menu.content.items.iter().map(|item| &item.label).collect::<Vec<_>>(), pane.read(cx).state.read(cx).value().as_str());
             Ok(())
         })??;
         cx.advance_clock(std::time::Duration::from_millis(550)); cx.run_until_parked();
         cx.update_window(handle, |_,window,cx| -> Result<()> {
             window.render_frame(cx);
             let menu=pane.read(cx).menu.as_ref().ok_or_else(||anyhow::anyhow!("Merged CP menu missing"))?;
-            ensure!(menu.selected==0 && menu.content.items[0].label==expected,"Late auto-imports displaced {expected}");
-            ensure!(menu.content.items.iter().filter(|item|item.label==expected).count()==1,"Local and LSP declarations duplicated");
+            ensure!(menu.selected==0 && menu.content.items[0].label==expected && menu.content.items[0].kind!=Some(lsp_types::CompletionItemKind::SNIPPET),"Late auto-imports displaced {expected}");
+            ensure!(menu.content.items.iter().filter(|item|item.label==expected && item.kind!=Some(lsp_types::CompletionItemKind::SNIPPET)).count()==1,"Local and LSP declarations duplicated");
             ensure!(!menu.content.items.iter().any(|item|item.label.starts_with("TextWrapper")),"Unrelated Python auto-import leaked");
             ensure!(menu.content.items.last().is_some_and(|item|item.label=="heappush"),"CP auto-import was not last");
             window.press("enter",cx); Ok(())

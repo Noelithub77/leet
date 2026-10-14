@@ -22,6 +22,7 @@ html-escape = "0.2"
 htmd = "0.5"
 libsqlite3-sys = { version = "0.35", features = ["bundled"] }
 nucleo-matcher = "0.3"
+frizbee = "0.13"
 strsim = "0.11"
 open = "5"
 regex = "1"
