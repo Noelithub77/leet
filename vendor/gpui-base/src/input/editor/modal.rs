@@ -26,6 +26,7 @@ impl EditorState {
         self.selections.remove_all_but_active();
         self.ime_marked_range = None;
         self.vim_message = None;
+        self.vim_text_snapshot = None;
         self.vim_cursor = None;
         self.vim = enabled
             .then(|| VimEngine::new(self.vim_shared.get_or_insert_with(Default::default).clone()));
@@ -93,25 +94,6 @@ impl<M: InputModeKind> InputBaseState<M> {
             .is_none_or(|vim| vim.mode() == VimMode::Insert)
     }
 
-    pub(super) fn vim_native_snapshot(&self) -> Option<String> {
-        (!self.vim_applying
-            && self
-                .vim
-                .as_ref()
-                .is_some_and(|vim| vim.mode() == VimMode::Insert))
-        .then(|| self.text.to_string())
-    }
-
-    pub(super) fn record_vim_native_edit(&mut self, before: Option<String>) {
-        if let Some(before) = before {
-            let after = self.text.to_string();
-            let cursor = self.cursor();
-            if let Some(vim) = &mut self.vim {
-                vim.native_edit(&before, &after, cursor);
-            }
-        }
-    }
-
     fn commit_vim_insert(&mut self) {
         if self.vim_insert_transaction {
             self.undo_manager.commit_transaction();
@@ -160,8 +142,23 @@ impl<M: InputModeKind> InputBaseState<M> {
         }
     }
 
+    // Native edits and history replay advance the revision in push_history.
+    fn modal_text_snapshot(&mut self) -> Rc<String> {
+        let revision = self.document_revision;
+        let snapshot = self
+            .vim_text_snapshot
+            .get_or_insert_with(|| (revision, Rc::new(self.text.to_string())));
+        if snapshot.0 != revision {
+            *snapshot = (revision, Rc::new(self.text.to_string()));
+        }
+        snapshot.1.clone()
+    }
+
     fn modal_key(&mut self, key: &str, window: &mut Window, cx: &mut Context<Self>) {
-        let before = self.text.to_string();
+        if self.vim.as_ref().is_none_or(|vim| !vim.handles_key(key)) {
+            return;
+        }
+        let before = self.modal_text_snapshot();
         let cursor = self.modal_cursor();
         let editable = self.is_editable();
         let tab_size = self.mode.tab_size().tab_size;
@@ -199,7 +196,10 @@ impl<M: InputModeKind> InputBaseState<M> {
     }
 
     pub(super) fn blur_modal_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let before = self.text.to_string();
+        if self.vim.is_none() {
+            return;
+        }
+        let before = self.modal_text_snapshot();
         let cursor = self.modal_cursor();
         let tab_size = self.mode.tab_size().tab_size;
         let Some(vim) = &mut self.vim else {
@@ -219,7 +219,7 @@ impl<M: InputModeKind> InputBaseState<M> {
         if self.vim.is_none() {
             return;
         }
-        let before = self.text.to_string();
+        let before = self.modal_text_snapshot();
         let cursor = self.modal_cursor();
         let editable = self.is_editable();
         let tab_size = self.mode.tab_size().tab_size;
@@ -240,12 +240,11 @@ impl<M: InputModeKind> InputBaseState<M> {
     fn apply_modal_outcome(
         &mut self,
         outcome: VimOutcome,
-        before: &str,
+        before: &Rc<String>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.vim_message = outcome.message;
-        self.vim_applying = true;
         if outcome.native_paste {
             // Preserve the native selection for clipboard replacement.
         } else if let Some((undo, count)) = outcome.history {
@@ -258,7 +257,10 @@ impl<M: InputModeKind> InputBaseState<M> {
             self.selections.remove_all_but_active();
             self.vim_cursor = Some(cursor);
         } else {
-            if before != outcome.text && self.is_editable() {
+            if !Rc::ptr_eq(before, &outcome.text)
+                && before.as_str() != outcome.text.as_str()
+                && self.is_editable()
+            {
                 let (range, replacement) = text_difference(before, &outcome.text);
                 self.undo_manager.set_pending_intent(EditIntent::Atomic);
                 self.replace_text_in_ranges(&[(range, replacement.to_string())], window, cx);
@@ -288,7 +290,6 @@ impl<M: InputModeKind> InputBaseState<M> {
             self.cursor_line_end_affinity = false;
             self.scroll_to(outcome.cursor.min(self.text.len()), None, cx);
         }
-        self.vim_applying = false;
         if outcome.native_paste {
             // Keep the existing native clipboard insertion, including its
             // selection replacement, asynchronous target guard and LSP updates.

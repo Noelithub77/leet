@@ -47,3 +47,9 @@ Next action: None; implementation and verification are complete.
 - Focused snippets fixture passed at `/tmp/leet-vim-snippets/report.json`. Relevant new Rust files pass rustfmt checks; `git diff --check` passes.
 - Verification used one heavy job at a time, two CPUs/workers, low CPU and idle I/O priority. No active-desktop interaction, compositor check, installed release or physical IME session was performed. IME mutation guards were asserted through the production input handler.
 - Judgment: AC-001 through AC-008 have source, reference, production interaction and inspected pixel evidence. Engine committed as b6c08cd; application integration and this evidence record are delivered in the accompanying focused commit. No new dependencies or unsafe code were added.
+
+### Performance follow-up, 2026-10-15
+- Modal commands share a document snapshot keyed by the editor revision. Navigation retains the same text allocation; edits use copy-on-write. Native Insert keystrokes bypass modal snapshots, and repeat is derived from the session start and final buffer. Disabling Vim releases the snapshot; disabled-editor blur does not materialize text.
+- All 20 engine tests passed, including the 171 clean Vim reference cases and new shared-buffer/native-key routing regressions.
+- Production Vim interaction fixture passed at `/tmp/leet-gui-450263-1791997500523/report.json`; snippet/completion regression fixture passed at `/tmp/leet-gui-814687-1792004176134/report.json`. Both used isolated headless input with pixel rendering disabled.
+- Native development build, targeted rustfmt checks and working-tree `git diff --check` passed. Verification used two CPUs/workers with low CPU and idle I/O priority. Buffer reuse is asserted directly; runtime latency was not benchmarked.

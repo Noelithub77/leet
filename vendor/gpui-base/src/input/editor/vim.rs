@@ -47,7 +47,7 @@ pub(super) enum VimScroll {
 #[derive(Clone, Debug)]
 pub(super) struct VimOutcome {
     pub(super) handled: bool,
-    pub(super) text: String,
+    pub(super) text: Rc<String>,
     pub(super) cursor: usize,
     pub(super) selections: Vec<Range<usize>>,
     pub(super) history: Option<(bool, usize)>,
@@ -97,11 +97,11 @@ pub struct VimShared {
     search_word: bool,
 }
 #[derive(Clone, Debug)]
+// Compare the session start with the final buffer when Insert ends.
+// Native typing does not need a full document snapshot after each edit.
 struct Insertion {
-    before: String,
+    before: Rc<String>,
     start: usize,
-    latest: String,
-    cursor: usize,
     block: Option<(Vec<usize>, usize, bool, usize)>,
     count: usize,
     open_line: bool,
@@ -205,24 +205,8 @@ impl VimEngine {
             |(kind, value)| format!("{kind}{value}"),
         )
     }
-    pub(super) fn native_edit(&mut self, before: &str, after: &str, cursor: usize) {
-        if self.mode != VimMode::Insert {
-            return;
-        }
-        let session = self.insert.get_or_insert_with(|| Insertion {
-            before: before.into(),
-            start: cursor.min(before.len()),
-            latest: before.into(),
-            cursor,
-            block: None,
-            count: 1,
-            open_line: false,
-        });
-        session.latest = after.into();
-        session.cursor = boundary(after, cursor);
-    }
     /// Finish an insertion and clear incomplete input when focus leaves the editor.
-    pub(super) fn blur(&mut self, text: &str, cursor: usize, tab_size: usize) -> VimOutcome {
+    pub(super) fn blur(&mut self, text: &Rc<String>, cursor: usize, tab_size: usize) -> VimOutcome {
         let mut out = self.outcome(text, cursor);
         if !text.is_empty() {
             self.empty_line_ending = None;
@@ -234,10 +218,10 @@ impl VimEngine {
         self.entry = None;
         self.with_selections(out, tab_size)
     }
-    fn outcome(&self, text: &str, cursor: usize) -> VimOutcome {
+    fn outcome(&self, text: &Rc<String>, cursor: usize) -> VimOutcome {
         VimOutcome {
             handled: true,
-            text: text.into(),
+            text: text.clone(),
             cursor: boundary(text, cursor),
             selections: vec![],
             history: None,
@@ -248,10 +232,14 @@ impl VimEngine {
             message: None,
         }
     }
+    pub(super) fn handles_key(&self, key: &str) -> bool {
+        self.mode != VimMode::Insert
+            || matches!(key, "escape" | "ctrl-[" | "ctrl-v" | "ctrl-w" | "ctrl-u")
+    }
     pub(super) fn key(
         &mut self,
         key: &str,
-        text: &str,
+        text: &Rc<String>,
         cursor: usize,
         editable: bool,
         tab_size: usize,
@@ -268,15 +256,13 @@ impl VimEngine {
                 "ctrl-v" => out.native_paste = editable,
                 "ctrl-w" if editable => {
                     let start = word_backward(text, cursor, false);
-                    out.text.replace_range(start..cursor, "");
+                    Rc::make_mut(&mut out.text).replace_range(start..cursor, "");
                     out.cursor = start;
-                    self.native_edit(text, &out.text, out.cursor);
                 }
                 "ctrl-u" if editable => {
                     let start = line(text, cursor).start;
-                    out.text.replace_range(start..cursor, "");
+                    Rc::make_mut(&mut out.text).replace_range(start..cursor, "");
                     out.cursor = start;
-                    self.native_edit(text, &out.text, out.cursor);
                 }
                 _ => out.handled = false,
             }
@@ -420,8 +406,13 @@ impl VimEngine {
                         })
                         .collect::<Vec<_>>();
                     if let Some(row) = rows.first() {
-                        out.cursor =
-                            prepare_insert(&mut out.text, *row, col, tab_size, first == "A");
+                        out.cursor = prepare_insert(
+                            Rc::make_mut(&mut out.text),
+                            *row,
+                            col,
+                            tab_size,
+                            first == "A",
+                        );
                         self.begin_insert(
                             &out.text,
                             out.cursor,
@@ -453,13 +444,14 @@ impl VimEngine {
                             let row = line(text, r.start).start;
                             let replacement =
                                 rectangle_replace(text, row, left, right + 1, value, tab_size);
-                            out.text.replace_range(replacement.0, &replacement.1);
+                            Rc::make_mut(&mut out.text)
+                                .replace_range(replacement.0, &replacement.1);
                         } else {
                             let replacement = text[r.clone()]
                                 .chars()
                                 .map(|c| if c == '\n' { '\n' } else { value })
                                 .collect::<String>();
-                            out.text.replace_range(r.clone(), &replacement);
+                            Rc::make_mut(&mut out.text).replace_range(r.clone(), &replacement);
                         }
                     }
                     out.cursor = ranges.first().map_or(out.cursor, |r| r.start);
@@ -647,10 +639,10 @@ impl VimEngine {
                             .take_while(|c| *c == ' ' || *c == '\t')
                             .collect::<String>();
                         if first == "O" {
-                            out.text.insert_str(l.start, &format!("{ws}\n"));
+                            Rc::make_mut(&mut out.text).insert_str(l.start, &format!("{ws}\n"));
                             out.cursor = l.start + ws.len();
                         } else {
-                            out.text.insert_str(l.end, &format!("\n{ws}"));
+                            Rc::make_mut(&mut out.text).insert_str(l.end, &format!("\n{ws}"));
                             out.cursor = l.end + 1 + ws.len();
                         }
                     }
@@ -734,7 +726,8 @@ impl VimEngine {
                             } else {
                                 value.to_string().repeat(count)
                             };
-                            out.text.replace_range(out.cursor..end, &replacement);
+                            Rc::make_mut(&mut out.text)
+                                .replace_range(out.cursor..end, &replacement);
                             out.cursor = if value == '\n' {
                                 first_nonblank(&out.text, out.cursor + 1)
                             } else {
@@ -777,10 +770,10 @@ impl VimEngine {
                         } else {
                             " "
                         };
-                        out.text.replace_range(end..after, space);
+                        Rc::make_mut(&mut out.text).replace_range(end..after, space);
                         out.cursor = end;
                     }
-                    changed = out.text != text;
+                    changed = out.text.as_str() != text.as_str();
                 }
                 "p" | "P" if editable => {
                     let register = self.shared.borrow().register.clone();
@@ -1004,16 +997,14 @@ impl VimEngine {
     }
     fn begin_insert(
         &mut self,
-        text: &str,
+        text: &Rc<String>,
         cursor: usize,
         block: Option<(Vec<usize>, usize, bool, usize)>,
     ) {
         self.mode = VimMode::Insert;
         self.insert = Some(Insertion {
-            before: text.into(),
-            latest: text.into(),
+            before: text.clone(),
             start: cursor,
-            cursor,
             block,
             count: 1,
             open_line: false,
@@ -1035,7 +1026,7 @@ impl VimEngine {
                     patch.value.clone()
                 }
                 .repeat(session.count - 1);
-                out.text.insert_str(out.cursor, &repeated);
+                Rc::make_mut(&mut out.text).insert_str(out.cursor, &repeated);
                 out.cursor += repeated.len();
             }
             if let Some((rows, col, pad, _normal_col)) = session.block.clone() {
@@ -1056,8 +1047,14 @@ impl VimEngine {
                         {
                             continue;
                         }
-                        let point = prepare_insert(&mut out.text, shifted, col, tab_size, pad);
-                        out.text.insert_str(point, &patch.value);
+                        let point = prepare_insert(
+                            Rc::make_mut(&mut out.text),
+                            shifted,
+                            col,
+                            tab_size,
+                            pad,
+                        );
+                        Rc::make_mut(&mut out.text).insert_str(point, &patch.value);
                     }
                 }
             }
@@ -1067,9 +1064,7 @@ impl VimEngine {
                 }
             }
             if !self.replaying
-                && (session.before != session.latest
-                    || session.before != out.text
-                    || !self.change_keys.is_empty())
+                && (session.before.as_str() != out.text.as_str() || !self.change_keys.is_empty())
             {
                 self.shared.borrow_mut().change = Change {
                     keys: self.change_keys.clone(),
@@ -1160,10 +1155,8 @@ impl VimEngine {
             if let Some(patch) = &change.insert {
                 let start = boundary(&out.text, out.cursor.saturating_sub(patch.back));
                 let end = boundary(&out.text, start.saturating_add(patch.remove));
-                let before = out.text.clone();
-                out.text.replace_range(start..end, &patch.value);
+                Rc::make_mut(&mut out.text).replace_range(start..end, &patch.value);
                 out.cursor = start + patch.value.len();
-                self.native_edit(&before, &out.text, out.cursor);
                 self.finish_insert(&mut out, tab_size);
             }
         }
@@ -1255,7 +1248,7 @@ impl VimEngine {
             for r in ranges.iter().rev() {
                 let row = line(&out.text, r.start).start;
                 let edit = rectangle_delete(&out.text, row, left, right, tab_size);
-                out.text.replace_range(edit.0, &edit.1);
+                Rc::make_mut(&mut out.text).replace_range(edit.0, &edit.1);
             }
             out.cursor = at_column(
                 &out.text,
@@ -1290,11 +1283,11 @@ impl VimEngine {
                         } else {
                             ""
                         };
-                    out.text
+                    Rc::make_mut(&mut out.text)
                         .replace_range(range.clone(), &format!("{ws}{suffix}"));
                     out.cursor = range.start + ws.len();
                 } else {
-                    out.text.replace_range(range, "");
+                    Rc::make_mut(&mut out.text).replace_range(range, "");
                 }
             }
         }
@@ -1324,7 +1317,7 @@ impl VimEngine {
                     out.cursor
                 };
                 let value = value.repeat(count);
-                out.text.insert_str(at, &value);
+                Rc::make_mut(&mut out.text).insert_str(at, &value);
                 out.cursor = if value.contains('\n') {
                     at
                 } else {
@@ -1357,7 +1350,7 @@ impl VimEngine {
                         value.truncate(value.len() - ending.len());
                     }
                 }
-                out.text.insert_str(at, &value);
+                Rc::make_mut(&mut out.text).insert_str(at, &value);
                 out.cursor = first_nonblank(
                     &out.text,
                     if after && l.end == at {
@@ -1384,7 +1377,7 @@ impl VimEngine {
                     if index > 0 {
                         let l = line(&out.text, row);
                         if l.end == out.text.len() {
-                            out.text.push('\n');
+                            Rc::make_mut(&mut out.text).push('\n');
                         }
                         row = line_after(&out.text, row, 1);
                     }
@@ -1392,7 +1385,7 @@ impl VimEngine {
                     let current = column(&out.text, at, tab_size);
                     let padding = width.saturating_sub(display_width(value, tab_size));
                     let unit = format!("{value}{}", " ".repeat(padding));
-                    out.text.insert_str(
+                    Rc::make_mut(&mut out.text).insert_str(
                         at,
                         &format!(
                             "{}{}",
@@ -2083,7 +2076,7 @@ fn indent(
     let width = tab_size.max(1) * count;
     for row in rows.iter().rev() {
         if right {
-            out.text.insert_str(*row, &" ".repeat(width));
+            Rc::make_mut(&mut out.text).insert_str(*row, &" ".repeat(width));
         } else {
             let mut end = *row;
             let mut removed = 0;
@@ -2100,7 +2093,7 @@ fn indent(
                     _ => break,
                 }
             }
-            out.text.replace_range(*row..end, "");
+            Rc::make_mut(&mut out.text).replace_range(*row..end, "");
         }
     }
     if let Some(row) = rows.first() {

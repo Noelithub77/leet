@@ -9,6 +9,7 @@
 <details>
 <summary>Fix</summary>
 
+- Avoid repeated document copies during Vim navigation and typing.
 - Always wrap long code and text in editors and the debugger.
 - Keep debugger highlights and scrolling aligned with wrapped source lines.
 

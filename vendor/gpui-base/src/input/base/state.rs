@@ -367,8 +367,8 @@ pub struct InputBaseState<M: InputModeKind> {
     pub(super) vim_shared: Option<Rc<std::cell::RefCell<super::VimShared>>>,
     pub(super) vim_cursor: Option<usize>,
     pub(super) vim_message: Option<String>,
-    pub(super) vim_applying: bool,
     pub(super) vim_insert_transaction: bool,
+    pub(super) vim_text_snapshot: Option<(u64, Rc<String>)>,
     pub(super) inline_tokens: Option<Box<super::inline_tokens::InlineTokenStore>>,
     pub(super) pending_token: Option<super::InlineToken>,
     pub(super) replaying_history: bool,
@@ -760,8 +760,8 @@ impl<M: InputModeKind> InputBaseState<M> {
             vim_shared: None,
             vim_cursor: None,
             vim_message: None,
-            vim_applying: false,
             vim_insert_transaction: false,
+            vim_text_snapshot: None,
             inline_tokens: None,
             pending_token: None,
             replaying_history: false,
@@ -1277,6 +1277,7 @@ impl<M: InputModeKind> InputBaseState<M> {
     pub fn default_value(mut self, value: impl Into<SharedString>) -> Self {
         let text: SharedString = value.into();
         self.text = Rope::from(self.normalize_input(&text).as_ref());
+        self.vim_text_snapshot = None;
         if let Some(diagnostics) = self.mode.diagnostics_mut() {
             diagnostics.reset(&self.text)
         }
@@ -3791,7 +3792,6 @@ impl<M: InputModeKind> InputBaseState<M> {
             self.undo_manager.begin_transaction();
         }
 
-        let vim_before = self.vim_native_snapshot();
         let auto_closed_pairs_before = self.mode.auto_closed_pairs().clone();
         let mut recorded = false;
         // Several edits reach the highlighter as one batch, so it reparses
@@ -3923,7 +3923,6 @@ impl<M: InputModeKind> InputBaseState<M> {
         if self.is_multi_line() {
             self.mode.update_auto_grow(&self.display_map);
         }
-        self.record_vim_native_edit(vim_before);
         if self.emit_events {
             cx.emit(InputEvent::Change);
         }
@@ -4270,7 +4269,6 @@ impl<M: InputModeKind> EntityInputHandler for InputBaseState<M> {
         if !self.is_editable() || (!self.silent_replace_text && !self.vim_accepts_text()) {
             return;
         }
-        let vim_before = self.vim_native_snapshot();
         let selection_before = *self.active_selection();
 
         let starts_composition = self.ime_marked_range.is_none();
@@ -4386,7 +4384,6 @@ impl<M: InputModeKind> EntityInputHandler for InputBaseState<M> {
         if new_text.is_empty() {
             self.undo_manager.commit_transaction();
         }
-        self.record_vim_native_edit(vim_before);
         cx.notify();
     }
 

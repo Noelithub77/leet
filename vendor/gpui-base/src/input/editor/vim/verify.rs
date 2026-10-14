@@ -9,5 +9,5 @@ fn main() {
     let _ = engine.pending();
     let _ = engine.block_insertion();
     let _ = engine.block_geometry("", 4);
-    let _ = engine.blur("", 0, 4);
+    let _ = engine.blur(&std::rc::Rc::new(String::new()), 0, 4);
 }
