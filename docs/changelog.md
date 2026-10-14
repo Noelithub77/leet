@@ -10,6 +10,7 @@
 <details>
 <summary>Fix</summary>
 
+- Keep completions close to the caret and soften suggestion text changes with a fast transition.
 - Toggle the AI panel without a status toast.
 - Make code text and completion panels smaller, with suggestions positioned farther right.
 - Always wrap long code and text in editors and the debugger.

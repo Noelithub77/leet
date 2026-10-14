@@ -245,12 +245,17 @@ fn completion_placement(cx: &mut HeadlessAppContext, output: &Path, pixels: bool
             ensure!(popup.top() >= input.top() - px(1.) && popup.bottom() <= input.bottom() + px(1.) && popup.left() >= input.left() - px(1.) && popup.right() <= input.right() + px(1.), "{name}: popup escapes editor: {popup:?}, input {input:?}");
             ensure!(preview.size.height > px(40.), "{name}: full preview became inaccessible");
             ensure!(preview.size.width <= px(300.) && preview.size.height <= px(184.), "{name}: preview is no longer compact");
-            ensure!(popup.left() > input.left() + px(16.), "{name}: popup lost its rightward offset");
+            let caret_left = cursor.origin.x + editor.scroll_offset().x;
+            ensure!((popup.left() - caret_left - px(12.)).abs() <= px(1.), "{name}: popup drifted away from the caret");
             if name == "wide" { ensure!(preview.left() > popup.left() + px(240.), "Wide preview should sit beside the list"); }
             Ok(())
         })??;
         if pixels { cx.capture_screenshot(handle)?.save(output.join(format!("completion-placement-{name}.png")))?; }
-        cx.update_window(handle, |_,window,cx| { window.press("escape",cx); window.remove_window(); })?;
+        cx.update_window(handle, |_,window,cx| -> Result<()> {
+            window.press("enter",cx);
+            ensure!(pane.read(cx).state.read(cx).value().contains("def dfs(graph, source):"), "{name}: animation delayed completion acceptance");
+            window.press("escape",cx); window.remove_window(); Ok(())
+        })??;
     }
     cx.update(|cx| { crate::theme::apply("Vesper",cx); crate::theme::set_zoom(1.,cx); });
     Ok(())

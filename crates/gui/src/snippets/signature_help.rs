@@ -194,7 +194,7 @@ pub(super) fn render_popup(pane: &EditorPane, window: &mut Window, cx: &mut Cont
     let desired = height(pane, window); let use_below = below_space >= desired || below_space >= above;
     let height = desired.min(if use_below { below_space } else { above });
     if height < rems(1.5).to_pixels(window.rem_size()) { return None; }
-    let left = (position.x + px(16.)).max(input.size.width * 0.35).min((input.size.width - width).max(px(0.)));
+    let left = (position.x + px(12.)).min((input.size.width - width).max(px(0.)));
     let top = if use_below { below } else { above - height };
     Some(deferred(anchored().position(input.origin + point(left, top)).child(div().id("signature-popup").test_support()
         .w(width).h(height).overflow_hidden().bg(theme.popover.opacity(0.97)).border_1().border_color(theme.border).rounded_md().shadow_md()

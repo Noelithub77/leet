@@ -8,6 +8,7 @@ use gpui_kit::component::text::TextView;
 use gpui_kit::prelude::FluentBuilder as _;
 use lsp_types::{CompletionItemKind, CompletionTextEdit, Documentation};
 use practice::language::Language;
+use std::{hash::{Hash, Hasher}, time::Duration};
 use super::expansion::EditorPane;
 
 pub(super) struct Menu {
@@ -91,7 +92,7 @@ pub(super) fn render(pane: &EditorPane, window: &mut Window, cx: &mut Context<Ed
     let row_height = rems(1.375).to_pixels(window.rem_size());
     let desired_list = row_height * menu.content.items.len().min(6) as f32;
     let available_height = input.size.height.min((window.viewport_size().height - input.origin.y).max(px(0.)));
-    let preferred_left = (pos.x + px(16.)).max(input.size.width * 0.35);
+    let preferred_left = pos.x + px(12.);
     let side = preferred_left + width + chrome + preview_width + gap <= input.size.width;
     let selected = menu.content.items.get(menu.selected)?;
     let documentation = selected.documentation.as_ref().map(|doc| match doc { Documentation::String(text) => text.clone(), Documentation::MarkupContent(markup) => markup.value.clone() });
@@ -117,6 +118,7 @@ pub(super) fn render(pane: &EditorPane, window: &mut Window, cx: &mut Context<Ed
     let left = preferred_left.min((input.size.width - popup_width).max(px(0.)));
     let top = if use_below { below } else { above - popup_height };
     let surface = theme.popover.opacity(0.97);
+    let preview_text = format!("{}{}", menu.preview.as_ref().map_or("", |(code, _)| code.as_str()), documentation.as_deref().unwrap_or(""));
     let preview: Option<AnyElement> = if let Some((code, highlighter)) = &menu.preview {
         Some(div().font_family(theme.mono_font_family.clone()).text_size(rems(11. / 16.))
             .when_some(documentation.as_ref().and_then(|doc| Some(doc.split_once("```").map_or(doc.as_str(), |(header, _)| header).trim().to_owned())).filter(|header| !header.is_empty()), |view, header|
@@ -135,10 +137,13 @@ pub(super) fn render(pane: &EditorPane, window: &mut Window, cx: &mut Context<Ed
                 .hover(|row| row.bg(theme.accent.opacity(0.5)))
                 .child(div().id(("completion-kind", index)).tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(label).build(window, cx))
                     .child(Icon::new(icon).size(px(12.)).text_color(theme.primary.opacity(0.85))))
-                .child(div().flex_1().truncate().child(if index == menu.selected {
-                    menu.preview.as_ref().and_then(|(code, _)| code.lines().find(|line| !line.trim().is_empty()))
-                        .map(str::to_owned).unwrap_or_else(|| item.label.clone())
-                } else { item.label.clone() }))
+                .child({
+                    let text = if index == menu.selected {
+                        menu.preview.as_ref().and_then(|(code, _)| code.lines().find(|line| !line.trim().is_empty()))
+                            .map(str::to_owned).unwrap_or_else(|| item.label.clone())
+                    } else { item.label.clone() };
+                    soften_text(div().flex_1().truncate().child(text.clone()), &text, cx)
+                })
                 .when_some(if index == menu.selected && menu.preview.is_some() { Some(item.label.clone()) } else { item.detail.clone() }, |row, detail|
                     row.child(div().max_w(px(100.)).truncate().text_size(rems(11. / 16.)).text_color(theme.muted_foreground).child(detail)))
                 .on_mouse_down(MouseButton::Left, cx.listener(move |pane, _, window, cx| {
@@ -156,11 +161,20 @@ pub(super) fn render(pane: &EditorPane, window: &mut Window, cx: &mut Context<Ed
         .when_some(preview, |popup, preview| popup.child(div().id("source-completion-preview").test_support().relative().overflow_hidden()
             .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
             .w(preview_width).h(preview_height).bg(surface).border_1().border_color(theme.border).rounded_md().shadow_md()
-            .child(div().id("source-completion-preview-scroll").overflow_y_scroll().h((preview_height - px(2.)).max(px(0.))).p_2().pb_8().text_size(rems(11. / 16.)).child(preview))
+            .child(soften_text(div().id("source-completion-preview-scroll").overflow_y_scroll().h((preview_height - px(2.)).max(px(0.))).p_2().pb_8().text_size(rems(11. / 16.)).child(preview), &preview_text, cx))
             .child(deferred(div().id("completion-preview-fade").test_support().absolute().w_full().left_0().bottom_0().h_8().rounded_b_md()
                 .bg(linear_gradient(180., linear_color_stop(theme.popover.opacity(0.), 0.), linear_color_stop(surface, 1.)))))))
         .on_mouse_down_out(cx.listener(|pane, _, window, cx| pane.close_completions(window, cx)))
     )).into_any_element())
+}
+
+// Keep text readable on the first frame; only soften the final contrast change.
+fn soften_text<E: Styled + IntoElement + 'static>(view: E, text: &str, cx: &App) -> AnyElement {
+    if cx.reduce_motion() { return view.into_any_element(); }
+    let mut key = std::collections::hash_map::DefaultHasher::new();
+    text.hash(&mut key);
+    view.with_animation(("completion-text", key.finish()), Animation::new(Duration::from_millis(50)),
+        |view, progress| view.opacity(0.88 + 0.12 * progress)).into_any_element()
 }
 
 #[cfg(test)]
