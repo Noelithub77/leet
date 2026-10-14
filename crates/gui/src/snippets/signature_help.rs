@@ -149,7 +149,7 @@ impl EditorPane {
 }
 
 pub(super) fn height(pane: &EditorPane, window: &Window) -> Pixels {
-    if pane.signature.help.is_some() { rems(5.).to_pixels(window.rem_size()) } else { px(0.) }
+    if pane.signature.help.is_some() { rems(4.).to_pixels(window.rem_size()) } else { px(0.) }
 }
 
 pub(super) fn render_content(pane: &EditorPane, cx: &mut Context<EditorPane>) -> Option<AnyElement> {
@@ -163,15 +163,15 @@ pub(super) fn render_content(pane: &EditorPane, cx: &mut Context<EditorPane>) ->
         if text.trim().is_empty() { return None; }
         Some(match doc {
             Documentation::MarkupContent(markup) if markup.kind == lsp_wire::MarkupKind::Markdown => TextView::markdown("signature-documentation", text.clone()).into_any_element(),
-            _ => div().text_xs().text_color(theme.muted_foreground).child(text.clone()).into_any_element(),
+            _ => div().text_size(rems(11. / 16.)).text_color(theme.muted_foreground).child(text.clone()).into_any_element(),
         })
     });
     Some(v_flex().id("parameter-hints").test_support().w_full().min_w_0().gap_1().p_2()
         .child(h_flex().gap_1().when(help.signatures.len() > 1, |row| row
             .child(Button::new("previous-signature").ghost().xsmall().icon(gpui_kit::assets::IconName::ChevronLeft).accessibility_label("Previous signature").on_click(|_, window, cx| window.dispatch_action(Box::new(PreviousSignature), cx)))
-            .child(div().text_xs().text_color(theme.muted_foreground).child(format!("{}/{}", ix + 1, help.signatures.len())))
+            .child(div().text_size(rems(11. / 16.)).text_color(theme.muted_foreground).child(format!("{}/{}", ix + 1, help.signatures.len())))
             .child(Button::new("next-signature").ghost().xsmall().icon(gpui_kit::assets::IconName::ChevronRight).accessibility_label("Next signature").on_click(|_, window, cx| window.dispatch_action(Box::new(NextSignature), cx))))
-            .child(div().flex_1().min_w_0().font_family(theme.mono_font_family.clone()).text_sm().text_color(theme.foreground)
+            .child(div().flex_1().min_w_0().font_family(theme.mono_font_family.clone()).text_size(rems(11. / 16.)).text_color(theme.foreground)
                 .child(StyledText::new(information.label.clone()).with_highlights(highlights))))
         .when_some(documentation, |view, documentation| view.child(documentation))
         .into_any_element())
@@ -188,16 +188,16 @@ pub(super) fn render_popup(pane: &EditorPane, window: &mut Window, cx: &mut Cont
     let (caret, line_height) = editor.cursor_layout()?; let input = editor.input_bounds();
     let position = editor.scroll_offset() + caret.origin - input.origin;
     let gap = rems(0.25).to_pixels(window.rem_size());
-    let width = rems(30.).to_pixels(window.rem_size()).min(input.size.width);
+    let width = px(300.).min(input.size.width);
     let above = (position.y - gap).max(px(0.)); let below = position.y + line_height + gap;
     let below_space = (input.size.height - below).max(px(0.));
     let desired = height(pane, window); let use_below = below_space >= desired || below_space >= above;
     let height = desired.min(if use_below { below_space } else { above });
     if height < rems(1.5).to_pixels(window.rem_size()) { return None; }
-    let left = position.x.max(px(0.)).min((input.size.width - width).max(px(0.)));
+    let left = (position.x + px(16.)).max(input.size.width * 0.35).min((input.size.width - width).max(px(0.)));
     let top = if use_below { below } else { above - height };
     Some(deferred(anchored().position(input.origin + point(left, top)).child(div().id("signature-popup").test_support()
-        .w(width).h(height).overflow_hidden().bg(theme.popover).border_1().border_color(theme.border).rounded_md().shadow_md()
+        .w(width).h(height).overflow_hidden().bg(theme.popover.opacity(0.97)).border_1().border_color(theme.border).rounded_md().shadow_md()
         .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
         .child(div().id("signature-scroll").size_full().overflow_y_scroll().child(content)))).into_any_element())
 }

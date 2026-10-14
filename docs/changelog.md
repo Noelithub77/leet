@@ -10,6 +10,7 @@
 <details>
 <summary>Fix</summary>
 
+- Make code text and completion panels smaller, with suggestions positioned farther right.
 - Always wrap long code and text in editors and the debugger.
 - Keep debugger highlights and scrolling aligned with wrapped source lines.
 

@@ -435,7 +435,7 @@ impl Render for EditorPane {
             .on_action(cx.listener(|this, _: &super::signature_help::NextSignature, window, cx| this.step_signature(1, window, cx)))
             .on_mouse_move(cx.listener(|this,_,_,cx|{this.state.update(cx,|e,cx|e.clear_diagnostic_popover(cx));cx.notify();}))
             .when_some(hover,|view,(message,bounds)|view.child(deferred(div().absolute().left((bounds.left()-origin.x).max(px(0.))).top(bounds.bottom()-origin.y+px(8.)).max_w(px(420.)).max_h(px(180.)).id("hovered-diagnostic").overflow_y_scroll().p_3().rounded_lg().bg(theme.popover).border_1().border_color(theme.danger.opacity(0.4)).shadow_md().text_sm().text_color(theme.danger).child(message))))
-            .child(Editor::new(&self.state).bordered(false).h_full().context_menu({
+            .child(Editor::new(&self.state).text_size(theme.mono_font_size * (12. / 13.)).bordered(false).h_full().context_menu({
                 let capabilities = self.state.read(cx).context_menu_capabilities();
                 move |menu, _, _| {
                     use gpui_kit::base::input::{GoToDefinition, ToggleCodeActions, Cut, Copy, Paste, SelectAll};

@@ -114,7 +114,7 @@ pub(crate) fn native(cx:&mut HeadlessAppContext,output:&Path,pixels:bool)->Resul
         ensure!(doc.contains("Input ·")&&doc.contains("Output ·")&&doc.contains("Example ·"),"Algorithm usage guide missing");
         let bounds=window.find("source-completions").bounds();
         ensure!(bounds.size.width<=pane.read(cx).state.read(cx).input_bounds().size.width&&bounds.size.height<px(300.),"Completion menu exceeds the editor bounds");
-        ensure!(window.find("completion-preview-fade").bounds().size.width>px(300.),"Preview fade has no width");
+        ensure!(window.find("completion-preview-fade").bounds().size.width>px(240.),"Preview fade has no width");
         Ok(())
     })??;
     if pixels{
@@ -244,6 +244,9 @@ fn completion_placement(cx: &mut HeadlessAppContext, output: &Path, pixels: bool
             ensure!(popup.bottom() <= caret_top - px(3.) || popup.top() >= caret_top + line_height + px(3.), "{name}: popup covers typing line: {popup:?}, caret {caret_top:?}");
             ensure!(popup.top() >= input.top() - px(1.) && popup.bottom() <= input.bottom() + px(1.) && popup.left() >= input.left() - px(1.) && popup.right() <= input.right() + px(1.), "{name}: popup escapes editor: {popup:?}, input {input:?}");
             ensure!(preview.size.height > px(40.), "{name}: full preview became inaccessible");
+            ensure!(preview.size.width <= px(300.) && preview.size.height <= px(184.), "{name}: preview is no longer compact");
+            ensure!(popup.left() > input.left() + px(16.), "{name}: popup lost its rightward offset");
+            if name == "wide" { ensure!(preview.left() > popup.left() + px(240.), "Wide preview should sit beside the list"); }
             Ok(())
         })??;
         if pixels { cx.capture_screenshot(handle)?.save(output.join(format!("completion-placement-{name}.png")))?; }
