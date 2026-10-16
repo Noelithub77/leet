@@ -147,8 +147,8 @@ pub const COMMANDS: &[Command] = &[
     cmd!("Focus editor", "ctrl-1", FocusEditor),
     cmd!("Focus problem description", "ctrl-2", FocusStatement),
     cmd!("Editor completions", "ctrl-space", Complete),
-    cmd!("Previous parameter signature", "", PreviousSignature),
-    cmd!("Next parameter signature", "", NextSignature),
+    cmd!("Previous parameter signature", "alt-up", PreviousSignature),
+    cmd!("Next parameter signature", "alt-down", NextSignature),
     cmd!("Go to definition", "ctrl-f12", GoToDefinition),
     cmd!("Editor code actions", "alt-enter", ToggleCodeActions),
     cmd!("Next problem", "ctrl-down|alt-n", NextProblem),
@@ -272,14 +272,16 @@ pub fn bind_keys(config: &practice::config::Config, cx: &mut App) {
         .iter()
         .flat_map(|c| c.effective_key(config).split('|').rev().filter(|k| !k.is_empty()).map(move |k| (c, k)))
         .filter_map(|(c, key)| {
-            KeyBinding::load(key, (c.action)(), None, false, None, cx.keyboard_mapper().as_ref())
+            let context = matches!(c.id, "PreviousSignature" | "NextSignature").then(|| KeyBindingContextPredicate::parse("SignatureHints").expect("valid context").into());
+            KeyBinding::load(key, (c.action)(), context, false, None, cx.keyboard_mapper().as_ref())
                 .map_err(|error| eprintln!("leet: invalid shortcut for {}: {error}", c.label)).ok()
         })
         .collect();
     // Apply the same keys in inputs, where component bindings take precedence.
     for command in COMMANDS {
         for key in command.effective_key(config).split('|').rev().filter(|key| !key.is_empty()) {
-            let context = KeyBindingContextPredicate::parse("Workspace > Input").expect("valid context");
+            let scope = if matches!(command.id, "PreviousSignature" | "NextSignature") { "SignatureHints > Input" } else { "Workspace > Input" };
+            let context = KeyBindingContextPredicate::parse(scope).expect("valid context");
             if let Ok(binding) = KeyBinding::load(key, (command.action)(), Some(context.into()), false, None, cx.keyboard_mapper().as_ref()) {
                 bindings.push(binding);
             }

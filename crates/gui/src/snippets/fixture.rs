@@ -194,6 +194,7 @@ pub(crate) fn native(cx:&mut HeadlessAppContext,output:&Path,pixels:bool)->Resul
     workspace_tab(cx,output,pixels)?;
     completion_placement(cx, output, pixels)?;
     cpp_highlighting(cx, output, pixels)?;
+    crate::snippets::expansion::cursor_fixture::native(cx, output, pixels)?;
     delayed_autocomplete(cx)?;
     cp_autocomplete(cx)?;
     crate::snippets::signature_help::fixture::native(cx, output, pixels)?;

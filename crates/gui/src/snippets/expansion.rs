@@ -377,12 +377,15 @@ impl Render for EditorPane {
         let selection = self.state.read(cx).selected_range();
         let active = self.session.as_ref().filter(|s| { let r=s.range(); selection.start>=r.start && selection.end<=r.end });
         let expandable = active.is_some() || self.tab_expand && !self.matching_prefix(cx).is_empty();
-        let bounds = active.and_then(|s| self.state.read(cx).range_to_bounds(&s.range()));
-        let origin = self.state.read(cx).input_bounds().origin;
+        let editor = self.state.read(cx);
+        let bounds = active.and_then(|session| editor.range_to_bounds(&session.range()))
+            .filter(|bounds| bounds.intersects(&editor.input_bounds()))
+            .map(|bounds| bounds.intersect(&editor.input_bounds()));
+        let origin = editor.input_bounds().origin;
         let glide = bounds.map(|b| {
             let ease=gpui_kit::base::Transition::new(Duration::from_millis(95));
-            let x=gpui_kit::base::transition("snippet-caret-x",(b.left()-origin.x).as_f32(),ease.clone(),window,cx);
-            let y=gpui_kit::base::transition("snippet-caret-y",(b.top()-origin.y).as_f32(),ease,window,cx);
+            let x=gpui_kit::base::transition("snippet-caret-x",b.left().as_f32(),ease.clone(),window,cx);
+            let y=gpui_kit::base::transition("snippet-caret-y",b.top().as_f32(),ease,window,cx);
             (x,y,b.size.height)
         });
         let hover=self.state.read(cx).diagnostics().and_then(|set|set.iter().find_map(|entry|{
@@ -391,7 +394,9 @@ impl Render for EditorPane {
         }));
         self.state.update(cx,|e,cx|e.clear_diagnostic_popover(cx));
         let choices = active.map(|s| s.stops[s.active].choices.clone()).unwrap_or_default();
-        div().id("snippet-source").test_support().relative().size_full().key_context(if self.menu.is_some() { "SnippetPicker" } else if expandable { "SnippetSource" } else { "SourceEditor" })
+        let mut context = KeyContext::parse(if self.menu.is_some() { "SnippetPicker" } else if expandable { "SnippetSource" } else { "SourceEditor" }).expect("valid editor context");
+        if self.signature.has_overloads() { context.add("SignatureHints"); }
+        div().id("snippet-source").test_support().relative().size_full().key_context(context)
             .on_modifiers_changed(cx.listener(Self::prediction_modifiers))
             .capture_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 if event.keystroke.key == "escape" && (EditorMode::has_inline_completion(this.state.read(cx)) || this.predictions.as_ref().is_some_and(|predictions| predictions.alt.get())) {
@@ -452,9 +457,9 @@ impl Render for EditorPane {
                     }
                 }
             }))
-            .when_some(bounds, |view,bounds| view.child(div().absolute().left(bounds.left()-origin.x).top(bounds.top()-origin.y).w(bounds.size.width.max(px(3.))).h(bounds.size.height).rounded_sm().border_1().border_color(theme.primary).bg(theme.primary.opacity(0.08))
-                .with_animation(("snippet-stop-glide",self.epoch), Animation::new(Duration::from_millis(100)), |view,t|view.opacity(0.35+0.65*t))))
-            .when_some(glide, |view,(x,y,height)|view.child(div().absolute().left(px(x)).top(px(y)).w(px(2.)).h(height).bg(theme.primary)))
+            .when_some(bounds, |view,bounds| view.child(deferred(anchored().position(bounds.origin).child(div().id("snippet-placeholder").test_support().w(bounds.size.width.max(px(3.))).h(bounds.size.height).rounded_sm().border_1().border_color(theme.primary).bg(theme.primary.opacity(0.08))
+                .with_animation(("snippet-stop-glide",self.epoch), Animation::new(Duration::from_millis(100)), |view,t|view.opacity(0.35+0.65*t))))))
+            .when_some(glide, |view,(x,y,height)|view.child(deferred(anchored().position(point(px(x),px(y))).child(div().w(px(2.)).h(height).bg(theme.primary)))))
             .when(!choices.is_empty(),|view|view.child(deferred(h_flex().absolute().bottom_2().left_2().gap_1().p_1().bg(theme.popover).rounded_md().children(choices.into_iter().map(|choice| {
                 Button::new(SharedString::from(format!("snippet-choice-{choice}"))).ghost().small().label(choice.clone()).on_click(cx.listener(move|this,_,w,cx| {
                     if let Some(s)=&this.session {let range=s.range();this.state.update(cx,|e,cx|{e.set_selected_range(range,cx);e.replace(choice.clone(),w,cx);});}
@@ -465,3 +470,7 @@ impl Render for EditorPane {
             .when_some(if self.menu.is_none() { crate::copilot::preview_overlay(self, window, cx) } else { None }, |view, hint| view.child(hint))
     }
 }
+
+#[cfg(feature = "gui-test")]
+#[path = "cursor_fixture.rs"]
+pub(crate) mod cursor_fixture;

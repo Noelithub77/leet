@@ -10,12 +10,12 @@ pub mod signature;
 fn lock<T>(value: &Mutex<T>) -> std::sync::MutexGuard<'_, T> { value.lock().unwrap_or_else(|error| error.into_inner()) }
 struct Stop;
 
-static JAVA_WORKSPACE: AtomicU64 = AtomicU64::new(0);
-struct JavaWorkspace(PathBuf);
-impl JavaWorkspace {
-    fn new() -> Result<Self> {
+static SERVER_WORKSPACE: AtomicU64 = AtomicU64::new(0);
+struct ServerWorkspace(PathBuf);
+impl ServerWorkspace {
+    fn new(server: &str) -> Result<Self> {
         loop {
-            let path = std::env::temp_dir().join(format!("leet-jdtls-{}-{}", std::process::id(), JAVA_WORKSPACE.fetch_add(1, Ordering::Relaxed)));
+            let path = std::env::temp_dir().join(format!("leet-{server}-{}-{}", std::process::id(), SERVER_WORKSPACE.fetch_add(1, Ordering::Relaxed)));
             match std::fs::create_dir(&path) {
                 Ok(()) => return Ok(Self(path)),
                 Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
@@ -24,7 +24,7 @@ impl JavaWorkspace {
         }
     }
 }
-impl Drop for JavaWorkspace { fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); } }
+impl Drop for ServerWorkspace { fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); } }
 
 #[derive(Clone, Debug)] pub enum Status { Starting, Ready, Failed(String) }
 struct State {
@@ -89,8 +89,24 @@ impl Server {
 
     pub fn start(language: Language, root: &Path) -> Result<Arc<Self>> {
         let (binary, mut args, name) = command(language)?;
-        let java_workspace = if language == Language::Java { Some(JavaWorkspace::new()?) } else { None };
-        if let Some(workspace) = &java_workspace { args.extend(["-data".into(), workspace.0.to_string_lossy().into_owned()]); }
+        let workspace = match language {
+            Language::Java => Some(ServerWorkspace::new("jdtls")?),
+            Language::Cpp => Some(ServerWorkspace::new("clangd")?),
+            _ => None,
+        };
+        let initialization_options = match (language, &workspace) {
+            (Language::Java, Some(workspace)) => {
+                args.extend(["-data".into(), workspace.0.to_string_lossy().into_owned()]);
+                None
+            }
+            (Language::Cpp, Some(workspace)) => {
+                let header = workspace.0.join("judge.hpp");
+                std::fs::write(&header, include_str!("lsp/judge.hpp"))?;
+                // Forced inclusion preserves every user-document position. Existing compile commands win.
+                Some(serde_json::json!({"fallbackFlags": ["-std=c++20", "-include", header.to_string_lossy()]}))
+            }
+            _ => None,
+        };
         let root = root.to_path_buf();
         let uri = lsp::Url::from_directory_path(&root).map_err(|_| anyhow::anyhow!("Invalid workspace directory"))?;
         let state = Arc::new(Mutex::new(State { status: Status::Starting, diagnostics: HashMap::new(), sequence: 0, completion_resolve: false, signature_help: None, subscribers: HashMap::new() }));
@@ -117,7 +133,7 @@ impl Server {
         });
         let server = Arc::new(Self { socket: socket.clone(), state: state.clone(), name });
         std::thread::Builder::new().name(format!("leet-lsp-{}", language.id())).spawn(move || {
-            let _java_workspace = java_workspace;
+            let _workspace = workspace;
             let outcome: Result<()> = async_io::block_on(async {
                 let mut process = async_process::Command::new(binary);
                 #[cfg(windows)] {
@@ -133,7 +149,7 @@ impl Server {
                         "textDocument": {"signatureHelp": {"contextSupport": true, "signatureInformation": {"documentationFormat": ["markdown", "plaintext"], "parameterInformation": {"labelOffsetSupport": true}, "activeParameterSupport": true}}, "completion": {"completionItem": {"snippetSupport": false, "documentationFormat": ["markdown", "plaintext"], "resolveSupport": {"properties": ["documentation", "detail"]}}}, "hover": {"contentFormat": ["markdown", "plaintext"]}, "publishDiagnostics": {"versionSupport": true}, "definition": {"linkSupport": true}, "codeAction": {"codeActionLiteralSupport": {"codeActionKind": {"valueSet": ["quickfix", "refactor", "source", "source.organizeImports"]}}}},
                         "workspace": {"workspaceFolders": true, "configuration": true}
                     }))?;
-                    let params = lsp::InitializeParams { process_id: Some(std::process::id()), capabilities,
+                    let params = lsp::InitializeParams { process_id: Some(std::process::id()), capabilities, initialization_options,
                         workspace_folders: Some(vec![lsp::WorkspaceFolder { uri, name: "Solutions".into() }]), ..Default::default() };
                     let initialized = deadline(async { Ok(socket.request::<request::Initialize>(params).await?) }, 20).await;
                     match initialized {
@@ -269,6 +285,61 @@ impl Drop for Document { fn drop(&mut self) { let _ = self.server.socket.notify:
             }
             assert!(matches!(server.status(), Status::Failed(_)));
             assert!(document.server.ready().await.is_err());
+        });
+    }
+
+    #[test]
+    #[ignore = "requires installed clangd"]
+    fn live_cpp_judge_context() {
+        async_io::block_on(async {
+            let root = tempfile::tempdir().unwrap();
+            let path = root.path().join("solution.cpp");
+            let text = "class Solution {\npublic:\n    vector<int> twoSum(vector<int>& numbers, int target) {\n        unordered_map<int, int> seen;\n        sort(numbers.begin(), numbers.end());\n        return {};\n    }\n};\n";
+            std::fs::write(&path, text).unwrap();
+            let server = Server::start(Language::Cpp, root.path()).unwrap();
+            let doc = server.open(&path, Language::Cpp, text.into()).await.unwrap();
+            for _ in 0..100 {
+                if doc.diagnostics().is_some() { break; }
+                async_io::Timer::after(Duration::from_millis(100)).await;
+            }
+            let (_, diagnostics) = doc.diagnostics().expect("clangd must publish diagnostics");
+            assert!(diagnostics.is_empty(), "judge-style C++ must resolve standard names: {diagnostics:?}");
+            let hover = server.request::<request::HoverRequest>(lsp::HoverParams { text_document_position_params: doc.position(text, text.find("numbers,").unwrap() + 2), work_done_progress_params: Default::default() }).await.unwrap().unwrap();
+            assert_eq!(hover.range.unwrap().start.line, 2, "editor positions must stay on user lines");
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), text, "judge context must not modify saved solutions");
+            doc.sync(text.replace("return {};", "return unknown_value;")).unwrap();
+            for _ in 0..100 {
+                if let Some((_, diagnostics)) = doc.diagnostics() {
+                    if diagnostics.iter().any(|diagnostic| diagnostic.message.contains("unknown_value") && diagnostic.range.start.line == 5) { return; }
+                }
+                async_io::Timer::after(Duration::from_millis(100)).await;
+            }
+            panic!("real errors must retain their user-document positions");
+        });
+    }
+
+    #[test]
+    #[ignore = "requires installed clangd"]
+    fn live_cpp_compile_commands_override_judge_fallback() {
+        async_io::block_on(async {
+            let root = tempfile::Builder::new().prefix("leet compile ").tempdir().unwrap();
+            let path = root.path().join("solution.cpp");
+            let text = "#ifndef LEET_CUSTOM_CONTEXT\n#error Missing project flags\n#endif\nstatic_assert(__cplusplus == 201703L);\nint main() { return 0; }\n";
+            std::fs::write(&path, text).unwrap();
+            std::fs::write(root.path().join("compile_commands.json"), serde_json::to_vec(&serde_json::json!([{
+                "directory": root.path(), "file": path,
+                "arguments": ["clang++", "-std=c++17", "-DLEET_CUSTOM_CONTEXT", "-c", path.to_str().unwrap()]
+            }])).unwrap()).unwrap();
+            let server = Server::start(Language::Cpp, root.path()).unwrap();
+            let doc = server.open(&path, Language::Cpp, text.into()).await.unwrap();
+            for _ in 0..100 {
+                if let Some((_, diagnostics)) = doc.diagnostics() {
+                    assert!(diagnostics.is_empty(), "Project compile commands must retain their flags: {diagnostics:?}");
+                    return;
+                }
+                async_io::Timer::after(Duration::from_millis(100)).await;
+            }
+            panic!("clangd must publish diagnostics for the project command");
         });
     }
 

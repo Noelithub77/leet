@@ -36,7 +36,7 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         let delayed = Rc::new(Cell::new(false)); let requests = Rc::new(RefCell::new(Vec::new()));
         let (handle, view) = cx.update(|cx| {
             crate::theme::apply(theme, cx); crate::theme::set_zoom(zoom, cx);
-            let mut config = practice::config::Config::default(); config.keybindings.insert("NextSignature".into(), "ctrl-alt-shift-u".into());
+            let config = practice::config::Config::default();
             crate::actions::bind_keys(&config, cx);
             let requests = requests.clone(); let delayed = delayed.clone();
             gpui_kit::open_window(WindowOptions { window_bounds: Some(WindowBounds::Windowed(Bounds { origin: point(px(0.), px(0.)), size: size(px(width), px(height)) })), show: false, focus: false, ..Default::default() }, cx, |window, cx| cx.new(|cx| {
@@ -80,6 +80,15 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         cx.update_window(handle, |_, window, cx| -> Result<()> {
             window.render_frame(cx);
             ensure!(pane.read(cx).signature.help.as_ref().is_some_and(|help| signature::active_signature(help) == 1), "Overload navigation failed");
+            let before = pane.read(cx).state.read(cx).value().to_string();
+            window.press("alt-down", cx);
+            ensure!(pane.read(cx).signature.help.as_ref().is_some_and(|help| signature::active_signature(help) == 0), "Alt+Down did not wrap to the first overload");
+            window.press("alt-up", cx);
+            ensure!(pane.read(cx).signature.help.as_ref().is_some_and(|help| signature::active_signature(help) == 1), "Alt+Up did not wrap to the last overload");
+            ensure!(pane.read(cx).state.read(cx).value().as_str() == before, "Overload shortcuts edited source");
+            ensure!(pane.read(cx).state.read(cx).focus_handle(cx).is_focused(window), "Overload shortcuts stole focus");
+            let mut config = practice::config::Config::default(); config.keybindings.insert("NextSignature".into(), "ctrl-alt-shift-u".into());
+            crate::actions::bind_keys(&config, cx);
             window.press("ctrl-alt-shift-u", cx);
             ensure!(pane.read(cx).signature.help.as_ref().is_some_and(|help| signature::active_signature(help) == 0), "Configured overload shortcut failed");
             window.press("ctrl-space", cx); Ok(())
@@ -90,9 +99,36 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             ensure!(window.find("source-completions").visible() && window.find("completion-signature").visible(), "Ctrl+Space did not show completions with hints");
             ensure!(requests.borrow().iter().any(|(_, _, context)| context.trigger_kind == SignatureHelpTriggerKind::INVOKED), "Ctrl+Space did not invoke signature help");
             ensure!(window.try_find("signature-popup").is_none(), "Ctrl+Space opened overlapping signature surfaces");
+            let strip = window.find("completion-signature").bounds();
+            let list = window.find("source-completion-list").bounds();
+            ensure!(strip.bottom() <= list.top() + px(1.), "Parameter strip must sit above completions");
+            let label = window.find("signature-label").bounds();
+            ensure!(label.size.width >= strip.size.width - rems(1.5).to_pixels(window.rem_size()), "Signature text is squeezed beside overload controls: label={label:?}, strip={strip:?}");
+            window.press("alt-up", cx);
+            ensure!(pane.read(cx).signature.help.as_ref().is_some_and(|help| signature::active_signature(help) == 1), "Overload shortcut failed with completions open");
+            ensure!(window.find("source-completions").visible(), "Overload shortcut dismissed completions");
+            let selected = pane.read(cx).menu.as_ref().unwrap().selected;
+            window.press("down", cx);
+            ensure!(pane.read(cx).menu.as_ref().unwrap().selected != selected, "Normal arrows no longer navigate completions");
+            ensure!(pane.read(cx).signature.help.as_ref().is_some_and(|help| signature::active_signature(help) == 1), "Completion arrows changed the overload");
+            window.press("up", cx);
             Ok(())
         })??;
         if pixels { cx.capture_screenshot(handle)?.save(output.join(format!("parameter-hints-{name}.png")))?; }
+        if name == "dark" {
+            cx.update_window(handle, |_, window, cx| window.hover("previous-signature", cx))?;
+            cx.advance_clock(Duration::from_millis(700)); cx.run_until_parked();
+            std::thread::sleep(Duration::from_millis(700));
+            cx.update_window(handle, |_, window, cx| -> Result<()> {
+                window.render_frame(cx);
+                ensure!(window.find("tooltip-keybinding").visible(), "Overload arrow tooltip does not show its shortcut");
+                Ok(())
+            })??;
+            if pixels { cx.capture_screenshot(handle)?.save(output.join("parameter-shortcut.png"))?; }
+            cx.update_window(handle, |_, window, cx| window.hover("signature-other-control", cx))?;
+            cx.advance_clock(Duration::from_millis(700)); cx.run_until_parked();
+            std::thread::sleep(Duration::from_millis(700));
+        }
         cx.update_window(handle, |_, window, cx| { window.press("escape", cx); })?; cx.run_until_parked();
         cx.advance_clock(Duration::from_millis(500)); cx.run_until_parked();
         cx.update_window(handle, |_, window, cx| -> Result<()> {

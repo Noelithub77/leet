@@ -40,6 +40,7 @@ impl Hints {
         Self { focused, input: None, help: None, pending: false, epoch: 0, task: Task::ready(()), dismissed: None, parser: SyntaxHighlighter::new(language.id()), parsed: String::new(), language,
             #[cfg(feature = "gui-test")] fixture: None }
     }
+    pub(super) fn has_overloads(&self) -> bool { self.focused && self.help.as_ref().is_some_and(|help| help.signatures.len() > 1) }
     fn call(&mut self, source: &str, offset: usize, language: Language) -> Option<usize> {
         if self.language != language { self.parser = SyntaxHighlighter::new(language.id()); self.language = language; self.parsed.clear(); }
         if self.parsed != source {
@@ -149,7 +150,7 @@ impl EditorPane {
 }
 
 pub(super) fn height(pane: &EditorPane, window: &Window) -> Pixels {
-    if pane.signature.help.is_some() { rems(4.).to_pixels(window.rem_size()) } else { px(0.) }
+    if pane.signature.help.is_some() { rems(4.5).to_pixels(window.rem_size()) } else { px(0.) }
 }
 
 pub(super) fn render_content(pane: &EditorPane, cx: &mut Context<EditorPane>) -> Option<AnyElement> {
@@ -167,12 +168,14 @@ pub(super) fn render_content(pane: &EditorPane, cx: &mut Context<EditorPane>) ->
         })
     });
     Some(v_flex().id("parameter-hints").test_support().w_full().min_w_0().gap_1().p_2()
-        .child(h_flex().gap_1().when(help.signatures.len() > 1, |row| row
-            .child(Button::new("previous-signature").ghost().xsmall().icon(gpui_kit::assets::IconName::ChevronLeft).accessibility_label("Previous signature").on_click(|_, window, cx| window.dispatch_action(Box::new(PreviousSignature), cx)))
-            .child(div().text_size(rems(11. / 16.)).text_color(theme.muted_foreground).child(format!("{}/{}", ix + 1, help.signatures.len())))
-            .child(Button::new("next-signature").ghost().xsmall().icon(gpui_kit::assets::IconName::ChevronRight).accessibility_label("Next signature").on_click(|_, window, cx| window.dispatch_action(Box::new(NextSignature), cx))))
-            .child(div().flex_1().min_w_0().font_family(theme.mono_font_family.clone()).text_size(rems(11. / 16.)).text_color(theme.foreground)
-                .child(StyledText::new(information.label.clone()).with_highlights(highlights))))
+        .child(h_flex().w_full().gap_1()
+            .child(div().flex_1().text_size(rems(10. / 16.)).text_color(theme.muted_foreground).child("Parameters"))
+            .when(help.signatures.len() > 1, |row| row
+                .child(Button::new("previous-signature").ghost().xsmall().icon(gpui_kit::assets::IconName::ChevronLeft).accessibility_label("Previous signature").tooltip_with_action("Previous signature", &PreviousSignature, Some("SignatureHints")).on_click(|_, window, cx| window.dispatch_action(Box::new(PreviousSignature), cx)))
+                .child(div().text_size(rems(10. / 16.)).text_color(theme.muted_foreground).child(format!("{}/{}", ix + 1, help.signatures.len())))
+                .child(Button::new("next-signature").ghost().xsmall().icon(gpui_kit::assets::IconName::ChevronRight).accessibility_label("Next signature").tooltip_with_action("Next signature", &NextSignature, Some("SignatureHints")).on_click(|_, window, cx| window.dispatch_action(Box::new(NextSignature), cx)))))
+        .child(div().id("signature-label").test_support().w_full().min_w_0().font_family(theme.mono_font_family.clone()).text_size(rems(11. / 16.)).text_color(theme.foreground)
+            .child(StyledText::new(information.label.clone()).with_highlights(highlights)))
         .when_some(documentation, |view, documentation| view.child(documentation))
         .into_any_element())
 }
