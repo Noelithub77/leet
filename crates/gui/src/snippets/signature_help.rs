@@ -5,6 +5,7 @@ use gpui_kit::component::{ActiveTheme as _, Sizable as _, h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::highlighter::SyntaxHighlighter;
 use gpui_kit::component::text::TextView;
+use gpui_kit::component::scroll::{Scrollbar, ScrollbarMode};
 use gpui_kit::prelude::FluentBuilder as _;
 use lsp_wire::{SignatureHelp, SignatureHelpContext, SignatureHelpTriggerKind, Documentation};
 use practice::{language::Language, lsp::signature};
@@ -31,13 +32,14 @@ pub(super) struct Hints {
     parser: SyntaxHighlighter,
     parsed: String,
     language: Language,
+    scroll: ScrollHandle,
     #[cfg(feature = "gui-test")]
     pub fixture: Option<std::rc::Rc<dyn Fn(String, usize, SignatureHelpContext, &mut App) -> Task<anyhow::Result<Option<SignatureHelp>>>>>,
 }
 
 impl Hints {
     pub fn new(language: Language, focused: bool) -> Self {
-        Self { focused, input: None, help: None, pending: false, epoch: 0, task: Task::ready(()), dismissed: None, parser: SyntaxHighlighter::new(language.id()), parsed: String::new(), language,
+        Self { focused, input: None, help: None, pending: false, epoch: 0, task: Task::ready(()), dismissed: None, parser: SyntaxHighlighter::new(language.id()), parsed: String::new(), language, scroll: ScrollHandle::new(),
             #[cfg(feature = "gui-test")] fixture: None }
     }
     pub(super) fn has_overloads(&self) -> bool { self.focused && self.help.as_ref().is_some_and(|help| help.signatures.len() > 1) }
@@ -105,7 +107,7 @@ impl EditorPane {
         if manual { self.signature.dismissed = None; }
         else if self.signature.dismissed != call { self.signature.dismissed = None; }
         if !manual && (call.is_none() || self.signature.dismissed == call) { self.hide_signature(false, cx); return; }
-        if !same_call { self.hide_signature(false, cx); }
+        if !same_call { self.hide_signature(false, cx); self.signature.scroll.set_offset(point(px(0.), px(0.))); }
         self.signature.epoch = self.signature.epoch.wrapping_add(1);
         let epoch = self.signature.epoch;
         self.signature.pending = true;
@@ -133,7 +135,9 @@ impl EditorPane {
                 if pane.signature.epoch != epoch || !pane.signature.focused || pane.signature.input.as_ref() != Some(&input) { return; }
                 let editor = pane.state.read(cx);
                 if editor.value().as_str() != input.source || editor.cursor() != offset || !editor.selected_range().is_empty() { return; }
-                pane.signature.help = result.ok().flatten().filter(|help| !help.signatures.is_empty());
+                let help = result.ok().flatten().filter(|help| !help.signatures.is_empty());
+                if pane.signature.help != help { pane.signature.scroll.set_offset(point(px(0.), px(0.))); }
+                pane.signature.help = help;
                 pane.signature.pending = false;
                 cx.notify();
             });
@@ -144,6 +148,7 @@ impl EditorPane {
         if let Some(help) = &mut self.signature.help {
             let current = signature::active_signature(help);
             help.active_signature = Some((current as isize + delta).rem_euclid(help.signatures.len() as isize) as u32);
+            self.signature.scroll.set_offset(point(px(0.), px(0.)));
             self.hide_prediction(cx);
             self.state.read(cx).focus_handle(cx).focus(window, cx); cx.notify();
         }
@@ -171,10 +176,11 @@ pub(super) fn render_content(pane: &EditorPane, show_documentation: bool, window
         if text.trim().is_empty() { return None; }
         Some(match doc {
             Documentation::MarkupContent(markup) if markup.kind == lsp_wire::MarkupKind::Markdown => TextView::markdown("signature-documentation", text.clone()).into_any_element(),
-            _ => div().text_size(rems(11. / 16.)).text_color(theme.muted_foreground).child(text.clone()).into_any_element(),
+            _ => div().id("signature-documentation").test_support().text_size(rems(11. / 16.)).text_color(theme.muted_foreground).child(text.clone()).into_any_element(),
         })
     });
-    Some(v_flex().id("parameter-hints").test_support().w_full().min_w_0().gap_1().p_2()
+    Some(v_flex().id("parameter-hints").test_support().w_full().min_w_0().flex_shrink_0().gap_1().p_2()
+        .when(show_documentation, |view| view.p_3().pr_4().pb_4())
         .child(h_flex().w_full().gap_1()
             .child(div().flex_1().text_size(rems(10. / 16.)).text_color(theme.muted_foreground).child("Parameters"))
             .when_some(prediction_hint, |row, hint| row.child(hint))
@@ -203,15 +209,18 @@ pub(super) fn render_popup(pane: &EditorPane, window: &mut Window, cx: &mut Cont
     let above = (position.y - gap).max(px(0.)); let below = position.y + line_height + gap;
     let below_space = (input.size.height - below).max(px(0.));
     let cue_height = if crate::copilot::preview_hint(pane, window, cx).is_some() { rems(1.).to_pixels(window.rem_size()) } else { px(0.) };
-    let desired = height(pane, window) + cue_height; let use_below = below_space >= desired || below_space >= above;
+    let desired = if documentation(pane).is_some() { rems(12.).to_pixels(window.rem_size()) } else { height(pane, window) } + cue_height;
+    let use_below = below_space >= desired || below_space >= above;
     let height = desired.min(if use_below { below_space } else { above });
     if height < rems(1.5).to_pixels(window.rem_size()) { return None; }
     let left = (position.x + px(12.)).min((input.size.width - width).max(px(0.)));
-    let top = if use_below { below } else { above - height };
-    Some(deferred(anchored().position(input.origin + point(left, top)).child(div().id("signature-popup").test_support()
-        .w(width).h(height).overflow_hidden().bg(theme.popover.opacity(0.97)).border_1().border_color(theme.border).rounded_md().shadow_md()
+    let top = if use_below { below } else { above };
+    Some(deferred(anchored().position(input.origin + point(left, top)).anchor(if use_below { Anchor::TopLeft } else { Anchor::BottomLeft }).child(div().id("signature-popup").test_support()
+        .relative().w(width).max_h(height).overflow_hidden().bg(theme.popover.opacity(0.97)).border_1().border_color(theme.border).rounded_md().shadow_md()
         .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
-        .child(div().id("signature-scroll").size_full().overflow_y_scroll().child(content)))).into_any_element())
+        .child(div().id("signature-scroll").test_support().w_full().max_h(height).overflow_y_scroll().track_scroll(&pane.signature.scroll).child(content))
+        .child(div().absolute().top_0().bottom_0().left_0().right_0()
+            .child(Scrollbar::vertical(&pane.signature.scroll).id("signature-scrollbar").mode(ScrollbarMode::Always).viewport_from_layout())))).into_any_element())
 }
 
 #[cfg(test)]

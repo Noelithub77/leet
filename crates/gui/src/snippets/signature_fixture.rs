@@ -79,6 +79,39 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             Ok(())
         })??;
         if pixels { cx.capture_screenshot(handle)?.save(output.join(format!("parameter-copilot-{name}.png")))?; }
+        let original = cx.update(|cx| pane.read(cx).signature.help.clone());
+        cx.update_window(handle, |_, window, cx| -> Result<()> {
+            pane.update(cx, |pane, cx| {
+                let help = pane.signature.help.as_mut().unwrap();
+                help.signatures[0].parameters.as_mut().unwrap()[0].documentation = Some(Documentation::String(
+                    (0..30).map(|line| format!("Parameter documentation line {} with details about the input.\n", line + 1)).collect()));
+                cx.notify();
+            });
+            window.render_frame(cx);
+            let popup = window.find("signature-popup").bounds();
+            ensure!(popup.size.height >= rems(10.).to_pixels(window.rem_size()), "Parameter documentation is cramped");
+            let scroll = &pane.read(cx).signature.scroll;
+            ensure!(scroll.max_offset().y > px(0.), "Long parameter documentation has no scroll range");
+            window.scroll("signature-scroll", ScrollDelta::Lines(point(0., -12.)), cx);
+            ensure!(pane.read(cx).signature.scroll.offset().y < px(0.), "Parameter documentation wheel did not scroll");
+            window.render_frame(cx);
+            let viewport = pane.read(cx).signature.scroll.bounds();
+            pane.read(cx).signature.scroll.set_offset(point(px(0.), px(0.)));
+            window.render_frame(cx);
+            window.drag(point(viewport.right() - px(6.), viewport.top() + px(8.)), point(viewport.right() - px(6.), viewport.bottom() - px(8.)), cx);
+            ensure!(pane.read(cx).signature.scroll.offset().y < px(0.), "Parameter scrollbar thumb did not drag");
+            let scroll = &pane.read(cx).signature.scroll;
+            scroll.set_offset(point(px(0.), -scroll.max_offset().y));
+            window.render_frame(cx);
+            let content = window.find("parameter-hints").bounds();
+            let text = window.find("signature-documentation").bounds();
+            ensure!(content.bottom() - text.bottom() >= rems(0.9).to_pixels(window.rem_size()), "Parameter text has no bottom breathing room");
+            Ok(())
+        })??;
+        if pixels { cx.capture_screenshot(handle)?.save(output.join(format!("parameter-scroll-{name}.png")))?; }
+        cx.update_window(handle, |_, _, cx| pane.update(cx, |pane, cx| {
+            pane.signature.help = original; pane.signature.scroll.set_offset(point(px(0.), px(0.))); cx.notify();
+        }))?;
         cx.update_window(handle, |_, window, cx| -> Result<()> {
             window.render_frame(cx);
             ensure!(window.find("parameter-hints").visible(), "Typing ( did not open parameter hints");

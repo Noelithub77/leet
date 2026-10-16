@@ -25,6 +25,9 @@
 <details>
 <summary>Fix</summary>
 
+- Give parameter hints more height, bottom padding, and a draggable scrollbar.
+- Show Quote, Explain, and Fix shortcuts directly in the selection toolbar.
+
 - Show an agent's plain-text reply as chat instead of an error when it skips the structured format.
 - Keep the selection when right-clicking so context-menu actions apply to it.
 - Hide code hover cards over selected text.

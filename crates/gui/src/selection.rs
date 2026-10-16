@@ -43,19 +43,20 @@ pub(super) fn citation_pill(id: impl Into<ElementId>, citation: &Citation, theme
 pub(crate) fn render_menu(ws: &Workspace, window: &mut Window, cx: &mut Context<Workspace>) -> Option<AnyElement> {
     let selection = ws.selection_menu.as_ref()?;
     let theme = cx.theme().clone();
-    // Ctrl+I stays visible on the edit button; the other shortcuts live in tooltips.
     let edit_key = gpui_kit::component::kbd::Kbd::binding_for_action(&crate::actions::InlineEdit, None, window).map(|kbd| kbd.appearance(false));
-    let command = |index: usize, icon: IconName, label: &'static str, tooltip: &'static str, action: &dyn gpui_kit::Action, command: Option<&'static str>, cx: &mut Context<Workspace>| {
+    let command = |index: usize, icon: IconName, label: &'static str, action: &dyn gpui_kit::Action, command: Option<&'static str>, cx: &mut Context<Workspace>| {
         let citation = selection.citation.clone();
-        Button::new(index).ghost().xsmall().icon(icon).label(label).tooltip_with_action(tooltip, action, None)
+        let key = gpui_kit::component::kbd::Kbd::binding_for_action(action, None, window).map(|kbd| kbd.appearance(false));
+        Button::new(index).ghost().xsmall().icon(icon).label(label)
+            .children(key.map(|kbd| div().id(("selection-shortcut", index)).test_support().text_color(theme.muted_foreground).child(kbd)))
             .on_click(cx.listener(move |ws, _, window, cx| ws.selection_ai_citation(command, citation.clone(), window, cx)))
     };
     let toolbar = h_flex().id("selection-ai-menu").test_support().occlude().items_center().gap_0p5().p_0p5()
         .rounded_lg().border_1().border_color(theme.border).bg(theme.popover).shadow_md().text_xs()
         .on_mouse_down_out(cx.listener(|ws, _, _, cx| { ws.selection_menu = None; cx.notify(); }))
-        .child(command(0, IconName::MessageCircle, "Quote", "Quote in chat", &crate::actions::QuoteSelection, None, cx))
-        .child(command(1, IconName::Lightbulb, "Explain", "Explain selection", &crate::actions::ExplainSelection, Some("Explain"), cx))
-        .child(command(2, IconName::WandSparkles, "Fix", "Fix selection", &crate::actions::FixSelection, Some("Fix"), cx))
+        .child(command(0, IconName::MessageCircle, "Quote", &crate::actions::QuoteSelection, None, cx))
+        .child(command(1, IconName::Lightbulb, "Explain", &crate::actions::ExplainSelection, Some("Explain"), cx))
+        .child(command(2, IconName::WandSparkles, "Fix", &crate::actions::FixSelection, Some("Fix"), cx))
         .when(selection.editable, |toolbar| toolbar
             .child(div().w_px().h_4().mx_0p5().bg(theme.border))
             .child(Button::new(3usize).ghost().xsmall().icon(Icon::new(IconName::Sparkles).text_color(theme.magenta)).label("Edit")
@@ -390,6 +391,11 @@ pub(crate) fn fixture(cx: &mut HeadlessAppContext, output: &std::path::Path, pix
         let selected = editor.read(cx).range_to_bounds(&(0..11)).context("Selection has no bounds")?;
         ensure!(!toolbar.intersects(&selected), "Selection toolbar covers the selected code");
         ensure!((toolbar.left() - selected.left()).abs() < px(24.), "Selection toolbar is not aligned with the selection");
+        for index in 0..3usize { ensure!(window.find(("selection-shortcut", index)).visible(), "Selection action shortcut is hidden"); }
+        Ok(())
+    })??;
+    if pixels { cx.capture_screenshot(handle)?.save(output.join("selection-shortcuts.png"))?; }
+    cx.update_window(handle, |_, window, cx| -> anyhow::Result<()> {
         window.within("selection-ai-menu").click(3usize, cx);
         Ok(())
     })??;
