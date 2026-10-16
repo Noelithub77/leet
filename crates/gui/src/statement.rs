@@ -298,7 +298,7 @@ fn toggle_section(mut sections: [bool; 3], section: usize) -> [bool; 3] {
 
 fn description_font_size(length: usize) -> f32 {
     // Scale only statement prose, with a readable floor that still follows app zoom.
-    14. - 2. * (length.saturating_sub(600) as f32 / 2400.).clamp(0., 1.)
+    13. - (length.saturating_sub(600) as f32 / 2400.).clamp(0., 1.)
 }
 
 #[cfg(test)]
@@ -307,8 +307,8 @@ mod section_tests {
 
     #[test]
     fn description_font_shrinks_gradually_with_a_readable_floor() {
-        assert_eq!(description_font_size(100), 14.);
-        assert_eq!(description_font_size(1800), 13.);
+        assert_eq!(description_font_size(100), 13.);
+        assert_eq!(description_font_size(1800), 12.5);
         assert_eq!(description_font_size(3000), 12.);
         assert_eq!(description_font_size(100000), 12.);
     }
