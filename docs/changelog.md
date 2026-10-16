@@ -17,6 +17,7 @@
 <details>
 <summary>Fix</summary>
 
+- Simplify the status bar by removing the LeetCode account label and showing only the search shortcut.
 - Keep the Copilot preview cue inside parameter hints so it cannot cover the signature.
 - Give parameter hints a full-width strip above completions, with overload shortcuts on the arrows.
 - Align snippet placeholders and the caret with selected text while scrolling and zooming.

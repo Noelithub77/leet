@@ -711,8 +711,7 @@ impl Workspace {
             .child(crate::language_picker::status(self, cx))
             .child(crate::copilot::status(self, cx))
             .child(self.ai_chip.clone())
-            .child(if self.client.signed_in() { "LeetCode ✓" } else { "LeetCode signed out" })
-            .child(h_flex().gap_1().child(key(crate::actions::key_for("Search", &self.config))).child("commands"))
+            .child(key(crate::actions::key_for("Search", &self.config)))
             .child(crate::update::button(self, cx))
             .child(crate::tour::button(self, cx))
     }
