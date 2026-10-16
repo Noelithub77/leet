@@ -99,6 +99,7 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             ensure!(window.find("source-completions").visible() && window.find("completion-signature").visible(), "Ctrl+Space did not show completions with hints");
             ensure!(requests.borrow().iter().any(|(_, _, context)| context.trigger_kind == SignatureHelpTriggerKind::INVOKED), "Ctrl+Space did not invoke signature help");
             ensure!(window.try_find("signature-popup").is_none(), "Ctrl+Space opened overlapping signature surfaces");
+            ensure!(window.find("source-completion-preview").visible(), "Parameter documentation must stay available beside or below completions");
             let strip = window.find("completion-signature").bounds();
             let list = window.find("source-completion-list").bounds();
             ensure!(strip.bottom() <= list.top() + px(1.), "Parameter strip must sit above completions");

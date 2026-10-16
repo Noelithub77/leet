@@ -95,7 +95,8 @@ pub(super) fn render(pane: &EditorPane, window: &mut Window, cx: &mut Context<Ed
     let preferred_left = pos.x + px(12.);
     let side = preferred_left + width + chrome + preview_width + gap <= input.size.width;
     let selected = menu.content.items.get(menu.selected)?;
-    let documentation = selected.documentation.as_ref().map(|doc| match doc { Documentation::String(text) => text.clone(), Documentation::MarkupContent(markup) => markup.value.clone() });
+    let documentation = selected.documentation.as_ref().map(|doc| match doc { Documentation::String(text) => text.clone(), Documentation::MarkupContent(markup) => markup.value.clone() })
+        .or_else(|| super::signature_help::documentation(pane).map(|doc| match doc { lsp_wire::Documentation::String(text) => text.clone(), lsp_wire::Documentation::MarkupContent(markup) => markup.value.clone() }));
     let has_preview = menu.preview.is_some() || documentation.is_some();
     let desired_menu = desired_list + chrome + hint_height + signature_height;
     let desired_preview = px(184.);
@@ -155,7 +156,7 @@ pub(super) fn render(pane: &EditorPane, window: &mut Window, cx: &mut Context<Ed
     Some(deferred(anchored().position(input.origin + point(left, top)).child(div().id("source-completions").test_support().flex().gap_1().items_start()
         .when(!side, |popup| popup.flex_col())
         .child(div().p_1().bg(surface).border_1().border_color(theme.border).rounded_md().shadow_md()
-            .when_some(super::signature_help::render_content(pane, cx), |menu, signature| menu.child(div().id("completion-signature").test_support().w(width).h(signature_height).overflow_hidden().border_b_1().border_color(theme.border)
+            .when_some(super::signature_help::render_content(pane, false, cx), |menu, signature| menu.child(div().id("completion-signature").test_support().w(width).h(signature_height).overflow_hidden().border_b_1().border_color(theme.border)
                 .child(div().id("completion-signature-scroll").size_full().overflow_y_scroll().on_scroll_wheel(|_, _, cx| cx.stop_propagation()).child(signature))))
             .child(list)
             .when_some(hint, |menu, hint| menu.child(div().h(hint_height).overflow_hidden().child(hint))))

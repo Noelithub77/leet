@@ -12,3 +12,5 @@
 - Alt+Up / Alt+Down and the compact strip above completions are **[chosen]**. Native input and PNG checks pass on the combined checkout, including normal completion arrows, shortcut overrides, focus, and shortcut tooltips. Dark and light/zoomed renders inspected.
 - Both live clangd regressions pass, including a C++17 project compile command that overrides the judge fallback.
 - Chat-management work is committed separately as `c2af1a5`. Release target: `v0.4.2`, after workspace checks and committing these fixes.
+
+- Release preflight found published Vim commits missing from local history. Fetch and merge `origin/main` without rewriting either history, then verify the combined editor behavior before dispatch.

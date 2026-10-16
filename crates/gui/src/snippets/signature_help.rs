@@ -153,13 +153,18 @@ pub(super) fn height(pane: &EditorPane, window: &Window) -> Pixels {
     if pane.signature.help.is_some() { rems(4.5).to_pixels(window.rem_size()) } else { px(0.) }
 }
 
-pub(super) fn render_content(pane: &EditorPane, cx: &mut Context<EditorPane>) -> Option<AnyElement> {
+pub(super) fn documentation(pane: &EditorPane) -> Option<&Documentation> {
+    let help = pane.signature.help.as_ref()?;
+    let information = help.signatures.get(signature::active_signature(help))?;
+    signature::active_parameter(help, information).and_then(|parameter| parameter.documentation.as_ref()).or(information.documentation.as_ref())
+}
+
+pub(super) fn render_content(pane: &EditorPane, show_documentation: bool, cx: &mut Context<EditorPane>) -> Option<AnyElement> {
     let help = pane.signature.help.as_ref()?;
     let ix = signature::active_signature(help); let information = help.signatures.get(ix)?;
     let theme = cx.theme().clone();
     let highlights = signature::parameter_range(help, information).map(|range| (range, HighlightStyle { color: Some(theme.primary), font_weight: Some(FontWeight::BOLD), ..Default::default() }));
-    let documentation = signature::active_parameter(help, information).and_then(|parameter| parameter.documentation.as_ref()).or(information.documentation.as_ref());
-    let documentation = documentation.and_then(|doc| {
+    let documentation = show_documentation.then(|| documentation(pane)).flatten().and_then(|doc| {
         let text = match doc { Documentation::String(text) => text, Documentation::MarkupContent(markup) => &markup.value };
         if text.trim().is_empty() { return None; }
         Some(match doc {
@@ -186,7 +191,7 @@ pub(crate) mod fixture;
 
 pub(super) fn render_popup(pane: &EditorPane, window: &mut Window, cx: &mut Context<EditorPane>) -> Option<AnyElement> {
     if pane.menu.as_ref().is_some_and(|menu| !menu.content.items.is_empty()) || !pane.signature.focused || pane.predictions.as_ref().is_some_and(|predictions| predictions.alt.get()) { return None; }
-    let content = render_content(pane, cx)?;
+    let content = render_content(pane, true, cx)?;
     let theme = cx.theme().clone(); let editor = pane.state.read(cx);
     let (caret, line_height) = editor.cursor_layout()?; let input = editor.input_bounds();
     let position = editor.scroll_offset() + caret.origin - input.origin;
