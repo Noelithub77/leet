@@ -92,7 +92,7 @@ impl EditorPane {
         let available = document.is_some();
         #[cfg(feature = "gui-test")]
         let available = available || fixture.is_some();
-        if !available || !self.signature.focused { self.hide_signature(false, cx); return; }
+        if !available || !self.signature.focused || self.state.read(cx).vim_mode().is_some_and(|mode| mode != gpui_kit::base::input::VimMode::Insert) { self.hide_signature(false, cx); return; }
         let editor = self.state.read(cx);
         let source = editor.value().to_string(); let offset = editor.cursor(); let selection = editor.selected_range();
         if !selection.is_empty() { self.hide_signature(false, cx); self.signature.input = None; return; }

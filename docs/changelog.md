@@ -7,6 +7,7 @@
 - Show parameter hints automatically inside calls and alongside Ctrl+Space completions.
 - Show subtle cyan feedback when a guided-tour shortcut is used.
 - Choose Rich, Raw, or Off from a compact annotation dropdown.
+- Enable Vim keybindings for solutions and snippets, with visual blocks, search, repeat, and command help.
 
 </details>
 
@@ -20,6 +21,7 @@
 - Keep completions close to the caret and soften suggestion text changes with a fast transition.
 - Toggle the AI panel without a status toast.
 - Make code text and completion panels smaller, with suggestions positioned farther right.
+- Avoid repeated document copies during Vim navigation and typing.
 - Always wrap long code and text in editors and the debugger.
 - Keep debugger highlights and scrolling aligned with wrapped source lines.
 

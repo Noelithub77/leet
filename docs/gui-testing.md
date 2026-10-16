@@ -128,3 +128,23 @@ Autocomplete fixtures also type `dijktsra` and `rés`, verify the corresponding 
 Completion placement checks type in the production editor at the top, middle, and bottom of a narrow pane, plus wide, light, and zoomed variants. They assert that the full popup stays inside the editor and clear of the typing line, and save `completion-placement-*.png`.
 
 Use `./ops gui:test --fixture snippets --json` for focused snippet rendering and input checks. It also checks the workspace tab, Explorer toggle, field titles, Ctrl+W closing, and retention of invalid edits. Add `--interaction-only` to skip pixels.
+
+Use `./ops gui:test --fixture vim --json` for Vim input in production solution and
+snippet editors. It checks mode-dependent Ctrl+V, native Insert clipboard paste,
+selection replacement, undo/redo and repeat, Visual and rectangular edits,
+tab/wide/short/empty line geometry, literal search, read-only safety, setting and
+palette propagation, retained tabs, and failed-save retention. Insert Ctrl+V is
+the documented native-paste exception. The fixture uses temporary SQLite,
+configuration, solution, and snippet paths; it never loads accounts or starts
+language servers. `vim-normal.png`, `vim-visual.png`, `vim-block.png`,
+`vim-command.png`, `vim-settings.png`, `vim-workspace.png`, and `vim-snippet.png`
+are separate pixel evidence. Inspect cursor shapes, rectangle highlights, mode
+labels, and command entry independently of the input assertions. Add
+`--interaction-only` for behavior without rendering.
+
+The Vim engine has dependency-free regression tests, including checked-in clean
+headless Vim references. Run `rustc --edition=2024 --test
+vendor/gpui-base/src/input/editor/vim/verify.rs -o /tmp/leet-vim-engine-tests`,
+then `/tmp/leet-vim-engine-tests --test-threads=2`. The `reference.py` generator
+uses clean temporary buffers; `file_reference.py` reads/writes actual temporary
+files to cover terminal newlines and CRLF without changing personal settings.

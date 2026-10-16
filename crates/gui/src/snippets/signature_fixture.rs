@@ -151,7 +151,28 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             window.press("left", cx); window.press("ctrl-space", cx); Ok(())
         })??; cx.run_until_parked();
         cx.update_window(handle, |_, window, cx| { window.press("ctrl-a", cx); })?; cx.run_until_parked(); cx.advance_clock(Duration::from_millis(600)); cx.run_until_parked();
-        cx.update_window(handle, |_, window, cx| -> Result<()> { ensure!(pane.read(cx).signature.help.is_none(), "Selection did not invalidate pending hints"); window.remove_window(); Ok(()) })??;
+        cx.update_window(handle, |_, _, cx| -> Result<()> { ensure!(pane.read(cx).signature.help.is_none(), "Selection did not invalidate pending hints"); Ok(()) })??;
+        if name == "dark" {
+            delayed.set(false);
+            cx.update_window(handle, |_, window, cx| {
+                pane.read(cx).state.clone().update(cx, |editor, cx| {
+                    editor.set_value("combine()", window, cx); editor.set_selected_range(8..8, cx);
+                    editor.set_vim_enabled(true, cx); editor.focus(window, cx);
+                });
+                window.render_frame(cx); window.press("i", cx); window.press("ctrl-space", cx);
+            })?;
+            cx.run_until_parked(); cx.advance_clock(Duration::from_millis(150)); cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| -> Result<()> {
+                window.render_frame(cx);
+                ensure!(pane.read(cx).signature.help.is_some(), "Vim Insert mode did not allow parameter hints");
+                window.press("escape", cx); window.render_frame(cx); window.press("escape", cx); window.render_frame(cx);
+                ensure!(pane.read(cx).state.read(cx).vim_mode() == Some(gpui_kit::base::input::VimMode::Normal), "Escape did not return to Vim Normal mode");
+                window.press("ctrl-space", cx); Ok(())
+            })??;
+            cx.run_until_parked(); cx.advance_clock(Duration::from_millis(150)); cx.run_until_parked();
+            cx.update_window(handle, |_, _, cx| -> Result<()> { ensure!(pane.read(cx).signature.help.is_none(), "Vim Normal mode reopened parameter hints"); Ok(()) })??;
+        }
+        cx.update_window(handle, |_, window, _| window.remove_window())?;
         cx.run_until_parked();
     }
     cx.update(|cx| { crate::theme::apply("Vesper", cx); crate::theme::set_zoom(1., cx); });

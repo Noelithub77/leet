@@ -26,14 +26,16 @@ use super::{
     mode::LayoutMode,
 };
 
-
 fn inline_completion_runs(
     range: Range<usize>,
     text_style: &TextStyle,
     fallback: Hsla,
     highlights: &[(Range<usize>, HighlightStyle)],
 ) -> Vec<TextRun> {
-    let default = HighlightStyle { color: Some(fallback), ..Default::default() };
+    let default = HighlightStyle {
+        color: Some(fallback),
+        ..Default::default()
+    };
     if range.is_empty() {
         return vec![text_style.clone().highlight(default).to_run(1)];
     }
@@ -592,10 +594,21 @@ impl<M: InputModeKind> TextElement<M> {
             line_origin
         };
 
-        let cursor_height = 0.85 * line_height;
+        let modal_block = state
+            .vim
+            .as_ref()
+            .is_some_and(|vim| vim.mode() != crate::input::VimMode::Insert);
+        let cursor_height = if modal_block {
+            line_height
+        } else {
+            0.85 * line_height
+        };
 
         for selection in state.selections.iter() {
             let is_active = selection.id == active_id;
+            if modal_block && !is_active {
+                continue;
+            }
 
             let mut selected_range = *selection;
             let mut cursor = selection.cursor_offset();
@@ -608,6 +621,9 @@ impl<M: InputModeKind> TextElement<M> {
             let is_selected_all = selected_range.len() == state.text.len();
 
             // Buffer rows from the raw (pre-mask) offsets, used to locate the cursor line.
+            if is_active && modal_block {
+                cursor = state.vim_cursor.unwrap_or(cursor);
+            }
             let cursor_row = state.text.offset_to_point(cursor).row;
 
             // Skip inactive cursors that are far outside the visible range. The
@@ -705,13 +721,26 @@ impl<M: InputModeKind> TextElement<M> {
             // Apply the final horizontal offset to every caret after cursor-follow and
             // deferred scrolling have been resolved, regardless of selection order.
             let cursor_x = bounds.left() + cursor_pos.x + line_number_width;
+            let cursor_width = if modal_block && state.text.char_at(cursor) == Some('\t') {
+                last_layout.space_width
+            } else if modal_block {
+                let next = state.next_boundary(cursor);
+                let next_pos = caret_for(cursor_row, next, false);
+                if next_pos.y == cursor_pos.y && next_pos.x > cursor_pos.x {
+                    next_pos.x - cursor_pos.x
+                } else {
+                    line_height * 0.5
+                }
+            } else {
+                CURSOR_WIDTH
+            };
             cursor_infos.push(CursorRenderInfo {
                 bounds: Bounds::new(
                     point(
                         cursor_x,
                         bounds.top() + cursor_pos.y + ((line_height - cursor_height) / 2.),
                     ),
-                    size(CURSOR_WIDTH, cursor_height),
+                    size(cursor_width, cursor_height),
                 ),
                 is_active,
             });
@@ -963,6 +992,76 @@ impl<M: InputModeKind> TextElement<M> {
             return vec![];
         }
 
+        if let Some((rows, columns)) = state.vim.as_ref().and_then(|vim| {
+            vim.block_geometry(&state.text.to_string(), state.mode.tab_size().tab_size)
+        }) {
+            let mut paths = Vec::new();
+            let mut y = last_layout.visible_top;
+            let origin = bounds.origin + point(last_layout.line_number_width, px(0.));
+            for (index, line_layout) in last_layout.lines.iter().enumerate() {
+                let row = last_layout.visible_buffer_lines[index];
+                if rows.contains(&row) {
+                    let start = state.text.line_start_offset(row);
+                    let end = state.text.line_end_offset(row);
+                    let line = state.text.slice(start..end).to_string();
+                    let mut column = 0;
+                    for (offset, character) in line.char_indices() {
+                        let width = crate::input::vim::width_at(
+                            character,
+                            column,
+                            state.mode.tab_size().tab_size,
+                        );
+                        let left = column.max(columns.start);
+                        let right = (column + width).min(columns.end);
+                        if left < right {
+                            if let (Some(a), Some(b)) = (
+                                line_layout.position_for_index(offset, last_layout, false),
+                                line_layout.position_for_index(
+                                    offset + character.len_utf8(),
+                                    last_layout,
+                                    true,
+                                ),
+                            ) {
+                                if a.y == b.y {
+                                    let span = b.x - a.x;
+                                    let x1 = a.x + span * ((left - column) as f32 / width as f32);
+                                    let x2 = a.x + span * ((right - column) as f32 / width as f32);
+                                    let mut builder = gpui::PathBuilder::fill();
+                                    let top = origin + point(x1, y + a.y);
+                                    builder.move_to(top);
+                                    builder.line_to(origin + point(x2, y + a.y));
+                                    builder.line_to(
+                                        origin + point(x2, y + a.y + last_layout.line_height),
+                                    );
+                                    builder.line_to(top + point(px(0.), last_layout.line_height));
+                                    builder.close();
+                                    if let Ok(path) = builder.build() {
+                                        paths.push(path);
+                                    }
+                                }
+                            }
+                        }
+                        column += width;
+                    }
+                    if line.is_empty() && columns.start == 0 {
+                        let top = origin
+                            + point(last_layout.alignment_offset(line_layout.longest_width), y);
+                        let mut builder = gpui::PathBuilder::fill();
+                        builder.move_to(top);
+                        builder.line_to(top + point(last_layout.space_width, px(0.)));
+                        builder
+                            .line_to(top + point(last_layout.space_width, last_layout.line_height));
+                        builder.line_to(top + point(px(0.), last_layout.line_height));
+                        builder.close();
+                        if let Ok(path) = builder.build() {
+                            paths.push(path);
+                        }
+                    }
+                }
+                y += line_layout.size(last_layout.line_height).height;
+            }
+            return paths;
+        }
         let active_id = state.active_selection().id;
         let mut paths = Vec::new();
 
@@ -1238,7 +1337,6 @@ impl<M: InputModeKind> TextElement<M> {
 
         let text_style = window.text_style();
 
-
         let lines: Vec<&str> = completion_text.split('\n').collect();
         if lines.is_empty() {
             return (None, vec![]);
@@ -1247,7 +1345,12 @@ impl<M: InputModeKind> TextElement<M> {
         // Shape first line (goes after cursor)
         let first_text: SharedString = lines[0].to_string().into();
         let first_line = if !first_text.is_empty() {
-            let runs = inline_completion_runs(0..first_text.len(), &text_style, completion_color, state.extras.inline_completion_highlights());
+            let runs = inline_completion_runs(
+                0..first_text.len(),
+                &text_style,
+                completion_color,
+                state.extras.inline_completion_highlights(),
+            );
             Some(
                 window
                     .text_system()
@@ -1265,9 +1368,16 @@ impl<M: InputModeKind> TextElement<M> {
                 let text: SharedString = line_text.to_string().into();
                 let range = offset..offset + text.len();
                 offset += text.len() + 1;
-                let runs = inline_completion_runs(range, &text_style, completion_color, state.extras.inline_completion_highlights());
+                let runs = inline_completion_runs(
+                    range,
+                    &text_style,
+                    completion_color,
+                    state.extras.inline_completion_highlights(),
+                );
                 let shaped_text = if text.is_empty() { " ".into() } else { text };
-                window.text_system().shape_line(shaped_text, font_size, &runs, None)
+                window
+                    .text_system()
+                    .shape_line(shaped_text, font_size, &runs, None)
             })
             .collect();
 
@@ -3210,7 +3320,18 @@ impl<M: InputModeKind> Element for TextElement<M> {
         // Paint blinking cursors (shared blink state for all carets)
         if focused && show_cursor {
             for cursor_info in prepaint.cursor_infos_with_scroll() {
-                window.paint_quad(fill(cursor_info.bounds, editor_style.caret));
+                let modal_block = self
+                    .state
+                    .read(cx)
+                    .vim
+                    .as_ref()
+                    .is_some_and(|vim| vim.mode() != crate::input::VimMode::Insert);
+                let color = if modal_block {
+                    editor_style.caret.opacity(0.45)
+                } else {
+                    editor_style.caret
+                };
+                window.paint_quad(fill(cursor_info.bounds, color));
             }
         }
 

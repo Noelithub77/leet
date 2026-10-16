@@ -1,6 +1,7 @@
 //! The single window: app state, the open problem, and the work behind every action.
 //! Action wiring lives in `commands.rs`; rendering in `view.rs`.
 
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -8,6 +9,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use gpui_kit::component::input::{EditorState, InputEvent, TabSize};
+use gpui_kit::base::input::VimShared;
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::*;
@@ -168,6 +170,7 @@ pub struct Workspace {
     pub tabs: Vec<Option<crate::home::ProblemTab>>,
     pub active_tab: Option<usize>,
     pub editor: Entity<EditorState>,
+    pub(crate) vim_shared: Rc<RefCell<VimShared>>,
     pub editor_subscription: Option<Subscription>,
     pub editor_pane: Entity<EditorPane>,
     pub copilot: Entity<crate::copilot::Connection>,
@@ -239,17 +242,22 @@ impl Workspace {
         let account_names = accounts.each_ref().map(|session| session.as_ref().map_or("Signed out".into(), |s| s.display_name().unwrap_or("Account").to_owned()));
         let neetcode_solved = accounts[1].as_ref().and_then(|s| db.get(&format!("neetcode-progress:{}", s.user_id)).ok().flatten())
             .map(|text| text.lines().map(str::to_owned).collect()).unwrap_or_default();
+        let vim_shared = Rc::new(RefCell::new(VimShared::default()));
         let editor = cx.new(|cx| {
-            EditorState::new(window, cx)
+            let mut editor = EditorState::new(window, cx)
                 .language("python")
                 .line_number(true)
                 .indent_guides(true)
                 .folding(true)
                 .soft_wrap(true)
                 .tab_size(TabSize { tab_size: 4, hard_tabs: false })
-                .placeholder("Open a problem with ctrl+p")
+                .placeholder("Open a problem with ctrl+p");
+            editor.set_vim_shared(vim_shared.clone());
+            editor.set_vim_enabled(config.vim_mode, cx);
+            editor
         });
         let editor_sub = cx.subscribe_in(&editor, window, |this, editor, event: &InputEvent, window, cx| {
+            if *editor == this.editor && let InputEvent::VimCommand(command) = event { this.vim_command(*command, window, cx); }
             if *editor == this.editor && matches!(event, InputEvent::Change) {
                 this.selection_menu = None; this.selection_epoch += 1;
                 this.schedule_save(window, cx);
@@ -318,6 +326,7 @@ impl Workspace {
             editor_pane: cx.new(|cx| EditorPane::new(editor.clone(), config.preferred_language, snippet_library, config.notes_view, window, cx)),
             copilot: copilot.clone(),
             editor,
+            vim_shared,
             editor_subscription: Some(editor_sub),
             selection_menu: None, selection_epoch: 0,
             statement: cx.new(|_| Statement::default()),
@@ -868,20 +877,21 @@ impl Workspace {
         });
     }
 
-    /// Writes the editor to the Solution file when it differs.
+    /// Writes the editor to the solution file when it differs.
     pub fn save_now(&mut self, cx: &mut Context<Self>) {
-        if self.session.as_ref().is_none_or(|s| s.question.is_none()) {
-            return;
-        }
+        if let Err(error) = self.save_solution_now(cx) { eprintln!("leet: save solution: {error:#}"); }
+    }
+
+    /// The shared save path; command hosts keep their tab open when it fails.
+    pub(crate) fn save_solution_now(&mut self, cx: &mut Context<Self>) -> anyhow::Result<()> {
+        if self.session.as_ref().is_none_or(|session| session.question.is_none()) { return Ok(()); }
         let text = self.solution_text(cx);
-        let Some(s) = self.session.as_mut() else { return };
-        if std::fs::read_to_string(&s.path).ok().as_deref() == Some(text.as_str()) {
-            return;
-        }
-        if std::fs::write(&s.path, &text).is_ok() {
-            s.disk_mtime = std::fs::metadata(&s.path).and_then(|m| m.modified()).ok();
-            self.language_document_saved();
-        }
+        let Some(session) = self.session.as_mut() else { return Ok(()); };
+        if std::fs::read_to_string(&session.path).ok().as_deref() == Some(text.as_str()) { return Ok(()); }
+        std::fs::write(&session.path, &text)?;
+        session.disk_mtime = std::fs::metadata(&session.path).and_then(|metadata| metadata.modified()).ok();
+        self.language_document_saved();
+        Ok(())
     }
 
     /// Reloads the Solution when another editor changes it on disk.

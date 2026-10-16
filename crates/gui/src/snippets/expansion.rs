@@ -68,6 +68,19 @@ impl EditorPane {
         let changes = cx.subscribe_in(&state, window, |this, editor, event, window, cx| {
             if matches!(event, InputEvent::Focus) { this.signature.focused = true; this.signature.input = None; this.refresh_signature(false, cx); }
             if matches!(event, InputEvent::Blur) { this.signature.focused = false; this.hide_signature(false, cx); }
+            if matches!(event, InputEvent::VimChanged) {
+                if editor.read(cx).vim_mode().is_some_and(|mode| mode != gpui_kit::base::input::VimMode::Insert) {
+                    this.session = None;
+                    this.completions.cancel();
+                    this.menu = None;
+                    this.detail_task = Task::ready(());
+                    this.hide_prediction(cx);
+                    this.hide_signature(false, cx);
+                    editor.update(cx, |editor, cx| editor.dismiss_lsp_overlays(cx));
+                }
+                cx.notify();
+                return;
+            }
             if !matches!(event, InputEvent::Change) || this.changing { return; }
             let text = editor.read(cx).value().to_string();
             if this.accepted_prediction.as_ref().is_some_and(|accepted| accepted.after != text) { this.accepted_prediction = None; }
@@ -465,6 +478,11 @@ impl Render for EditorPane {
                     if let Some(s)=&this.session {let range=s.range();this.state.update(cx,|e,cx|{e.set_selected_range(range,cx);e.replace(choice.clone(),w,cx);});}
                 }))
             })))))
+            .when_some(crate::modal_editing::status(self.state.read(cx)), |view, status| {
+                view.child(div().absolute().bottom_1().right_3().max_w_full().px_2().py_1()
+                    .rounded_sm().bg(theme.popover).text_xs().text_color(theme.muted_foreground)
+                    .truncate().child(status))
+            })
             .when_some(super::menu::render(self, window, cx), |view, menu| view.child(menu))
             .when_some(super::signature_help::render_popup(self, window, cx), |view, hints| view.child(hints))
             .when_some(if self.menu.is_none() { crate::copilot::preview_overlay(self, window, cx) } else { None }, |view, hint| view.child(hint))

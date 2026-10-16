@@ -10,6 +10,7 @@ use crate::debug_view::{Debugger, Snapshot};
 mod statement;
 mod tour;
 mod update;
+mod vim;
 
 const PYTHON: &str = "import sys\n\ndef solve():\n    data = list(map(int, sys.stdin.buffer.read().split()))\n    answers = []\n    for i in range(1, len(data)):\n        n = data[i]\n        answer = n * 2\n        answers.append(answer)\n        print(answer)\n\nif __name__ == '__main__':\n    solve()\n";
 const CPP: &str = "#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t;\n    cin >> t;\n    vector<int> answers;\n    while (t--) {\n        int n;\n        cin >> n;\n        int answer = n * 2;\n        answers.push_back(answer);\n        cout << answer << '\\n' << flush;\n    }\n    return 0;\n}\n";
@@ -49,7 +50,7 @@ pub fn run() -> Result<()> {
         match args[i].as_str() {
             "--output" if output.is_none() => { i += 1; output = Some(PathBuf::from(args.get(i).context("--output requires a path")?)); }
             "--statement" if !statement_view => statement_view = true,
-            "--fixture" if fixture.is_none() => { i += 1; let name = args.get(i).context("--fixture requires a name")?.as_str(); ensure!(matches!(name, "snippets" | "copilot" | "chat" | "statement" | "notes" | "tour"), "Supported focused fixtures: snippets, copilot, chat, statement, notes, tour"); fixture = Some(name); }
+            "--fixture" if fixture.is_none() => { i += 1; let name = args.get(i).context("--fixture requires a name")?.as_str(); ensure!(matches!(name, "snippets" | "copilot" | "chat" | "statement" | "notes" | "tour" | "vim"), "Supported focused fixtures: snippets, copilot, chat, statement, notes, tour, vim"); fixture = Some(name); }
             "--video" if !video => video = true,
             "--wayland" if !wayland => wayland = true,
             "--explore" if !explore => { explore = true; wayland = true; }
@@ -74,6 +75,7 @@ pub fn run() -> Result<()> {
             else if name == "tour" { tour::native(&mut cx, &output, pixels, false)? }
             else if name == "notes" { crate::notes::fixture::native(&mut cx, &output, pixels)? }
             else if name == "copilot" { crate::copilot::fixture::native(&mut cx, &output, pixels)? }
+            else if name == "vim" { vim::native(&mut cx, &output, pixels)? }
             else { crate::snippets::fixture::native(&mut cx, &output, pixels)? };
         let report = json!({"command":"gui:test","environment":"isolated-fixtures","backend":"gpui-headless","passed":true,"pixels":pixels,"video":false,"output":output,"fixtures":[fixture]});
         std::fs::write(output.join("report.json"), serde_json::to_vec_pretty(&report)?)?;

@@ -1,0 +1,874 @@
+[
+  {
+    "name": "motion-count",
+    "source": "one two three four five six seven",
+    "commands": "2d3w",
+    "column": 0,
+    "line": 0,
+    "text": "seven"
+  },
+  {
+    "name": "delete-lines",
+    "source": "one two\nthree\nfour",
+    "commands": "dj",
+    "column": 0,
+    "line": 0,
+    "text": "four"
+  },
+  {
+    "name": "delete-last-line",
+    "source": "one\ntwo",
+    "commands": "Gdd",
+    "column": 0,
+    "line": 0,
+    "text": "one"
+  },
+  {
+    "name": "change-word",
+    "source": "one two",
+    "commands": "cwX\u001b",
+    "column": 0,
+    "line": 0,
+    "text": "X two"
+  },
+  {
+    "name": "change-single-character-word",
+    "source": "x two",
+    "commands": "cwY\u001b",
+    "column": 0,
+    "line": 0,
+    "text": "Y two"
+  },
+  {
+    "name": "change-word-count",
+    "source": "one two three",
+    "commands": "c2wX\u001b",
+    "column": 0,
+    "line": 0,
+    "text": "X three"
+  },
+  {
+    "name": "delete-final-word",
+    "source": "one two\nthree",
+    "commands": "$bdw",
+    "column": 3,
+    "line": 0,
+    "text": "one \nthree"
+  },
+  {
+    "name": "word-end",
+    "source": "one two three",
+    "commands": "2e",
+    "column": 6,
+    "line": 0,
+    "text": "one two three"
+  },
+  {
+    "name": "previous-word-end",
+    "source": "one two three",
+    "commands": "wge",
+    "column": 2,
+    "line": 0,
+    "text": "one two three"
+  },
+  {
+    "name": "WORD-previous-end",
+    "source": "one.two three.four",
+    "commands": "WgE",
+    "column": 6,
+    "line": 0,
+    "text": "one.two three.four"
+  },
+  {
+    "name": "WORD-motion",
+    "source": "one.two three",
+    "commands": "WE",
+    "column": 12,
+    "line": 0,
+    "text": "one.two three"
+  },
+  {
+    "name": "paragraph",
+    "source": "one\ntwo\n\nthree\n\nfour",
+    "commands": "}",
+    "column": 0,
+    "line": 2,
+    "text": "one\ntwo\n\nthree\n\nfour"
+  },
+  {
+    "name": "matching-brackets",
+    "source": "call(one, [two])",
+    "commands": "%",
+    "column": 15,
+    "line": 0,
+    "text": "call(one, [two])"
+  },
+  {
+    "name": "find-till-repeat",
+    "source": "abcabcabc",
+    "commands": "tc;",
+    "column": 4,
+    "line": 0,
+    "text": "abcabcabc"
+  },
+  {
+    "name": "find-backward",
+    "source": "abcabcabc",
+    "commands": "$Fa",
+    "column": 6,
+    "line": 0,
+    "text": "abcabcabc"
+  },
+  {
+    "name": "inner-word",
+    "source": "one two",
+    "commands": "wdiw",
+    "column": 3,
+    "line": 0,
+    "text": "one "
+  },
+  {
+    "name": "around-word",
+    "source": "one two",
+    "commands": "wdaw",
+    "column": 2,
+    "line": 0,
+    "text": "one"
+  },
+  {
+    "name": "inner-parens",
+    "source": "call(one, [two])",
+    "commands": "6ldi(",
+    "column": 5,
+    "line": 0,
+    "text": "call()"
+  },
+  {
+    "name": "inner-quotes",
+    "source": "say \"hello\" now",
+    "commands": "6ldi\"",
+    "column": 5,
+    "line": 0,
+    "text": "say \"\" now"
+  },
+  {
+    "name": "around-braces",
+    "source": "x{a{b}c}y",
+    "commands": "4lda}",
+    "column": 3,
+    "line": 0,
+    "text": "x{ac}y"
+  },
+  {
+    "name": "visual-delete-forward",
+    "source": "abcdef",
+    "commands": "lv2ld",
+    "column": 1,
+    "line": 0,
+    "text": "aef"
+  },
+  {
+    "name": "visual-delete-reverse",
+    "source": "abcdef",
+    "commands": "3lv2hd",
+    "column": 1,
+    "line": 0,
+    "text": "aef"
+  },
+  {
+    "name": "visual-text-object",
+    "source": "one two three",
+    "commands": "wvawd",
+    "column": 4,
+    "line": 0,
+    "text": "one three"
+  },
+  {
+    "name": "visual-lines",
+    "source": "abc\ndef\nghi",
+    "commands": "Vjd",
+    "column": 0,
+    "line": 0,
+    "text": "ghi"
+  },
+  {
+    "name": "visual-switch",
+    "source": "abc\ndef\nghi",
+    "commands": "vjVd",
+    "column": 0,
+    "line": 0,
+    "text": "ghi"
+  },
+  {
+    "name": "visual-swap",
+    "source": "abcdef",
+    "commands": "v2lod",
+    "column": 0,
+    "line": 0,
+    "text": "def"
+  },
+  {
+    "name": "visual-reselect",
+    "source": "abcdef",
+    "commands": "v2lylgvd",
+    "column": 0,
+    "line": 0,
+    "text": "def"
+  },
+  {
+    "name": "visual-replace",
+    "source": "abcdef",
+    "commands": "v2lrx",
+    "column": 0,
+    "line": 0,
+    "text": "xxxdef"
+  },
+  {
+    "name": "visual-line-change",
+    "source": "abc\ndef\nghi",
+    "commands": "VjcX\u001b",
+    "column": 0,
+    "line": 0,
+    "text": "X\nghi"
+  },
+  {
+    "name": "visual-put",
+    "source": "one two three",
+    "commands": "yiwwvep",
+    "column": 6,
+    "line": 0,
+    "text": "one one three"
+  },
+  {
+    "name": "block-delete",
+    "source": "abcd\nefgh\nijkl",
+    "commands": "l\u0016jjld",
+    "column": 1,
+    "line": 0,
+    "text": "ad\neh\nil"
+  },
+  {
+    "name": "block-delete-tabs",
+    "source": "\tab\n1234ab",
+    "commands": "\u0016j3ld",
+    "column": 0,
+    "line": 0,
+    "text": "\n"
+  },
+  {
+    "name": "block-delete-wide",
+    "source": "界ab\n1234",
+    "commands": "\u0016jld",
+    "column": 0,
+    "line": 0,
+    "text": "ab\n34"
+  },
+  {
+    "name": "block-short-rows",
+    "source": "abcd\nx\n\nwxyz",
+    "commands": "l\u00163jld",
+    "column": 1,
+    "line": 0,
+    "text": "ad\nx\n\nwz"
+  },
+  {
+    "name": "block-insert",
+    "source": "abc\ndef\nghi",
+    "commands": "\u0016jIx\u001b",
+    "column": 0,
+    "line": 0,
+    "text": "xabc\nxdef\nghi"
+  },
+  {
+    "name": "block-append",
+    "source": "abc\ndef\nghi",
+    "commands": "\u0016jAx\u001b",
+    "column": 0,
+    "line": 0,
+    "text": "axbc\ndxef\nghi"
+  },
+  {
+    "name": "block-change",
+    "source": "abc\ndef\nghi",
+    "commands": "\u0016jlcx\u001b",
+    "column": 0,
+    "line": 0,
+    "text": "xc\nxf\nghi"
+  },
+  {
+    "name": "block-yank-put",
+    "source": "abcd\nefgh\nijkl",
+    "commands": "l\u0016jjldP",
+    "column": 1,
+    "line": 0,
+    "text": "abcd\nefgh\nijkl"
+  },
+  {
+    "name": "block-repeat",
+    "source": "abc\ndef\nghi\njkl",
+    "commands": "\u0016jIx\u001bj.",
+    "column": 0,
+    "line": 1,
+    "text": "xabc\nxxdef\nxghi\njkl"
+  },
+  {
+    "name": "block-insert-short",
+    "source": "abcd\nx\n\nwxyz",
+    "commands": "2l\u00163jIx\u001b",
+    "column": 2,
+    "line": 0,
+    "text": "abxcd\nx\n\nwxxyz"
+  },
+  {
+    "name": "block-append-short",
+    "source": "abcd\nx\n\nwxyz",
+    "commands": "2l\u00163jAx\u001b",
+    "column": 2,
+    "line": 0,
+    "text": "abcxd\nx  x\n   x\nwxyxz"
+  },
+  {
+    "name": "block-replace",
+    "source": "abcd\nefgh",
+    "commands": "l\u0016jlrX",
+    "column": 1,
+    "line": 0,
+    "text": "aXXd\neXXh"
+  },
+  {
+    "name": "block-replace-tabs",
+    "source": "\tab\n1234ab",
+    "commands": "\u0016jrX",
+    "column": 0,
+    "line": 0,
+    "text": "XXXXab\nXXXXab"
+  },
+  {
+    "name": "block-insert-newline",
+    "source": "abc\ndef",
+    "commands": "\u0016jIx\ny\u001b",
+    "column": 0,
+    "line": 1,
+    "text": "x\nyabc\ndef"
+  },
+  {
+    "name": "delete-char",
+    "source": "abcdef",
+    "commands": "2x",
+    "column": 0,
+    "line": 0,
+    "text": "cdef"
+  },
+  {
+    "name": "delete-before",
+    "source": "abcdef",
+    "commands": "3l2X",
+    "column": 1,
+    "line": 0,
+    "text": "adef"
+  },
+  {
+    "name": "replace-char",
+    "source": "abcdef",
+    "commands": "3rx",
+    "column": 2,
+    "line": 0,
+    "text": "xxxdef"
+  },
+  {
+    "name": "join",
+    "source": "abc\n  def\nghi",
+    "commands": "3J",
+    "column": 7,
+    "line": 0,
+    "text": "abc def ghi"
+  },
+  {
+    "name": "indent",
+    "source": "abc\ndef",
+    "commands": ">>",
+    "column": 4,
+    "line": 0,
+    "text": "    abc\ndef"
+  },
+  {
+    "name": "line-put",
+    "source": "abc\ndef",
+    "commands": "yyGp",
+    "column": 0,
+    "line": 2,
+    "text": "abc\ndef\nabc"
+  },
+  {
+    "name": "repeat-delete",
+    "source": "one two three",
+    "commands": "dw.",
+    "column": 0,
+    "line": 0,
+    "text": "three"
+  },
+  {
+    "name": "repeat-insert",
+    "source": "abc",
+    "commands": "iXYZ\u001b.",
+    "column": 4,
+    "line": 0,
+    "text": "XYXYZZabc"
+  },
+  {
+    "name": "repeat-visual",
+    "source": "abcdefgh",
+    "commands": "v2ld.",
+    "column": 0,
+    "line": 0,
+    "text": "gh"
+  },
+  {
+    "name": "audit-0",
+    "source": "one   two  ",
+    "commands": "2diw",
+    "column": 0,
+    "line": 0,
+    "text": "two  "
+  },
+  {
+    "name": "audit-1",
+    "source": "one   two  ",
+    "commands": "3ldaw",
+    "column": 3,
+    "line": 0,
+    "text": "one  "
+  },
+  {
+    "name": "audit-2",
+    "source": "one   two  ",
+    "commands": "3l2daw",
+    "column": 10,
+    "line": 0,
+    "text": "one   two  "
+  },
+  {
+    "name": "audit-3",
+    "source": "one   two  ",
+    "commands": "$daw",
+    "column": 10,
+    "line": 0,
+    "text": "one   two  "
+  },
+  {
+    "name": "audit-4",
+    "source": "one\t two\nthree",
+    "commands": "2diw",
+    "column": 0,
+    "line": 0,
+    "text": "two\nthree"
+  },
+  {
+    "name": "audit-5",
+    "source": "one\t two\nthree",
+    "commands": "3ldaw",
+    "column": 2,
+    "line": 0,
+    "text": "one\nthree"
+  },
+  {
+    "name": "audit-6",
+    "source": "one\t two\nthree",
+    "commands": "3l2daw",
+    "column": 2,
+    "line": 0,
+    "text": "one"
+  },
+  {
+    "name": "audit-7",
+    "source": "one\n  two",
+    "commands": "2diw",
+    "column": 0,
+    "line": 0,
+    "text": "two"
+  },
+  {
+    "name": "audit-8",
+    "source": "xx \"one\" yy",
+    "commands": "2diw",
+    "column": 0,
+    "line": 0,
+    "text": "\"one\" yy"
+  },
+  {
+    "name": "audit-9",
+    "source": "aa (b(c)d) ee",
+    "commands": "2diw",
+    "column": 0,
+    "line": 0,
+    "text": "(b(c)d) ee"
+  },
+  {
+    "name": "audit-10",
+    "source": "x [a[b]c] y",
+    "commands": "2diw",
+    "column": 0,
+    "line": 0,
+    "text": "[a[b]c] y"
+  },
+  {
+    "name": "audit-11",
+    "source": "x (a(b)c) y",
+    "commands": "di(",
+    "column": 3,
+    "line": 0,
+    "text": "x () y"
+  },
+  {
+    "name": "audit-12",
+    "source": "x (a(b)c) y",
+    "commands": "da(",
+    "column": 2,
+    "line": 0,
+    "text": "x  y"
+  },
+  {
+    "name": "audit-13",
+    "source": "x [a[b]c] y",
+    "commands": "di[",
+    "column": 3,
+    "line": 0,
+    "text": "x [] y"
+  },
+  {
+    "name": "audit-14",
+    "source": "x [a[b]c] y",
+    "commands": "da[",
+    "column": 2,
+    "line": 0,
+    "text": "x  y"
+  },
+  {
+    "name": "audit-15",
+    "source": "x {a{b}c} y",
+    "commands": "di{",
+    "column": 3,
+    "line": 0,
+    "text": "x {} y"
+  },
+  {
+    "name": "audit-16",
+    "source": "x {a{b}c} y",
+    "commands": "da{",
+    "column": 2,
+    "line": 0,
+    "text": "x  y"
+  },
+  {
+    "name": "audit-17",
+    "source": "x (a(b)c) y",
+    "commands": "di(",
+    "column": 3,
+    "line": 0,
+    "text": "x () y"
+  },
+  {
+    "name": "audit-18",
+    "source": "x (a(b)c) y",
+    "commands": "da(",
+    "column": 2,
+    "line": 0,
+    "text": "x  y"
+  },
+  {
+    "name": "audit-19",
+    "source": "before \"a\\\"b\" after",
+    "commands": "9ldi\"",
+    "column": 8,
+    "line": 0,
+    "text": "before \"\" after"
+  },
+  {
+    "name": "audit-20",
+    "source": "before \"a\\\"b\" after",
+    "commands": "9lda\"",
+    "column": 7,
+    "line": 0,
+    "text": "before after"
+  },
+  {
+    "name": "audit-21",
+    "source": "before \"a\\\"b\" after",
+    "commands": "di\"",
+    "column": 8,
+    "line": 0,
+    "text": "before \"\" after"
+  },
+  {
+    "name": "audit-22",
+    "source": "before \"a\\\"b\" after",
+    "commands": "da\"",
+    "column": 7,
+    "line": 0,
+    "text": "before after"
+  },
+  {
+    "name": "audit-23",
+    "source": "before \"a\" \"b\" after",
+    "commands": "11l2di\"",
+    "column": 11,
+    "line": 0,
+    "text": "before \"a\"  after"
+  },
+  {
+    "name": "audit-24",
+    "source": "before 'a\\'b' after",
+    "commands": "9ldi'",
+    "column": 8,
+    "line": 0,
+    "text": "before '' after"
+  },
+  {
+    "name": "audit-25",
+    "source": "before 'a\\'b' after",
+    "commands": "9lda'",
+    "column": 7,
+    "line": 0,
+    "text": "before after"
+  },
+  {
+    "name": "audit-26",
+    "source": "one   two  ",
+    "commands": "3ldaw",
+    "column": 3,
+    "line": 0,
+    "text": "one  "
+  },
+  {
+    "name": "audit-27",
+    "source": "one   two  ",
+    "commands": "$daw",
+    "column": 10,
+    "line": 0,
+    "text": "one   two  "
+  },
+  {
+    "name": "audit-28",
+    "source": "one   two  ",
+    "commands": "3lcawX\u001b",
+    "column": 3,
+    "line": 0,
+    "text": "oneX  "
+  },
+  {
+    "name": "audit-37",
+    "source": "one",
+    "commands": "ddp",
+    "column": 0,
+    "line": 1,
+    "text": "\none"
+  },
+  {
+    "name": "audit-41",
+    "source": "one   \ntwo",
+    "commands": "wdw",
+    "column": 0,
+    "line": 1,
+    "text": "one   \n"
+  },
+  {
+    "name": "audit-42",
+    "source": "one\n\ntwo",
+    "commands": "2dw",
+    "column": 0,
+    "line": 0,
+    "text": "two"
+  },
+  {
+    "name": "audit-43",
+    "source": "one\n  two\n\nthree",
+    "commands": "3J",
+    "column": 6,
+    "line": 0,
+    "text": "one two\nthree"
+  },
+  {
+    "name": "audit-44",
+    "source": "one\n  two\n\nthree",
+    "commands": "4J",
+    "column": 7,
+    "line": 0,
+    "text": "one two three"
+  },
+  {
+    "name": "audit-45",
+    "source": "one\n  two\n\nthree",
+    "commands": "jJ",
+    "column": 4,
+    "line": 1,
+    "text": "one\n  two\nthree"
+  },
+  {
+    "name": "audit-46",
+    "source": "one.\ntwo",
+    "commands": "J",
+    "column": 4,
+    "line": 0,
+    "text": "one.  two"
+  },
+  {
+    "name": "audit-47",
+    "source": "a\n b\n  c\n    d",
+    "commands": ">>3.",
+    "column": 8,
+    "line": 0,
+    "text": "        a\n     b\n      c\n    d"
+  },
+  {
+    "name": "audit-48",
+    "source": "a\n b\n  c\n    d",
+    "commands": "G2<<",
+    "column": 4,
+    "line": 3,
+    "text": "a\n b\n  c\n    d"
+  },
+  {
+    "name": "combining-horizontal",
+    "source": "ábc",
+    "commands": "lx",
+    "column": 3,
+    "line": 0,
+    "text": "ác"
+  },
+  {
+    "name": "combining-delete",
+    "source": "ábc",
+    "commands": "x",
+    "column": 0,
+    "line": 0,
+    "text": "bc"
+  },
+  {
+    "name": "wide-horizontal",
+    "source": "界ab",
+    "commands": "lx",
+    "column": 3,
+    "line": 0,
+    "text": "界b"
+  },
+  {
+    "name": "emoji-horizontal",
+    "source": "😀abc",
+    "commands": "lx",
+    "column": 4,
+    "line": 0,
+    "text": "😀bc"
+  },
+  {
+    "name": "combining-block",
+    "source": "ábc\ndefg",
+    "commands": "\u0016jld",
+    "column": 0,
+    "line": 0,
+    "text": "c\nfg"
+  },
+  {
+    "name": "block-wide-replace",
+    "source": "界abc\n12345",
+    "commands": "\u0016jlrX",
+    "column": 0,
+    "line": 0,
+    "text": "XXabc\nXX345"
+  },
+  {
+    "name": "block-corners",
+    "source": "abcd\nefgh\nijkl",
+    "commands": "l\u0016jjlOd",
+    "column": 1,
+    "line": 0,
+    "text": "ad\neh\nil"
+  },
+  {
+    "name": "block-corners-swap",
+    "source": "abcd\nefgh\nijkl",
+    "commands": "l\u0016jjlod",
+    "column": 1,
+    "line": 0,
+    "text": "ad\neh\nil"
+  },
+  {
+    "name": "block-put-tabs",
+    "source": "\tab\n1234ab",
+    "commands": "\u0016jy$p",
+    "column": 3,
+    "line": 0,
+    "text": "\tab\t\n1234ab1234"
+  },
+  {
+    "name": "block-I-partial-tab",
+    "source": "abcd\n\tab",
+    "commands": "l\u0016jIx\u001b",
+    "column": 0,
+    "line": 0,
+    "text": "xabcd\nx\tab"
+  },
+  {
+    "name": "block-A-partial-tab",
+    "source": "abcd\n\tab",
+    "commands": "l\u0016jAx\u001b",
+    "column": 0,
+    "line": 0,
+    "text": "abcdx\n\txab"
+  },
+  {
+    "name": "block-change-short",
+    "source": "abcd\nx\n\nwxyz",
+    "commands": "2l\u00163jcx\u001b",
+    "column": 2,
+    "line": 0,
+    "text": "abxd\nx\n\nwxxz"
+  },
+  {
+    "name": "block-I-empty-first",
+    "source": "\nabc\ndef",
+    "commands": "\u0016jIx\u001b",
+    "column": 0,
+    "line": 0,
+    "text": "x\nxabc\ndef"
+  },
+  {
+    "name": "block-delete-paste-repeat",
+    "source": "abcd\nefgh\nijkl",
+    "commands": "l\u0016jldPj.",
+    "column": 1,
+    "line": 1,
+    "text": "abcd\nebcfgh\nifgjkl"
+  },
+  {
+    "name": "counted-insert",
+    "source": "abc",
+    "commands": "3iX\u001b",
+    "column": 2,
+    "line": 0,
+    "text": "XXXabc"
+  },
+  {
+    "name": "counted-open",
+    "source": "abc\ndef",
+    "commands": "3oX\u001b",
+    "column": 0,
+    "line": 3,
+    "text": "abc\nX\nX\nX\ndef"
+  },
+  {
+    "name": "repeat-count",
+    "source": "abcdefghi",
+    "commands": "v2ld2.",
+    "column": 0,
+    "line": 0,
+    "text": "ghi"
+  },
+  {
+    "name": "counted-shift",
+    "source": "a\n b\n  c\n    d",
+    "commands": ">>3.",
+    "column": 8,
+    "line": 0,
+    "text": "        a\n     b\n      c\n    d"
+  }
+]

@@ -28,6 +28,7 @@ pub enum Setting {
     Language,
     LanguageServer,
     Copilot,
+    Vim,
     Codeforces,
     LeetCode,
     NeetCode,
@@ -64,6 +65,7 @@ impl Setting {
         Setting::Language,
         Setting::LanguageServer,
         Setting::Copilot,
+        Setting::Vim,
         Setting::Codeforces,
         Setting::LeetCode,
         Setting::NeetCode,
@@ -94,6 +96,7 @@ impl Setting {
             Setting::Language => "Preferred language",
             Setting::LanguageServer => "Restart language server",
             Setting::Copilot => "Copilot completions",
+            Setting::Vim => "Vim keybindings",
             Setting::Codeforces => "Codeforces handle",
             Setting::LeetCode => "LeetCode account",
             Setting::NeetCode => "NeetCode account",
@@ -127,6 +130,7 @@ impl Setting {
             Setting::Language => "language python cpp c++ go c java preferred",
             Setting::LanguageServer => "lsp intellisense completion diagnostics hover definitions restart",
             Setting::Copilot => "github copilot completions predictions tab alt sign in zen subtle",
+            Setting::Vim => "vim modal normal insert visual block keyboard",
             Setting::Codeforces => "codeforces handle account sign in",
             Setting::LeetCode | Setting::NeetCode => "login session account sign in sync",
             Setting::Theme => "color appearance dark light vesper",
@@ -150,7 +154,7 @@ impl Setting {
     pub fn kind(self) -> Kind {
         match self {
             Setting::Language | Setting::Theme | Setting::List | Setting::TestTimeout | Setting::AiAgent | Setting::AiReasoning | Setting::WebChat => Kind::Choice,
-            Setting::AiFast => Kind::Toggle,
+            Setting::AiFast | Setting::Vim => Kind::Toggle,
             Setting::AiModel | Setting::Install(_) | Setting::PlatformGroup(_) => Kind::Action,
             Setting::Python | Setting::ExternalEditor | Setting::Workspace | Setting::Keybinding(_) => Kind::Text,
             Setting::ArchivedChats | Setting::Onboarding | Setting::ResetSettings | Setting::LanguageServer | Setting::Copilot | Setting::Codeforces | Setting::OpenFile | Setting::Font | Setting::Keybindings | Setting::LeetCode | Setting::NeetCode => Kind::Action,
@@ -164,6 +168,7 @@ impl Setting {
             Setting::Language => c.preferred_language.label().into(),
             Setting::LanguageServer => ws.intelligence.label(ws.session.as_ref().map_or(c.preferred_language, |session| session.language)),
             Setting::Copilot => ws.copilot.read(cx).label(),
+            Setting::Vim => if c.vim_mode { "On" } else { "Off" }.into(),
             Setting::Codeforces => if c.codeforces_handle.is_empty() { "Not set".into() } else { c.codeforces_handle.clone() },
             Setting::LeetCode => ws.account_names[0].clone(),
             Setting::NeetCode => ws.account_names[1].clone(),
@@ -189,6 +194,7 @@ impl Setting {
         match self {
             Setting::Workspace => Some("Applies after restart"),
             Setting::Copilot => Some("Hold Alt to preview · Tab or Alt+L to accept"),
+            Setting::Vim => Some("Applies immediately · Insert Ctrl+V pastes · Palette: Vim command help"),
 
             _ => None,
         }
@@ -206,7 +212,7 @@ impl SettingsTab {
     fn settings(self) -> &'static [Setting] {
         match self {
             Self::General => &[Setting::ArchivedChats, Setting::List, Setting::Workspace, Setting::Onboarding, Setting::OpenFile, Setting::ResetSettings],
-            Self::Editor => &[Setting::Language, Setting::Python, Setting::ExternalEditor, Setting::TestTimeout, Setting::LanguageServer, Setting::Copilot],
+            Self::Editor => &[Setting::Language, Setting::Python, Setting::ExternalEditor, Setting::TestTimeout, Setting::LanguageServer, Setting::Copilot, Setting::Vim],
             Self::Appearance => &[Setting::Theme, Setting::Font],
             Self::Platform => &[Setting::LeetCode, Setting::NeetCode, Setting::Codeforces],
             Self::Ai => &[Setting::AiAgent, Setting::AiModel, Setting::AiReasoning, Setting::AiFast, Setting::WebChat, Setting::Install(AgentKind::OpenCode), Setting::Install(AgentKind::Antigravity)],
@@ -415,6 +421,7 @@ impl Workspace {
                 self.config.roadmap_list = if delta > 0 { self.config.roadmap_list.next() } else { self.config.roadmap_list.next().next() };
                 self.rebuild_library();
             }
+            Setting::Vim => { self.toggle_vim(window, cx); return; }
             Setting::Language => self.config.preferred_language = self.config.preferred_language.next(),
             Setting::TestTimeout => {
                 self.config.test_timeout_secs = (self.config.test_timeout_secs as i64 + delta as i64).clamp(1, 120) as u64;
@@ -547,7 +554,7 @@ impl Workspace {
                                 this.settings.scroll.scroll_to_item(0); this.focus_nav(Focus::Settings, window, cx); cx.notify();
                             }))
                     })))
-                .child(v_flex().id("settings-scroll").overflow_y_scroll().track_scroll(&self.settings.scroll)
+                .child(v_flex().id("settings-scroll").test_support().overflow_y_scroll().track_scroll(&self.settings.scroll)
                     .min_h_0().flex_1().w_full().pb_8().gap_1()
                     .children(self.setting_rows(cx).iter().enumerate().map(|(i, &setting)| {
                         let selected = i == self.settings.selected;
@@ -589,7 +596,7 @@ impl Workspace {
                                 .text_right()
                                 .font_family(theme.mono_font_family.clone())
                                 .text_xs()
-                                .child(if value.is_empty() { "—".into() } else { value })
+                                .child(if value.is_empty() { "-".into() } else { value })
                                 .into_any_element(),
                             (None, Kind::Action) => div().text_color(theme.link).child(if value.is_empty() { "Open".into() } else { value }).into_any_element(),
                         };
@@ -659,6 +666,7 @@ mod tests {
         }
         assert!(SettingsTab::for_setting(Setting::Keybinding(0)) == SettingsTab::Keybindings);
         assert!(SettingsTab::for_setting(Setting::Theme) == SettingsTab::Appearance);
+        assert!(SettingsTab::for_setting(Setting::Vim) == SettingsTab::Editor);
         assert!(SettingsTab::for_setting(Setting::LeetCode) == SettingsTab::Platform);
         assert!(SettingsTab::for_setting(Setting::Codeforces) == SettingsTab::Platform);
     }
