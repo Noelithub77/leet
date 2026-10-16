@@ -144,6 +144,7 @@ impl EditorPane {
         if let Some(help) = &mut self.signature.help {
             let current = signature::active_signature(help);
             help.active_signature = Some((current as isize + delta).rem_euclid(help.signatures.len() as isize) as u32);
+            self.hide_prediction(cx);
             self.state.read(cx).focus_handle(cx).focus(window, cx); cx.notify();
         }
     }

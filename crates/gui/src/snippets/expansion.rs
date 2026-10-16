@@ -141,7 +141,7 @@ impl EditorPane {
             if !window.is_window_active() { this.hide_prediction(cx); }
         }));
     }
-    fn hide_prediction(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn hide_prediction(&mut self, cx: &mut Context<Self>) {
         if let Some(predictions) = &self.predictions { predictions.alt.set(false); }
         self.state.update(cx, |editor, cx| EditorMode::clear_inline_completion(editor, cx));
         cx.notify();
@@ -153,9 +153,10 @@ impl EditorPane {
         if !alt { self.hide_prediction(cx); return; }
         predictions.cancel_warm();
         predictions.configure(self.path.clone(), self.language);
-        self.completions.cancel();
-        self.detail_task = Task::ready(());
-        self.menu = None;
+        if self.menu.is_none() {
+            self.completions.cancel();
+            self.detail_task = Task::ready(());
+        }
         self.state.update(cx, |editor, cx| {
             editor.dismiss_completion_overlay(cx);
             let offset = editor.cursor();
@@ -485,7 +486,7 @@ impl Render for EditorPane {
             })
             .when_some(super::menu::render(self, window, cx), |view, menu| view.child(menu))
             .when_some(super::signature_help::render_popup(self, window, cx), |view, hints| view.child(hints))
-            .when_some(if self.menu.is_none() { crate::copilot::preview_overlay(self, window, cx) } else { None }, |view, hint| view.child(hint))
+            .when_some(if self.menu.is_none() || self.predictions.as_ref().is_some_and(|predictions| predictions.alt.get()) { crate::copilot::preview_overlay(self, window, cx) } else { None }, |view, hint| view.child(hint))
     }
 }
 

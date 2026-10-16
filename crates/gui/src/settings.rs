@@ -58,7 +58,7 @@ pub enum Kind {
 }
 
 impl Setting {
-    pub const ALL: [Setting; 25] = [
+    pub const ALL: [Setting; 26] = [
         Setting::Onboarding,
         Setting::ResetSettings,
         Setting::ArchivedChats,

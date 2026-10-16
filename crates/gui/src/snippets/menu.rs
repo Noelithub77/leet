@@ -76,6 +76,7 @@ fn kind_icon(kind: Option<CompletionItemKind>) -> (IconName, &'static str) {
 }
 
 pub(super) fn render(pane: &EditorPane, window: &mut Window, cx: &mut Context<EditorPane>) -> Option<AnyElement> {
+    if pane.predictions.as_ref().is_some_and(|predictions| predictions.alt.get()) { return None; }
     let menu = pane.menu.as_ref()?;
     let theme = cx.theme().clone();
     let editor = pane.state.read(cx);
@@ -95,11 +96,14 @@ pub(super) fn render(pane: &EditorPane, window: &mut Window, cx: &mut Context<Ed
     let preferred_left = pos.x + px(12.);
     let side = preferred_left + width + chrome + preview_width + gap <= input.size.width;
     let selected = menu.content.items.get(menu.selected)?;
-    let documentation = selected.documentation.as_ref().map(|doc| match doc { Documentation::String(text) => text.clone(), Documentation::MarkupContent(markup) => markup.value.clone() })
-        .or_else(|| super::signature_help::documentation(pane).map(|doc| match doc { lsp_wire::Documentation::String(text) => text.clone(), lsp_wire::Documentation::MarkupContent(markup) => markup.value.clone() }));
+    let completion_documentation = selected.documentation.as_ref().map(|doc| match doc { Documentation::String(text) => text.clone(), Documentation::MarkupContent(markup) => markup.value.clone() }).filter(|text| !text.trim().is_empty());
+    let parameter_detail = completion_documentation.is_none() && menu.preview.is_none();
+    let preview_width = if parameter_detail && !side { width + chrome } else { preview_width };
+    let documentation = completion_documentation.or_else(|| super::signature_help::documentation(pane).map(|doc| match doc { lsp_wire::Documentation::String(text) => text.clone(), lsp_wire::Documentation::MarkupContent(markup) => markup.value.clone() })).filter(|text| !text.trim().is_empty());
     let has_preview = menu.preview.is_some() || documentation.is_some();
     let desired_menu = desired_list + chrome + hint_height + signature_height;
-    let desired_preview = px(184.);
+    let short_parameter_detail = parameter_detail && documentation.as_ref().is_some_and(|text| text.len() <= 160 && text.lines().count() <= 2);
+    let desired_preview = if short_parameter_detail { rems(4.).to_pixels(window.rem_size()) } else { px(184.) };
     let desired_height = if !has_preview { desired_menu } else if side { desired_menu.max(desired_preview) } else { desired_menu + gap + desired_preview };
     let above = (pos.y - px(4.)).max(px(0.)).min(available_height);
     let below = (pos.y + line_height + px(4.)).max(px(0.)).min(available_height);
@@ -110,7 +114,8 @@ pub(super) fn render(pane: &EditorPane, window: &mut Window, cx: &mut Context<Ed
     let minimum_menu = row_height + chrome + hint_height + signature_height;
     let stacked = has_preview && !side;
     if budget < minimum_menu + if stacked { gap + px(40.) } else { px(0.) } { return None; }
-    let menu_budget = if stacked { desired_menu.min((budget * 0.45).max(minimum_menu)) } else { desired_menu.min(budget) };
+    let menu_budget = if stacked && desired_menu + gap + desired_preview <= budget { desired_menu }
+        else if stacked { desired_menu.min((budget * 0.45).max(minimum_menu)) } else { desired_menu.min(budget) };
     let height = row_height * ((menu_budget - chrome - hint_height - signature_height).as_f32() / row_height.as_f32()).floor();
     let menu_height = height + chrome + hint_height + signature_height;
     let preview_height = if stacked { desired_preview.min((budget - menu_height - gap).max(px(0.))) } else { desired_preview.min(budget) };
@@ -163,9 +168,9 @@ pub(super) fn render(pane: &EditorPane, window: &mut Window, cx: &mut Context<Ed
         .when_some(preview, |popup, preview| popup.child(div().id("source-completion-preview").test_support().relative().overflow_hidden()
             .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
             .w(preview_width).h(preview_height).bg(surface).border_1().border_color(theme.border).rounded_md().shadow_md()
-            .child(soften_text(div().id("source-completion-preview-scroll").overflow_y_scroll().h((preview_height - px(2.)).max(px(0.))).p_2().pb_8().text_size(rems(11. / 16.)).child(preview), &preview_text, cx))
-            .child(deferred(div().id("completion-preview-fade").test_support().absolute().w_full().left_0().bottom_0().h_8().rounded_b_md()
-                .bg(linear_gradient(180., linear_color_stop(theme.popover.opacity(0.), 0.), linear_color_stop(surface, 1.)))))))
+            .child(soften_text(div().id("source-completion-preview-scroll").overflow_y_scroll().h((preview_height - px(2.)).max(px(0.))).p_2().when(menu.preview.is_some(), |view| view.pb_8()).text_size(rems(11. / 16.)).child(preview), &preview_text, cx))
+            .when(menu.preview.is_some(), |view| view.child(deferred(div().id("completion-preview-fade").test_support().absolute().w_full().left_0().bottom_0().h_8().rounded_b_md()
+                .bg(linear_gradient(180., linear_color_stop(theme.popover.opacity(0.), 0.), linear_color_stop(surface, 1.))))))))
         .on_mouse_down_out(cx.listener(|pane, _, window, cx| pane.close_completions(window, cx)))
     )).into_any_element())
 }

@@ -13,7 +13,7 @@ struct CompletionFixture;
 impl CompletionProvider for CompletionFixture {
     fn is_completion_trigger(&self, _: usize, _: &str, _: &mut App) -> bool { false }
     fn completions(&self, _: &ropey::Rope, _: usize, _: lsp_types::CompletionContext, _: &mut Window, _: &mut App) -> Task<Result<lsp_types::CompletionResponse>> {
-        Task::ready(Ok(lsp_types::CompletionResponse::Array(["first", "second"].map(|label| lsp_types::CompletionItem { label: label.into(), kind: Some(lsp_types::CompletionItemKind::VARIABLE), ..Default::default() }).into())))
+        Task::ready(Ok(lsp_types::CompletionResponse::Array(["first", "second"].map(|label| lsp_types::CompletionItem { label: label.into(), kind: Some(lsp_types::CompletionItemKind::VARIABLE), documentation: (label == "first").then(|| lsp_types::Documentation::String(String::new())), ..Default::default() }).into())))
     }
 }
 impl Render for Fixture {
@@ -27,7 +27,7 @@ impl Render for Fixture {
 fn response(second: bool) -> SignatureHelp {
     serde_json::from_value(serde_json::json!({"activeSignature":0,"activeParameter":usize::from(second),"signatures":[
         {"label":"combine(first: int, second: int) -> int", "parameters":[{"label":"first: int","documentation":"First input value"},{"label":"second: int","documentation":"Second input value"}]},
-        {"label":"combine(first: str, second: str) -> str", "parameters":[{"label":"first: str"},{"label":"second: str"}]}
+        {"label":"combine(first: str, second: str) -> str", "parameters":[{"label":"first: str","documentation":"First text value"},{"label":"second: str","documentation":"Second text value"}]}
     ]})).unwrap()
 }
 
@@ -43,6 +43,8 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
                 let editor = cx.new(|cx| EditorState::new(window, cx).language("python").line_number(true));
                 let pane = cx.new(|cx| {
                     let mut pane = EditorPane::new(editor.clone(), Language::Python, Rc::new(practice::snippets::search::Library::new(vec![])), Default::default(), window, cx);
+                    let connection = cx.new(|_| crate::copilot::Connection::new(false));
+                    pane.connect_predictions(connection, window, cx);
                     pane.signature.fixture = Some(Rc::new(move |text, offset, context, cx| {
                         requests.borrow_mut().push((text.clone(), offset, context));
                         let help = response(text[..offset].contains(',')); let delay = delayed.get();
@@ -100,13 +102,20 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             ensure!(requests.borrow().iter().any(|(_, _, context)| context.trigger_kind == SignatureHelpTriggerKind::INVOKED), "Ctrl+Space did not invoke signature help");
             ensure!(window.try_find("signature-popup").is_none(), "Ctrl+Space opened overlapping signature surfaces");
             ensure!(window.find("source-completion-preview").visible(), "Parameter documentation must stay available beside or below completions");
+            ensure!(window.find("source-completion-preview").bounds().size.height <= rems(4.).to_pixels(window.rem_size()) + px(1.), "Short parameter documentation must remain compact");
             let strip = window.find("completion-signature").bounds();
             let list = window.find("source-completion-list").bounds();
+            ensure!(list.size.height >= rems(2.75).to_pixels(window.rem_size()) - px(1.), "Short parameter details unnecessarily hid completion rows");
             ensure!(strip.bottom() <= list.top() + px(1.), "Parameter strip must sit above completions");
             let label = window.find("signature-label").bounds();
             ensure!(label.size.width >= strip.size.width - rems(1.5).to_pixels(window.rem_size()), "Signature text is squeezed beside overload controls: label={label:?}, strip={strip:?}");
+            window.dispatch_event(PlatformInput::ModifiersChanged(ModifiersChangedEvent { modifiers: Modifiers { alt: true, ..Default::default() }, capslock: Default::default() }), cx);
+            ensure!(pane.read(cx).menu.is_some(), "Alt modifier discarded the completion menu before overload navigation");
             window.press("alt-up", cx);
+            window.render_frame(cx);
             ensure!(pane.read(cx).signature.help.as_ref().is_some_and(|help| signature::active_signature(help) == 1), "Overload shortcut failed with completions open");
+            ensure!(!pane.read(cx).predictions.as_ref().unwrap().alt.get(), "Overload navigation left Copilot preview active");
+            window.dispatch_event(PlatformInput::ModifiersChanged(ModifiersChangedEvent { modifiers: Modifiers::default(), capslock: Default::default() }), cx);
             ensure!(window.find("source-completions").visible(), "Overload shortcut dismissed completions");
             let selected = pane.read(cx).menu.as_ref().unwrap().selected;
             window.press("down", cx);
