@@ -54,6 +54,11 @@ impl Drop for Client { fn drop(&mut self) { let _ = self.socket.emit(Stop); } }
 #[non_exhaustive]
 #[serde(rename_all = "camelCase")]
 pub struct SignIn { pub user_code: Option<String>, pub command: Option<lsp::Command> }
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+pub struct Account { pub status: String, pub user: Option<String> }
+impl Account {
+    pub fn signed_in(&self) -> bool { matches!(self.status.as_str(), "OK" | "MaybeOK" | "NotAuthorized") }
+}
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[non_exhaustive]
 #[serde(rename_all = "camelCase")]
@@ -75,6 +80,10 @@ enum SignInRequest {}
 #[derive(Deserialize, Serialize)]
 struct SignInParams {}
 impl request::Request for SignInRequest { type Params = SignInParams; type Result = SignIn; const METHOD: &'static str = "signIn"; }
+enum CheckStatus {}
+impl request::Request for CheckStatus { type Params = Value; type Result = Account; const METHOD: &'static str = "checkStatus"; }
+enum SignOut {}
+impl request::Request for SignOut { type Params = SignInParams; type Result = Value; const METHOD: &'static str = "signOut"; }
 enum InlineRequest {}
 impl request::Request for InlineRequest { type Params = Value; type Result = Items; const METHOD: &'static str = "textDocument/inlineCompletion"; }
 enum StatusChanged {}
@@ -170,6 +179,14 @@ impl Client {
         bail!("Copilot initialization timed out")
     }
     pub async fn sign_in(&self) -> Result<SignIn> { self.ready().await?; deadline(async { Ok(self.socket.request::<SignInRequest>(SignInParams {}).await?) }, 30).await }
+    pub async fn account(&self) -> Result<Account> {
+        self.ready().await?;
+        deadline(async { Ok(self.socket.request::<CheckStatus>(json!({"options":{"localChecksOnly":true}})).await?) }, 10).await
+    }
+    pub async fn sign_out(&self) -> Result<()> {
+        self.ready().await?;
+        deadline(async { self.socket.request::<SignOut>(SignInParams {}).await?; Ok(()) }, 15).await
+    }
     pub async fn finish_sign_in(&self, command: lsp::Command) -> Result<()> {
         ensure!(command.command == "github.copilot.finishDeviceFlow", "Unexpected Copilot sign-in command");
         self.execute(command, 300).await

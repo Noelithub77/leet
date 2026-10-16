@@ -10,9 +10,10 @@ use practice::language::Language;
 struct StatusFixture(Entity<crate::workspace::Workspace>);
 impl Render for StatusFixture {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let settings = self.0.update(cx, |ws, cx| (ws.center == crate::workspace::Center::Settings).then(|| ws.render_settings(window, cx).into_any_element()));
         let status = self.0.update(cx, |ws, cx| ws.render_status(window, cx).into_any_element());
         gpui_kit::component::v_flex().size_full().bg(cx.theme().background)
-            .child(div().flex_1()).child(status)
+            .child(div().flex_1().children(settings)).child(status)
     }
 }
 
@@ -195,27 +196,64 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         let workspace = cx.new(|cx| crate::workspace::Workspace::from_storage(config, db, [None, None], window, cx));
         workspace.read(cx).copilot.clone().update(cx, |connection, _| {
             connection.enabled = true;
+            connection.fixture_no_transport = true;
+            connection.account = Some(practice::copilot::Account { status: "OK".into(), user: Some("fixture-user".into()) });
             connection.quota = Some(serde_json::from_value(serde_json::json!({"copilotPlan":"free","completions":{"unlimited":false,"percentRemaining":42.5},"premium_interactions":{"unlimited":true}})).unwrap());
         });
         cx.new(|_| StatusFixture(workspace))
     }))?;
     let status_handle = status_handle.into(); settle(cx);
     cx.update_window(status_handle, |_, window, cx| -> Result<()> {
+        window.activate_window(); window.render_frame(cx);
+        window.click("status-copilot", cx);
+        let ws = status_fixture.read(cx).0.read(cx);
+        ensure!(!ws.copilot.read(cx).enabled() && !ws.config.copilot_enabled, "Single click did not disable and persist completions");
+        ensure!(ws.copilot.read(cx).signed_in(), "Disabling completions signed the account out");
+        ensure!(ws.copilot.read(cx).quota.is_some(), "Disabling completions discarded account usage");
+        ensure!(ws.center != crate::workspace::Center::Settings, "The toggle opened Settings");
         window.render_frame(cx);
-        ensure!(window.find("status-copilot").visible(), "Copilot status button is hidden");
-        let connection = status_fixture.read(cx).0.read(cx).copilot.read(cx);
-        ensure!(connection.detail().contains("57.5% used · 42.5% remaining"), "Status tooltip lost server quota");
-        window.hover("status-copilot", cx); Ok(())
+        ensure!(window.find("copilot-disabled-mark").visible(), "Disabled Copilot has no cross");
+        Ok(())
     })??;
-    cx.advance_clock(Duration::from_secs(1)); cx.run_until_parked();
-    cx.update_window(status_handle, |_, window, cx| window.render_frame(cx))?;
-    cx.advance_clock(Duration::from_millis(200)); cx.run_until_parked();
-    if pixels { std::thread::sleep(Duration::from_millis(200)); }
-    cx.update_window(status_handle, |_, window, cx| window.render_frame(cx))?;
-    if pixels { cx.capture_screenshot(status_handle)?.save(output.join("copilot-usage-hover.png"))?; }
+    if pixels { cx.capture_screenshot(status_handle)?.save(output.join("copilot-disabled-status.png"))?; }
     cx.update_window(status_handle, |_, window, cx| -> Result<()> {
         window.click("status-copilot", cx);
-        ensure!(status_fixture.read(cx).0.read(cx).settings.tab == crate::settings::SettingsTab::Editor, "Copilot status button did not open Editor settings");
+        ensure!(status_fixture.read(cx).0.read(cx).copilot.read(cx).enabled(), "Second click did not re-enable completions");
+        window.render_frame(cx);
+        ensure!(window.try_find("copilot-disabled-mark").is_none(), "Enabled Copilot kept the cross");
+        window.click("copilot-options", cx); Ok(())
+    })??;
+    settle(cx);
+    cx.update_window(status_handle, |_, window, cx| -> Result<()> {
+        window.render_frame(cx);
+        ensure!(window.find("popup-menu").visible(), "Copilot options did not open");
+        let connection = status_fixture.read(cx).0.read(cx).copilot.read(cx);
+        ensure!(connection.detail().contains("57.5% used · 42.5% remaining"), "Options lost the reported quota");
+        Ok(())
+    })??;
+    if pixels { cx.capture_screenshot(status_handle)?.save(output.join("copilot-options.png"))?; }
+    cx.update_window(status_handle, |_, window, cx| { window.press("escape", cx); })?;
+    settle(cx);
+    cx.update_window(status_handle, |_, window, cx| -> Result<()> {
+        window.render_frame(cx); ensure!(window.try_find("popup-menu").is_none(), "Escape did not close Copilot options");
+        window.click("copilot-options", cx); Ok(())
+    })??;
+    settle(cx);
+    cx.update_window(status_handle, |_, window, cx| { window.press("enter", cx); })?;
+    settle(cx);
+    cx.update_window(status_handle, |_, window, cx| -> Result<()> {
+        window.render_frame(cx);
+        let ws = status_fixture.read(cx).0.read(cx);
+        ensure!(ws.center == crate::workspace::Center::Settings && ws.settings.tab == crate::settings::SettingsTab::Editor, "Options did not open Copilot settings");
+        ensure!(window.find("copilot-account").visible() && window.find("copilot-sign-out").visible(), "Signed-in Settings lacks account or Sign out");
+        ensure!(window.try_find("copilot-connect").is_none(), "Signed-in Settings still shows connection toggle");
+        Ok(())
+    })??;
+    if pixels { cx.capture_screenshot(status_handle)?.save(output.join("copilot-account-settings.png"))?; }
+    cx.update_window(status_handle, |_, window, cx| -> Result<()> {
+        window.click("copilot-sign-out", cx);
+        let connection = status_fixture.read(cx).0.read(cx).copilot.read(cx);
+        ensure!(connection.signed_in() && connection.error.is_some(), "Missing server reported a false successful sign-out");
         window.remove_window(); Ok(())
     })??;
     Ok(serde_json::json!({"fixture":"copilot","passed":true,"pixels":pixels,"checks":["hidden without Alt","Alt reveals native ghost text","faint syntax colors","stale and invalid highlight ranges rejected","preview preserves document","Alt release hides immediately","Alt+Tab does not accept","Alt+L accepts and Alt+K reverts","revert restores the preview and caret","revert preserves later typing","Escape dismisses","typing invalidates stale predictions","focus loss hides prediction","turning off clears preview","long Unicode preview scrolls without moving the editor"]}))

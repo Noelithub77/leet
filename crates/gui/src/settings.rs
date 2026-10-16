@@ -455,7 +455,8 @@ impl Workspace {
             }
             Kind::Action if setting == Setting::LanguageServer => self.restart_language_server(window, cx),
             Kind::Action if setting == Setting::Copilot => self.copilot.update(cx, |connection, cx| {
-                if connection.enabled() || connection.busy { connection.disable(cx); } else { connection.connect(self.config.workspace.clone(), true, window, cx); }
+                if connection.busy { return; }
+                if connection.signed_in() { connection.sign_out(cx); } else { connection.connect(self.config.workspace.clone(), true, window, cx); }
             }),
             Kind::Action if setting == Setting::Onboarding => self.begin_onboarding(false, window, cx),
             Kind::Action if setting == Setting::ArchivedChats => archived_chats::open(self.db.clone(), self.assist.downgrade(), window, cx),

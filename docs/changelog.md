@@ -1,6 +1,8 @@
 <details open>
 <summary>Feat</summary>
 
+- Toggle Copilot completions from its status icon, with a crossed logo when disabled and a quick menu for usage and Settings.
+- Show the connected Copilot account in Settings and sign out separately from disabling completions.
 - Reset the current solution to its template from the editor toolbar, with Undo support.
 - Navigate parameter overloads with Alt+Up and Alt+Down.
 - Archive chats from history; restore or permanently delete them in General settings.

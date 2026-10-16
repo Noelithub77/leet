@@ -211,7 +211,7 @@ impl Workspace {
         this.reload_snippets(cx);
         let language_servers = this.start_language_servers(window, cx);
         this._tasks.push(language_servers);
-        if this.config.copilot_enabled { this.copilot.update(cx, |connection, cx| connection.connect(this.config.workspace.clone(), false, window, cx)); }
+        if this.config.copilot_enabled || practice::copilot::install::binary().is_some() { this.copilot.update(cx, |connection, cx| connection.connect(this.config.workspace.clone(), false, window, cx)); }
         this.assist.update(cx, |assist, cx| assist.detect(cx));
         let workspace = this.config.workspace.clone();
         cx.background_spawn(async move {

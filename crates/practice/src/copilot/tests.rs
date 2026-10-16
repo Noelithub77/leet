@@ -39,6 +39,8 @@ fn official_protocol_sign_in_document_sync_and_acceptance() {
     let log = root.path().join("events.jsonl");
     std::fs::write(&script, r#"
 import sys,json
+signed_in=False
+sign_out_attempts=0
 def send(value):
     data=json.dumps({'jsonrpc':'2.0',**value}).encode()
     sys.stdout.buffer.write(b'Content-Length: '+str(len(data)).encode()+b'\r\n\r\n'+data)
@@ -59,7 +61,19 @@ while True:
             send({'id':request['id'],'error':{'code':-32602,'message':'Expected object'}})
             continue
         result={'userCode':'TEST-CODE','command':{'title':'Sign in','command':'github.copilot.finishDeviceFlow','arguments':[]}}
+    elif method=='checkStatus':
+        result={'status':'OK' if signed_in else 'NotSignedIn','user':'fixture-user' if signed_in else None}
+    elif method=='signOut':
+        assert request.get('params')=={}
+        sign_out_attempts+=1
+        if sign_out_attempts==1:
+            send({'id':request['id'],'error':{'code':-32603,'message':'Fixture sign-out failure'}})
+            continue
+        signed_in=False
+        result={}
+        send({'method':'didChangeStatus','params':{'kind':'Error','message':'Sign in'}})
     elif method=='workspace/executeCommand' and request['params']['command']=='github.copilot.finishDeviceFlow':
+        signed_in=True
         send({'method':'didChangeStatus','params':{'kind':'Normal','message':'Ready'}})
         send({'method':'copilot/quotaChange','params':{'copilotPlan':'free','completions':{'percentRemaining':42.5,'unlimited':False},'chat':{'unlimited':True}}})
     elif method=='textDocument/inlineCompletion':
@@ -71,6 +85,9 @@ while True:
         let login = client.sign_in().await.unwrap();
         assert_eq!(login.user_code.as_deref(), Some("TEST-CODE"));
         client.finish_sign_in(login.command.unwrap()).await.unwrap();
+        let account = client.account().await.unwrap();
+        assert!(account.signed_in());
+        assert_eq!(account.user.as_deref(), Some("fixture-user"));
         assert_eq!(client.status(), Status::Ready);
         let detail = client.quota().unwrap().detail();
         assert!(detail.contains("Completions · 57.5% used · 42.5% remaining"));
@@ -94,6 +111,12 @@ while True:
         assert_eq!(change["params"]["contentChanges"][0]["range"]["end"], json!({"line":1,"character":3}));
         assert!(events.iter().any(|event| event["method"] == "textDocument/didShowCompletion"));
         assert!(events.iter().any(|event| event["params"]["command"] == "github.copilot.didAcceptCompletionItem"));
+        assert!(client.sign_out().await.is_err(), "A failed server sign-out must not be reported as success");
+        assert!(client.account().await.unwrap().signed_in());
+        client.sign_out().await.unwrap();
+        let account = client.account().await.unwrap();
+        assert!(!account.signed_in());
+        assert!(account.user.is_none());
         client.stop();
     });
 }

@@ -3,6 +3,8 @@ use std::{cell::{Cell, RefCell}, path::PathBuf, rc::Rc, sync::Arc, time::Duratio
 use anyhow::Result;
 use gpui_kit::*;
 use gpui_kit::prelude::FluentBuilder as _;
+use gpui_kit::base::Disableable as _;
+use gpui_kit::component::menu::DropdownMenu as _;
 use practice::copilot::{Client, Status, Suggestion};
 
 #[cfg(feature = "gui-test")]
@@ -15,14 +17,20 @@ pub struct Connection {
     client: Option<Arc<Client>>,
     enabled: bool,
     pub busy: bool,
+    signing_out: bool,
     pub code: Option<String>,
     pub error: Option<String>,
     quota: Option<practice::copilot::Quota>,
+    account: Option<practice::copilot::Account>,
     task: Task<()>,
+    account_task: Task<()>,
+    #[cfg(feature = "gui-test")]
+    fixture_no_transport: bool,
 }
 impl Connection {
-    pub fn new(enabled: bool) -> Self { Self { client: None, enabled, busy: false, code: None, error: None, quota: None, task: Task::ready(()) } }
+    pub fn new(enabled: bool) -> Self { Self { client: None, enabled, busy: false, signing_out: false, code: None, error: None, quota: None, account: None, task: Task::ready(()), account_task: Task::ready(()), #[cfg(feature = "gui-test")] fixture_no_transport: false } }
     pub fn enabled(&self) -> bool { self.enabled }
+    pub(crate) fn signed_in(&self) -> bool { self.account.as_ref().is_some_and(|account| account.signed_in()) || self.client.as_ref().is_some_and(|client| matches!(client.status(), Status::Ready)) }
     pub fn detail(&self) -> String {
         let mut detail = self.label();
         if self.enabled {
@@ -33,7 +41,7 @@ impl Connection {
         detail.push_str("\nHold Alt to preview · Alt+L accept · Alt+K revert"); detail
     }
     pub fn label(&self) -> String {
-        if self.busy { if self.code.is_some() { "Finish sign-in in your browser" } else { "Connecting…" }.into() }
+        if self.busy { if self.signing_out { "Signing out…" } else if self.code.is_some() { "Finish sign-in in your browser" } else { "Connecting…" }.into() }
         else if let Some(error) = &self.error { error.clone() }
         else if !self.enabled { "Off".into() }
         else { match self.client.as_ref().map(|client| client.status()) {
@@ -43,9 +51,43 @@ impl Connection {
         } }
     }
     pub fn disable(&mut self, cx: &mut Context<Self>) {
-        self.task = Task::ready(()); self.busy = false; self.code = None; self.error = None; self.quota = None; self.enabled = false;
-        if let Some(client) = self.client.take() { client.stop(); }
+        self.enabled = false;
         cx.emit(Enabled(false)); cx.notify();
+    }
+    pub fn toggle(&mut self, root: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        if self.enabled { self.disable(cx); return; }
+        self.enabled = true; cx.emit(Enabled(true)); cx.notify();
+        if self.client.is_none() {
+            #[cfg(feature = "gui-test")]
+            if self.fixture_no_transport { return; }
+            self.connect(root, false, window, cx);
+        }
+    }
+    fn cancel(&mut self, cx: &mut Context<Self>) {
+        self.task = Task::ready(()); self.busy = false; self.code = None;
+        if let Some(client) = self.client.take() { client.stop(); }
+        cx.notify();
+    }
+    pub fn sign_out(&mut self, cx: &mut Context<Self>) {
+        if self.busy { return; }
+        let Some(client) = self.client.clone() else { self.error = Some("Reconnect Copilot before signing out.".into()); cx.notify(); return; };
+        let was_enabled = self.enabled;
+        self.disable(cx); self.busy = true; self.signing_out = true; self.error = None;
+        self.account_task = cx.spawn(async move |this, cx| {
+            let result = cx.background_spawn(async move { client.sign_out().await }).await;
+            let _ = this.update(cx, |this, cx| {
+                this.busy = false; this.signing_out = false;
+                match result {
+                    Ok(()) => {
+                        this.task = Task::ready(()); this.code = None; this.account = None; this.quota = None;
+                        if let Some(client) = this.client.take() { client.stop(); }
+                    }
+                    Err(error) => { this.error = Some(format!("Could not sign out: {error}")); this.enabled = was_enabled; cx.emit(Enabled(was_enabled)); }
+                }
+                cx.notify();
+            });
+        });
+        cx.notify();
     }
     pub fn connect(&mut self, root: PathBuf, sign_in: bool, window: &mut Window, cx: &mut Context<Self>) {
         if self.busy { return; }
@@ -84,9 +126,12 @@ impl Connection {
                 if matches!(client.status(), Status::Ready) { break; }
                 cx.background_executor().timer(Duration::from_millis(100)).await;
             }
+            let account_client = client.clone();
+            let account = cx.background_spawn(async move { account_client.account().await.ok() }).await;
             let _ = this.update(cx, |this, cx| {
                 this.busy = false; this.code = None;
                 this.quota = client.quota();
+                this.account = account;
                 if sign_in {
                     match client.status() {
                         Status::Ready => { this.enabled = true; cx.emit(Enabled(true)); }
@@ -103,8 +148,9 @@ impl Connection {
                 let next = client.status();
                 let next_quota = client.quota(); let next_message = client.message();
                 if next != status || next_quota != quota || next_message != message {
+                    let account = if next != status { let client = client.clone(); cx.background_spawn(async move { client.account().await.ok() }).await } else { None };
                     status = next; quota = next_quota; message = next_message;
-                    if this.update(cx, |this, cx| { this.quota = quota.clone(); cx.notify(); }).is_err() { break; }
+                    if this.update(cx, |this, cx| { this.quota = quota.clone(); if let Some(account) = account { this.account = Some(account); } cx.notify(); }).is_err() { break; }
                 }
             }
         });
@@ -261,11 +307,27 @@ fn inline(suggestion: &Suggestion) -> lsp_types::InlineCompletionResponse {
 }
 
 pub fn status(ws: &crate::workspace::Workspace, cx: &mut Context<crate::workspace::Workspace>) -> impl IntoElement {
-    use gpui_kit::component::{Sizable as _, button::{Button, ButtonVariants as _}};
-    Button::new("status-copilot").ghost().xsmall()
-        .icon(gpui_kit::component::Icon::default().path("providers/copilot.svg").xsmall())
-        .accessibility_label("Copilot").tooltip(ws.copilot.read(cx).detail())
-        .on_click(cx.listener(|ws, _, window, cx| ws.open_settings(Some(crate::settings::Setting::Copilot), window, cx)))
+    use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, h_flex, button::{Button, ButtonVariants as _}, menu::PopupMenuItem};
+    let connection = ws.copilot.read(cx);
+    let enabled = connection.enabled(); let busy = connection.busy;
+    let detail = connection.detail();
+    let workspace = cx.weak_entity();
+    h_flex().id("copilot-status-controls").test_support().gap_0()
+        .child(Button::new("status-copilot").ghost().xsmall().disabled(busy)
+            .child(div().relative().size_4().child(Icon::default().path("providers/copilot.svg").size_4())
+                .when(!enabled, |logo| logo.child(div().id("copilot-disabled-mark").test_support().absolute().right_0().bottom_0().rounded_sm().bg(cx.theme().background)
+                    .child(Icon::new(gpui_kit::assets::IconName::X).size_2()))))
+            .accessibility_label(if enabled { "Disable Copilot completions" } else { "Enable Copilot completions" })
+            .tooltip(if enabled { "Copilot · Click to disable completions" } else { "Copilot disabled · Click to enable completions" })
+            .on_click(cx.listener(|ws, _, window, cx| ws.copilot.update(cx, |connection, cx| connection.toggle(ws.config.workspace.clone(), window, cx)))))
+        .child(Button::new("copilot-options").ghost().xsmall().icon(Icon::new(gpui_kit::assets::IconName::ChevronDown).size_3())
+            .accessibility_label("Copilot options").tooltip("Copilot options")
+            .dropdown_menu(move |mut menu, _, _| {
+                for line in detail.lines() { menu = menu.item(PopupMenuItem::label(line.to_owned())); }
+                let workspace = workspace.clone();
+                menu.item(PopupMenuItem::separator()).item(PopupMenuItem::new("Settings").icon(gpui_kit::assets::IconName::Settings)
+                    .on_click(move |_, window, cx| { let _ = workspace.update(cx, |ws, cx| ws.open_settings(Some(crate::settings::Setting::Copilot), window, cx)); }))
+            }))
 }
 
 pub fn controls(connection: &Entity<Connection>, root: PathBuf, cx: &App) -> AnyElement {
@@ -273,17 +335,19 @@ pub fn controls(connection: &Entity<Connection>, root: PathBuf, cx: &App) -> Any
     use gpui_kit::component::button::{Button, ButtonVariants as _};
     use gpui_kit::prelude::FluentBuilder as _;
     let state = connection.read(cx);
-    let busy = state.busy; let enabled = state.enabled; let code = state.code.clone();
+    let busy = state.busy; let signing_out = state.signing_out; let signed_in = state.signed_in(); let code = state.code.clone();
+    let account = signed_in.then(|| state.account.as_ref().and_then(|account| account.user.as_ref()).map_or_else(|| "Signed in · account not reported".into(), |user| format!("Signed in as {user}")));
     let label = state.label(); let error = state.error.is_some();
     let connection = connection.downgrade();
     v_flex().id("copilot-setup").test_support().gap_3()
-        .child(div().text_sm().text_color(if error { cx.theme().danger } else { cx.theme().muted_foreground }).child(label))
+        .when_some(account, |view, account| view.child(div().id("copilot-account").test_support().text_sm().child(account)))
+        .when(error || busy || !signed_in, |view| view.child(div().text_sm().text_color(if error { cx.theme().danger } else { cx.theme().muted_foreground }).child(label)))
         .when_some(code, |view, code| view.child(h_flex().gap_3()
             .child(div().font_family(cx.theme().mono_font_family.clone()).child(code.clone()))
             .child(Button::new("copilot-copy-code").ghost().small().label("Copy code").on_click(move |_, _, cx| { cx.stop_propagation(); cx.write_to_clipboard(ClipboardItem::new_string(code.clone())); }))))
-        .child(Button::new("copilot-connect").outline().label(if busy { "Cancel" } else if enabled { "Turn off" } else { "Connect Copilot" })
+        .child(Button::new(if signed_in { "copilot-sign-out" } else { "copilot-connect" }).outline().disabled(signing_out).label(if signing_out { "Signing out…" } else if busy { "Cancel" } else if signed_in { "Sign out" } else { "Connect Copilot" })
             .on_click(move |_, window, cx| { cx.stop_propagation(); let _ = connection.update(cx, |connection, cx| {
-                if busy || enabled { connection.disable(cx); } else { connection.connect(root.clone(), true, window, cx); }
+                if busy { connection.cancel(cx); } else if signed_in { connection.sign_out(cx); } else { connection.connect(root.clone(), true, window, cx); }
             }); }))
         .into_any_element()
 }

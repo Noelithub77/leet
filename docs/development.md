@@ -190,7 +190,7 @@ Highlighting text opens a selection menu with Quote (`Alt+Q`), Explain (`Alt+E`)
 ## Copilot completions
 
 Onboarding includes an optional Copilot step. Settings → Editor → Copilot completions
-connects or turns off predictions later. Connect downloads the pinned native GitHub
+connects the account or signs out later. Connect downloads the pinned native GitHub
 Copilot Language Server into Leet's private tools directory, verifies its upstream
 SHA-512 digest, and starts GitHub's browser device flow. The server stores its own
 credentials; Leet does not copy credentials from Zed or store tokens in `config.toml`.
@@ -206,9 +206,14 @@ Ghost suggestions use faint theme syntax colors through a pinned local
 highlighting hook, provenance, and removal condition. Alt+K restores both the
 previous source and caret, then reveals the same suggestion for Alt+L to accept again.
 
-The status-bar Copilot button opens its Editor setting. Hover shows connection
-status and quota snapshots supplied by `copilot/quotaChange`: plan, completion,
-chat, and premium usage when available. Unknown usage stays explicitly unavailable;
+Click the status-bar Copilot logo to toggle predictions without signing out. A
+cross marks disabled predictions. The adjacent arrow opens a compact menu with
+connection status, quota snapshots supplied by `copilot/quotaChange`, and Settings.
+Settings shows the GitHub username reported by `checkStatus` and a separate Sign out
+action using the server's `signOut` request. If the server omits the account name,
+the UI says so. An installed server can restore account status while predictions
+are disabled; no completion request is made until predictions are enabled.
+Quota includes plan, completion, chat, and premium usage when available. Unknown usage stays explicitly unavailable;
 Leet does not infer account limits or query private GitHub endpoints.
 
 `./ops copilot --install --json` installs the server without starting authentication.
