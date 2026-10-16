@@ -161,7 +161,7 @@ pub(super) fn render(pane: &EditorPane, window: &mut Window, cx: &mut Context<Ed
     Some(deferred(anchored().position(input.origin + point(left, top)).child(div().id("source-completions").test_support().flex().gap_1().items_start()
         .when(!side, |popup| popup.flex_col())
         .child(div().p_1().bg(surface).border_1().border_color(theme.border).rounded_md().shadow_md()
-            .when_some(super::signature_help::render_content(pane, false, cx), |menu, signature| menu.child(div().id("completion-signature").test_support().w(width).h(signature_height).overflow_hidden().border_b_1().border_color(theme.border)
+            .when_some(super::signature_help::render_content(pane, false, window, cx), |menu, signature| menu.child(div().id("completion-signature").test_support().w(width).h(signature_height).overflow_hidden().border_b_1().border_color(theme.border)
                 .child(div().id("completion-signature-scroll").size_full().overflow_y_scroll().on_scroll_wheel(|_, _, cx| cx.stop_propagation()).child(signature))))
             .child(list)
             .when_some(hint, |menu, hint| menu.child(div().h(hint_height).overflow_hidden().child(hint))))

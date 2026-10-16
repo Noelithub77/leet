@@ -486,7 +486,7 @@ impl Render for EditorPane {
             })
             .when_some(super::menu::render(self, window, cx), |view, menu| view.child(menu))
             .when_some(super::signature_help::render_popup(self, window, cx), |view, hints| view.child(hints))
-            .when_some(if self.menu.is_none() || self.predictions.as_ref().is_some_and(|predictions| predictions.alt.get()) { crate::copilot::preview_overlay(self, window, cx) } else { None }, |view, hint| view.child(hint))
+            .when_some(if self.predictions.as_ref().is_some_and(|predictions| predictions.alt.get()) || (self.menu.is_none() && !(self.signature.focused && super::signature_help::height(self, window) > px(0.))) { crate::copilot::preview_overlay(self, window, cx) } else { None }, |view, hint| view.child(hint))
     }
 }
 

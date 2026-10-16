@@ -43,7 +43,7 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
                 let editor = cx.new(|cx| EditorState::new(window, cx).language("python").line_number(true));
                 let pane = cx.new(|cx| {
                     let mut pane = EditorPane::new(editor.clone(), Language::Python, Rc::new(practice::snippets::search::Library::new(vec![])), Default::default(), window, cx);
-                    let connection = cx.new(|_| crate::copilot::Connection::new(false));
+                    let connection = cx.new(|_| crate::copilot::Connection::new(true));
                     pane.connect_predictions(connection, window, cx);
                     pane.signature.fixture = Some(Rc::new(move |text, offset, context, cx| {
                         requests.borrow_mut().push((text.clone(), offset, context));
@@ -60,6 +60,25 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         let pane = cx.update(|cx| view.read(cx).pane.clone()); let handle = handle.into(); cx.run_until_parked();
         cx.update_window(handle, |_, window, cx| { window.activate_window(); window.render_frame(cx); window.input("combine", cx); window.input("(", cx); })?;
         cx.run_until_parked(); cx.advance_clock(Duration::from_millis(150)); cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| -> Result<()> {
+            pane.update(cx, |pane, cx| {
+                let editor = pane.state.read(cx);
+                let source = editor.value().to_string(); let offset = editor.cursor();
+                let item = serde_json::from_value(serde_json::json!({"insertText":"1)"})).unwrap();
+                let predictions = pane.predictions.as_ref().unwrap();
+                predictions.restore(practice::copilot::Suggestion::from_item(&source, offset, item).unwrap(), &source, offset);
+                predictions.alt.set(false); cx.notify();
+            });
+            window.render_frame(cx);
+            let popup = window.find("signature-popup").bounds();
+            let cue = window.find("copilot-preview-hint");
+            ensure!(cue.visible(), "Parameter hints hid the ready Copilot cue");
+            let cue = cue.bounds(); let label = window.find("signature-label").bounds();
+            ensure!(cue.left() >= popup.left() && cue.right() <= popup.right() && cue.top() >= popup.top() && cue.bottom() <= label.top(), "Copilot cue overlaps the signature text or escapes the popup");
+            ensure!(window.try_find("copilot-preview-popover").is_none(), "A separate Copilot popover covers parameter hints");
+            Ok(())
+        })??;
+        if pixels { cx.capture_screenshot(handle)?.save(output.join(format!("parameter-copilot-{name}.png")))?; }
         cx.update_window(handle, |_, window, cx| -> Result<()> {
             window.render_frame(cx);
             ensure!(window.find("parameter-hints").visible(), "Typing ( did not open parameter hints");

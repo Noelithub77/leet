@@ -160,10 +160,11 @@ pub(super) fn documentation(pane: &EditorPane) -> Option<&Documentation> {
     signature::active_parameter(help, information).and_then(|parameter| parameter.documentation.as_ref()).or(information.documentation.as_ref())
 }
 
-pub(super) fn render_content(pane: &EditorPane, show_documentation: bool, cx: &mut Context<EditorPane>) -> Option<AnyElement> {
+pub(super) fn render_content(pane: &EditorPane, show_documentation: bool, window: &Window, cx: &mut Context<EditorPane>) -> Option<AnyElement> {
     let help = pane.signature.help.as_ref()?;
     let ix = signature::active_signature(help); let information = help.signatures.get(ix)?;
     let theme = cx.theme().clone();
+    let prediction_hint = if show_documentation { crate::copilot::preview_hint(pane, window, cx) } else { None };
     let highlights = signature::parameter_range(help, information).map(|range| (range, HighlightStyle { color: Some(theme.primary), font_weight: Some(FontWeight::BOLD), ..Default::default() }));
     let documentation = show_documentation.then(|| documentation(pane)).flatten().and_then(|doc| {
         let text = match doc { Documentation::String(text) => text, Documentation::MarkupContent(markup) => &markup.value };
@@ -176,6 +177,7 @@ pub(super) fn render_content(pane: &EditorPane, show_documentation: bool, cx: &m
     Some(v_flex().id("parameter-hints").test_support().w_full().min_w_0().gap_1().p_2()
         .child(h_flex().w_full().gap_1()
             .child(div().flex_1().text_size(rems(10. / 16.)).text_color(theme.muted_foreground).child("Parameters"))
+            .when_some(prediction_hint, |row, hint| row.child(hint))
             .when(help.signatures.len() > 1, |row| row
                 .child(Button::new("previous-signature").ghost().xsmall().icon(gpui_kit::assets::IconName::ChevronLeft).accessibility_label("Previous signature").tooltip_with_action("Previous signature", &PreviousSignature, Some("SignatureHints")).on_click(|_, window, cx| window.dispatch_action(Box::new(PreviousSignature), cx)))
                 .child(div().text_size(rems(10. / 16.)).text_color(theme.muted_foreground).child(format!("{}/{}", ix + 1, help.signatures.len())))
@@ -192,7 +194,7 @@ pub(crate) mod fixture;
 
 pub(super) fn render_popup(pane: &EditorPane, window: &mut Window, cx: &mut Context<EditorPane>) -> Option<AnyElement> {
     if pane.menu.as_ref().is_some_and(|menu| !menu.content.items.is_empty()) || !pane.signature.focused || pane.predictions.as_ref().is_some_and(|predictions| predictions.alt.get()) { return None; }
-    let content = render_content(pane, true, cx)?;
+    let content = render_content(pane, true, window, cx)?;
     let theme = cx.theme().clone(); let editor = pane.state.read(cx);
     let (caret, line_height) = editor.cursor_layout()?; let input = editor.input_bounds();
     let position = editor.scroll_offset() + caret.origin - input.origin;
@@ -200,7 +202,8 @@ pub(super) fn render_popup(pane: &EditorPane, window: &mut Window, cx: &mut Cont
     let width = px(300.).min(input.size.width);
     let above = (position.y - gap).max(px(0.)); let below = position.y + line_height + gap;
     let below_space = (input.size.height - below).max(px(0.));
-    let desired = height(pane, window); let use_below = below_space >= desired || below_space >= above;
+    let cue_height = if crate::copilot::preview_hint(pane, window, cx).is_some() { rems(1.).to_pixels(window.rem_size()) } else { px(0.) };
+    let desired = height(pane, window) + cue_height; let use_below = below_space >= desired || below_space >= above;
     let height = desired.min(if use_below { below_space } else { above });
     if height < rems(1.5).to_pixels(window.rem_size()) { return None; }
     let left = (position.x + px(12.)).min((input.size.width - width).max(px(0.)));

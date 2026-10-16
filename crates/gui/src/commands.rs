@@ -14,6 +14,15 @@ use crate::omnibar::Scope;
 use crate::workspace::{Center, Focus, Workspace};
 
 impl Workspace {
+    pub(crate) fn reset_solution(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(session) = self.session.as_ref() else { return; };
+        let Some(starter) = session.question.as_ref().and_then(|question| question.starter(session.language)) else { return; };
+        let starter = format!("{}\n", starter.trim_end());
+        self.editor_pane.update(cx, |pane, cx| pane.replace_file(starter, window, cx));
+        self.editor.update(cx, |editor, cx| editor.focus(window, cx));
+        self.toast(Notification::info("Reset to template · Undo restores your code"), window, cx);
+    }
+
     fn zoom(&mut self, delta: f32, window: &mut Window, cx: &mut Context<Self>) {
         self.config.zoom = crate::theme::set_zoom(self.config.zoom + delta, cx);
         self.save_config(window, cx);
@@ -259,14 +268,7 @@ impl Workspace {
             .on_action(cx.listener(|this, _: &MarkNeetCode, window, cx| this.mark_neetcode(window, cx)))
             .on_action(cx.listener(|this, _: &RevealHint, _, cx| this.reveal_hint(cx)))
             .on_action(cx.listener(|this, _: &HideHints, _, cx| this.hide_hints(cx)))
-            .on_action(cx.listener(|this, _: &ResetSolution, window, cx| {
-                let Some(q) = this.session.as_ref().and_then(|s| s.question.as_ref()) else { return };
-                let language = this.session.as_ref().map_or(practice::language::Language::Python, |session| session.language);
-                let Some(starter) = q.starter(language) else { return; };
-                let starter = format!("{}\n", starter.trim_end());
-                this.editor_pane.update(cx, |pane, cx| pane.replace_file(starter, window, cx));
-                this.toast(Notification::info("Reset to starter code · ctrl+z undoes"), window, cx);
-            }))
+            .on_action(cx.listener(|this, _: &ResetSolution, window, cx| this.reset_solution(window, cx)))
             .on_action(cx.listener(|this, _: &ZoomIn, window, cx| this.zoom(0.1, window, cx)))
             .on_action(cx.listener(|this, _: &ZoomOut, window, cx| this.zoom(-0.1, window, cx)))
             .on_action(cx.listener(|this, _: &ZoomReset, window, cx| {

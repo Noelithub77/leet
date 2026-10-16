@@ -198,7 +198,7 @@ pub const COMMANDS: &[Command] = &[
     cmd!("Open problem in browser", "ctrl-o", OpenInBrowser),
     cmd!("Change theme", "", PickTheme),
     cmd!("Refresh catalog and progress", "ctrl-alt-r", RefreshCatalog),
-    cmd!("Reset Solution to starter code", "", ResetSolution),
+    cmd!("Reset to template", "", ResetSolution),
     cmd!("Zoom in", "ctrl-=|ctrl-+|ctrl-shift-=", ZoomIn),
     cmd!("Zoom out", "ctrl--", ZoomOut),
     cmd!("Reset zoom", "", ZoomReset),

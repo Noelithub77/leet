@@ -325,6 +325,41 @@ pub(crate) fn fixture(cx: &mut HeadlessAppContext, output: &std::path::Path, pix
         ensure!(workspace.read(cx).assist.read(cx).composer_citations.len() == count, "Alt+L also quoted text");
         Ok(())
     })??;
+    cx.update_window(handle, |_, window, cx| {
+        window.dispatch_event(PlatformInput::ModifiersChanged(ModifiersChangedEvent { modifiers: Modifiers::default(), capslock: Default::default() }), cx);
+        workspace.read(cx).editor_pane.clone().update(cx, |pane, cx| {
+            pane.predictions = None;
+            pane.load_file("answer = 42\n".into(), window, cx);
+        });
+    })?;
+    cx.advance_clock(std::time::Duration::from_secs(1)); cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| {
+        window.activate_window(); window.render_frame(cx); window.click("reset-solution", cx);
+    })?;
+    cx.run_until_parked();
+    if pixels { cx.capture_screenshot(handle)?.save(output.join("reset-template-icon.png"))?; }
+    cx.update_window(handle, |_, window, cx| -> anyhow::Result<()> {
+        let starter = {
+            let ws = workspace.read(cx);
+            let session = ws.session.as_ref().unwrap();
+            format!("{}\n", session.question.as_ref().unwrap().starter(session.language).unwrap().trim_end())
+        };
+        ensure!(workspace.read(cx).solution_text(cx) == starter, "Reset icon did not restore the current language template: actual {:?}, expected {:?}", workspace.read(cx).solution_text(cx), starter);
+        ensure!(workspace.read(cx).editor.read(cx).focus_handle(cx).is_focused(window), "Reset did not focus the editor for Undo");
+        window.press("ctrl-z", cx);
+        ensure!(workspace.read(cx).solution_text(cx) == "answer = 42\n", "Undo did not restore the solution after reset");
+        workspace.read(cx).editor_pane.clone().update(cx, |pane, cx| pane.load_file(String::new(), window, cx));
+        window.render_frame(cx); window.click("reset-solution", cx);
+        Ok(())
+    })??;
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| -> anyhow::Result<()> {
+        let ws = workspace.read(cx); let session = ws.session.as_ref().unwrap();
+        let starter = format!("{}\n", session.question.as_ref().unwrap().starter(session.language).unwrap().trim_end());
+        ensure!(ws.solution_text(cx) == starter, "Reset did not recover an empty editor");
+        workspace.read(cx).editor_pane.clone().update(cx, |pane, cx| pane.load_file("answer = 42\n".into(), window, cx));
+        Ok(())
+    })??;
     cx.update_window(handle, |_, window, _| window.remove_window())?;
     cx.run_until_parked(); Ok(())
 }

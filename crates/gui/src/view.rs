@@ -384,6 +384,11 @@ impl Workspace {
             }))
             .when(solved, |el| el.child(div().text_xs().text_color(theme.success).child("✓ Solved")))
             .child(div().flex_1())
+            .when(!self.debug_mode, |el| el.child(Button::new("reset-solution").ghost().xsmall().icon(IconName::RefreshCw)
+                .accessibility_label("Reset to template")
+                .tooltip_with_action("Reset to template · Undo restores your code", &crate::actions::ResetSolution, Some(crate::actions::WORKSPACE))
+                .disabled(s.question.as_ref().and_then(|question| question.starter(s.language)).is_none())
+                .on_click(cx.listener(|this, _, window, cx| this.reset_solution(window, cx)))))
             .when(!self.debug_mode, |el| {
                 let weak = cx.weak_entity(); let selected = self.config.notes_view;
                 el.child(Button::new("notes-view").ghost().xsmall().label(selected.label()).icon(IconName::ChevronDown)
