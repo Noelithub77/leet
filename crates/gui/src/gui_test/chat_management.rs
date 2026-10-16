@@ -14,7 +14,7 @@ impl Render for Fixture {
             self.workspace.update(cx, |ws, cx| ws.render_settings(window, cx).into_any_element())
         } else {
             let assist = self.workspace.read(cx).assist.clone();
-            assist.update(cx, |assist, cx| assist.thread_header(window, cx))
+            assist.update(cx, |assist, cx| v_flex().relative().w_full().h(px(420.)).child(assist.chat_header(cx)).children(assist.thread_popover(cx)).into_any_element())
         };
         v_flex().size_full().bg(cx.theme().background)
             .child(Button::new("fixture-settings").label("Settings").on_click(cx.listener(|this, _, window, cx| {

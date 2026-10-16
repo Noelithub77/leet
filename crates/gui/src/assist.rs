@@ -51,6 +51,9 @@ mod conversation;
 pub(crate) mod composer_fixture;
 
 const SOLVE_ATTEMPTS: usize = 5;
+const COMPOSER_IDLE_ROWS: usize = 4;
+/// Secondary chat text: metadata, labels, and muted detail beside 12px messages.
+const META: Rems = rems(0.6875);
 
 /// Everything a run needs about the open problem, copied so the run outlives edits.
 #[derive(Clone)]
@@ -218,6 +221,7 @@ pub struct Assist {
     pub(crate) composer: Entity<TextareaState>,
     composer_thread: Option<i64>,
     composer_citations: Vec<practice::chat::history::Citation>,
+    composer_expanded: bool,
     threads: Vec<practice::chat::history::Thread>,
     selected_thread: Option<i64>,
     loaded_threads: HashSet<i64>,
@@ -249,7 +253,7 @@ impl Assist {
     pub fn new(workspace: WeakEntity<Workspace>, db: Arc<Db>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let catalog_cache = Arc::new(agents::CatalogCache::new(db.clone()));
         let catalogs = AgentKind::ALL.into_iter().filter_map(|kind| catalog_cache.cached(kind).map(|catalog| (kind, Loadable::Ready(catalog)))).collect();
-        let composer = cx.new(|cx| TextareaState::new(window, cx).rows(3).submit_on_enter(true).placeholder("Ask a question or add instructions…"));
+        let composer = cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, COMPOSER_IDLE_ROWS).submit_on_enter(true).placeholder("Ask about this problem…"));
         cx.subscribe_in(&composer, window, |this, _, event: &InputEvent, window, cx| {
             if matches!(event, InputEvent::PressEnter { secondary: false, shift: false }) { this.send(window, cx); }
             if matches!(event, InputEvent::Change) { this.persist_draft(cx); }
@@ -260,7 +264,7 @@ impl Assist {
             if matches!(event, InputEvent::Change) { this.thread_query = input.read(cx).value().to_string(); this.thread_selection = 0; this.thread_selection_visible = false; this.refresh_threads(); cx.notify(); }
         }).detach();
         let mut this = Self { workspace, db, agents: vec![], detecting: false, catalogs, catalog_cache, requested_catalogs: HashSet::new(), installing: None,
-            runs: vec![], next_id: 0, slug: None, ticker: None, scroll: ScrollHandle::new(), composer, composer_thread: None, composer_citations: vec![], threads: vec![], selected_thread: None, loaded_threads: HashSet::new(), show_threads: true, thread_scroll: UniformListScrollHandle::new(), thread_search, thread_query: String::new(), thread_selection: 0, thread_selection_visible: false, conversation_error: None, editing: None, ai_tab: 2, context_key: None,
+            runs: vec![], next_id: 0, slug: None, ticker: None, scroll: ScrollHandle::new(), composer, composer_thread: None, composer_citations: vec![], composer_expanded: false, threads: vec![], selected_thread: None, loaded_threads: HashSet::new(), show_threads: false, thread_scroll: UniformListScrollHandle::new(), thread_search, thread_query: String::new(), thread_selection: 0, thread_selection_visible: false, conversation_error: None, editing: None, ai_tab: 2, context_key: None,
             #[cfg(feature = "gui-test")] fixture_no_transport: false };
         if let Err(error) = this.db.migrate_chats() { this.conversation_error = Some(error.to_string()); }
         this.refresh_threads();
@@ -943,85 +947,92 @@ fn clock(duration: Duration) -> String {
 }
 
 impl Assist {
+    /// One Codex-style turn: the request as a right-aligned bubble, then the flat reply.
     fn card(&self, run: &Run, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme().clone();
         let color = accent(run.action, &theme);
         let id = run.id;
         let active = run.phase.active();
         let request_prompt = run.request_prompt.clone();
-        let header = h_flex().gap_2().items_center()
-            .child(Button::new(("assist-collapse", id)).ghost().xsmall().icon(if run.collapsed { IconName::ChevronRight } else { IconName::ChevronDown })
-                .tooltip(if run.collapsed { "Expand result" } else { "Collapse result" }).accessibility_label(if run.collapsed { "Expand result" } else { "Collapse result" })
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    if let Some(run) = this.runs.iter_mut().find(|run| run.id == id) { run.collapsed = !run.collapsed; if run.collapsed { run.playback.playing = false; } }
-                    cx.notify();
-                })))
-            .child(div().size(px(24.)).rounded_lg().flex().items_center().justify_center().bg(color.opacity(0.14)).child(Icon::new(icon(run.action)).size_3p5().text_color(color)))
-            .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child("Assistant"))
-            .when_some(run.agent, |el, agent| el.child(crate::brand::agent_icon(agent).xsmall()))
-            .child(div().min_w_0().flex_1().truncate().text_xs().text_color(theme.muted_foreground).child(run.model.clone()))
-            .when(run.elapsed != Some(Duration::ZERO), |el| el.child(h_flex().gap_1().text_xs().text_color(if active { color } else { theme.muted_foreground })
-                .font_family(theme.mono_font_family.clone()).child(Icon::new(IconName::Timer).size_3()).child(clock(run.time()))))
-            .child(if active || run.phase == Phase::Confirm {
-                Button::new(("assist-stop", id)).ghost().xsmall().icon(IconName::CircleStop).tooltip("Stop").accessibility_label("Stop")
-                    .on_click(cx.listener(move |this, _, _, cx| this.stop(id, cx))).into_any_element()
+        let group = SharedString::from(format!("chat-turn-{id}"));
+        let request = h_flex().w_full().justify_end().child(v_flex().id(("chat-request", id)).test_support().max_w(relative(0.88)).min_w_0().px_3().py_2().gap_1p5()
+            .rounded(px(14.)).bg(theme.secondary)
+            .children(run.citations.iter().map(|citation| selection::citation_pill(ElementId::NamedInteger(SharedString::from(format!("sent-citation-{id}")), selection::citation_key(citation)), citation, &theme)))
+            .when(run.action != Action::Ask, |el| el.child(h_flex().id(("chat-action-prompt", id)).gap_1p5().items_center().child(Icon::new(icon(run.action)).size_3p5().text_color(color)).child(run.action.label())
+                .tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(request_prompt.clone()).build(window, cx))))
+            .when(!run.instructions.is_empty(), |el| el.child(crate::rich_text::markdown(SharedString::from(format!("chat-request-{id}")), run.instructions.clone()).selectable(true))));
+        let finished = !active && run.phase != Phase::Confirm;
+        let summary = match &run.phase {
+            Phase::Failed(_) => "Failed".into(),
+            Phase::Stopped => "Stopped".into(),
+            _ if run.elapsed == Some(Duration::ZERO) => run.model.clone(),
+            _ => format!("Worked for {} · {}", clock(run.time()), run.model),
+        };
+        // Finished turns collapse from their summary line; live turns show progress there instead.
+        let meta = h_flex().gap_1p5().items_center().min_w_0().text_size(META).text_color(theme.muted_foreground)
+            .when_some(run.agent.filter(|_| finished), |el, agent| el.child(crate::brand::agent_icon(agent).xsmall()))
+            .child(if finished {
+                h_flex().id(("assist-collapse", id)).min_w_0().gap_1().items_center().cursor_pointer().hover(|el| el.text_color(theme.foreground))
+                    .when(matches!(run.phase, Phase::Failed(_)), |el| el.text_color(theme.danger))
+                    .child(div().min_w_0().truncate().child(summary))
+                    .child(Icon::new(if run.collapsed { IconName::ChevronRight } else { IconName::ChevronDown }).size_3())
+                    .tooltip({ let tip = if run.collapsed { "Expand result" } else { "Collapse result" }; move |window, cx| gpui_kit::component::tooltip::Tooltip::new(tip).build(window, cx) })
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(run) = this.runs.iter_mut().find(|run| run.id == id) { run.collapsed = !run.collapsed; if run.collapsed { run.playback.playing = false; } }
+                        cx.notify();
+                    })).into_any_element()
             } else {
-                let weak = cx.entity().downgrade();
-                use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
-                Button::new(("chat-message-options", id)).ghost().xsmall().icon(IconName::Ellipsis).tooltip("Message actions")
+                h_flex().min_w_0().flex_1().gap_1p5().items_center()
+                    .child(gpui_kit::component::spinner::Spinner::new().xsmall().color(color))
+                    .child(if active { ShimmerText::new(format!("{}…", run.phase.label())).id(("assist-phase", id)).into_any_element() } else { div().child(run.phase.label()).into_any_element() })
+                    .child(div().font_family(theme.mono_font_family.clone()).child(clock(run.time())))
+                    .when(run.tokens > 0, |el| el.child(div().child(format!("· {} tok", run.tokens)))).into_any_element()
+            })
+            .when(!finished, |el| el.child(div().flex_1()).child(Button::new(("assist-stop", id)).ghost().xsmall().icon(IconName::CircleStop).tooltip("Stop").accessibility_label("Stop")
+                .on_click(cx.listener(move |this, _, _, cx| this.stop(id, cx)))));
+        let thinking: String = run.thinking.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or_default().chars().take(140).collect();
+        let copy = match &run.answer { Some(Answer::Chat(text)) => Some(text.clone()), None if !run.reply.trim_start().starts_with('{') && !run.reply.is_empty() => Some(run.reply.clone()), _ => None };
+        let weak = cx.entity().downgrade();
+        let actions = finished.then(|| {
+            use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
+            h_flex().gap_0p5().opacity(0.).group_hover(group.clone(), |el| el.opacity(1.))
+                .when_some(copy.filter(|_| !run.collapsed), |el, text| el.child(Button::new(("chat-copy", id)).ghost().xsmall().icon(IconName::Copy).tooltip("Copy").accessibility_label("Copy reply")
+                    .on_click(move |_, _, cx| cx.write_to_clipboard(ClipboardItem::new_string(text.clone())))))
+                .child(Button::new(("chat-message-options", id)).ghost().xsmall().icon(IconName::Ellipsis).tooltip("Message actions")
                     .dropdown_menu(move |menu, _, _| {
                         let fork = weak.clone(); let edit = weak.clone(); let reload = weak.clone();
                         menu.item(PopupMenuItem::new("Fork from here").icon(IconName::GitBranch).on_click(move |_, window, cx| { let _ = fork.update(cx, |this, cx| this.fork_message(id, window, cx)); }))
                             .item(PopupMenuItem::new("Edit request").icon(IconName::Pencil).on_click(move |_, window, cx| { let _ = edit.update(cx, |this, cx| this.edit_message(id, window, cx)); }))
                             .separator()
                             .item(PopupMenuItem::new("Reload artifact").icon(IconName::RefreshCw).on_click(move |_, window, cx| { let _ = reload.update(cx, |this, cx| this.reload_artifact(id, window, cx)); }))
-                    }).into_any_element()
-            });
-        let status = (active || matches!(run.phase, Phase::Failed(_) | Phase::Stopped)).then(|| {
-            let label = run.phase.label();
-            let thinking: String = run.thinking.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or_default().chars().take(140).collect();
-            v_flex().gap_1()
-                .child(h_flex().gap_2().items_center().text_xs()
-                    .child(match &run.phase {
-                        Phase::Failed(_) => Icon::new(IconName::CircleX).size_3p5().text_color(theme.danger).into_any_element(),
-                        Phase::Stopped => Icon::new(IconName::CircleStop).size_3p5().text_color(theme.muted_foreground).into_any_element(),
-                        _ => gpui_kit::component::spinner::Spinner::new().xsmall().color(color).into_any_element(),
-                    })
-                    .child(if active { ShimmerText::new(format!("{label}…")).id(("assist-phase", id)).into_any_element() }
-                        else { div().text_color(if matches!(run.phase, Phase::Failed(_)) { theme.danger } else { theme.muted_foreground }).child(label).into_any_element() })
-                    .when(run.tokens > 0, |el| el.child(div().text_color(theme.muted_foreground).child(format!("· {} tok", run.tokens)))))
-                .when(active && !thinking.is_empty(), |el| el.child(div().pl_6().text_xs().italic().text_color(theme.muted_foreground).truncate().child(thinking)))
+                    }))
         });
         let body = run.answer.as_ref().filter(|_| !run.collapsed).map(|answer| self.body(run, answer, window, cx));
         let solve = run.solve.as_ref().filter(|_| !run.collapsed || run.phase == Phase::Confirm).map(|solve| self.solve_body(run, solve, cx));
-        v_flex().id(("assist-card", id)).p_3().gap_2p5().rounded_lg().bg(theme.background.opacity(0.55)).border_1()
-            .border_color(if active { color.opacity(0.45) } else { theme.border })
-            .child(v_flex().gap_1().pb_2().border_b_1().border_color(theme.border)
-                .child(div().text_xs().text_color(theme.muted_foreground).child("You"))
-                .children(run.citations.iter().map(|citation| selection::citation_pill(ElementId::NamedInteger(SharedString::from(format!("sent-citation-{id}")), selection::citation_key(citation)), citation, &theme)))
-                .when(run.action != Action::Ask, |el| el.child(h_flex().id(("chat-action-prompt", id)).gap_2().items_center().child(Icon::new(icon(run.action)).small().text_color(color)).child(div().text_sm().child(run.action.label()))
-                    .tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(request_prompt.clone()).build(window, cx))))
-                .when(!run.instructions.is_empty(), |el| el.child(crate::rich_text::markdown(SharedString::from(format!("chat-request-{id}")), run.instructions.clone()).selectable(true))))
-            .child(header)
+        v_flex().id(("assist-card", id)).group(group).w_full().min_w_0().gap_2()
+            .child(request)
+            .child(meta)
+            .when(active && !thinking.is_empty(), |el| el.child(div().text_size(META).italic().text_color(theme.muted_foreground).truncate().child(thinking)))
+            .when_some(match &run.phase { Phase::Failed(error) => Some(error.clone()), _ => None }, |el, error| el.child(div().text_color(theme.danger).child(error)))
             .children(run.question.clone())
-            .when(run.snippet_undo.is_some(),|el|el.child(Button::new(("undo-chat-snippets",id)).ghost().small().icon(IconName::Undo).label("Undo snippet changes")
+            .when(run.snippet_undo.is_some(),|el|el.child(Button::new(("undo-chat-snippets",id)).ghost().xsmall().icon(IconName::Undo).label("Undo snippet changes")
                 .on_click(cx.listener(move|this,_,window,cx|{
                     let Some(run)=this.runs.iter_mut().find(|run|run.id==id)else{return;};let Some((dir,before,after))=run.snippet_undo.clone()else{return;};
                     match practice::snippets::store::commit(&dir,&after,&before){Ok(())=>run.snippet_undo=None,Err(e)=>{window.push_notification(gpui_kit::component::notification::Notification::error(e.to_string()),cx);return;}}
                     let ws=this.workspace.clone();window.defer(cx,move|_,cx|{let _=ws.update(cx,|ws,cx|ws.reload_snippets(cx));});cx.notify();
                 }))))
-            .children(status)
-            .when(run.answer.is_none() && !run.reply.is_empty() && !run.reply.trim_start().starts_with('{'), |el| el.child(
+            .when(run.answer.is_none() && !run.reply.is_empty() && !run.reply.trim_start().starts_with('{') && !run.collapsed, |el| el.child(
                 crate::rich_text::markdown(SharedString::from(format!("chat-stream-{id}")), run.reply.clone()).selectable(true)))
-            .when(matches!(run.phase, Phase::Stopped | Phase::Failed(_)), |el| el.child(h_flex().gap_2()
-                .when(run.solve.is_some(), |el| el.child(Button::new(("assist-continue", id)).primary().small().icon(IconName::Play).label("Continue")
+            .when(matches!(run.phase, Phase::Stopped | Phase::Failed(_)), |el| el.child(h_flex().gap_1()
+                .when(run.solve.is_some(), |el| el.child(Button::new(("assist-continue", id)).primary().xsmall().icon(IconName::Play).label("Continue")
                     .tooltip("Continue using the current solution and agent session when available")
                     .on_click(cx.listener(move |this, _, window, cx| this.recover(id, true, window, cx)))))
-                .child(Button::new(("assist-retry", id)).ghost().small().icon(IconName::RefreshCw).label("Retry")
+                .child(Button::new(("assist-retry", id)).ghost().xsmall().icon(IconName::RefreshCw).label("Retry")
                     .tooltip("Start a new run using the current code")
                     .on_click(cx.listener(move |this, _, window, cx| this.recover(id, false, window, cx))))))
             .children(solve)
             .children(body)
+            .children(actions)
             .with_animation(("assist-card-in", id), Animation::new(Duration::from_millis(260)).with_easing(gpui_kit::base::animation::ease_out_cubic),
                 |el, t| el.opacity(t).mt(px(8. * (1. - t))))
             .into_any_element()
@@ -1037,14 +1048,14 @@ impl Assist {
             })))
             .children(solve.log.iter().map(|(tone, text)| {
                 let (_, _, fg) = crate::gen_ui::style::tone_colors(*tone, &theme);
-                h_flex().gap_2().text_xs().child(div().size(px(6.)).rounded_full().bg(fg)).child(div().text_color(theme.foreground).child(text.clone()))
+                h_flex().gap_2().text_size(META).child(div().size(px(6.)).rounded_full().bg(fg)).child(div().text_color(theme.foreground).child(text.clone()))
             }))
             .when(run.phase == Phase::Confirm, |el| el.child(h_flex().gap_2().pt_1()
                 .child(Button::new(("assist-submit", id)).primary().small().icon(IconName::Send).label("Submit")
                     .tooltip("Submit this solution to the judge").on_click(cx.listener(move |this, _, window, cx| this.submit(id, window, cx))))
                 .child(Button::new(("assist-keep", id)).ghost().small().label("Not now")
                     .on_click(cx.listener(move |this, _, _, cx| this.stop(id, cx))))))
-            .when(solve.accepted, |el| el.child(h_flex().gap_2().items_center().text_sm().text_color(theme.success)
+            .when(solve.accepted, |el| el.child(h_flex().gap_2().items_center().text_xs().text_color(theme.success)
                 .child(Icon::new(IconName::CircleCheck).size_4()).child("Accepted")
                 .with_animation(("solve-accepted", id), Animation::new(Duration::from_millis(500)).with_easing(gpui_kit::base::animation::ease_out_cubic), |el, t| el.opacity(t))))
             .into_any_element()
@@ -1077,13 +1088,13 @@ impl Assist {
             let index = sequence.get(); sequence.set(index + 1);
             crate::rich_text::markdown(SharedString::from(format!("answer-{id}-{:?}-{index}", std::mem::discriminant(answer))), text)
         };
-        let prose = |text: &str| div().min_w_0().text_sm().text_color(theme.foreground).child(rich(text));
-        let muted = |text: &str| div().min_w_0().text_xs().text_color(theme.muted_foreground).child(rich(text));
+        let prose = |text: &str| div().min_w_0().text_xs().text_color(theme.foreground).child(rich(text));
+        let muted = |text: &str| div().min_w_0().text_size(META).text_color(theme.muted_foreground).child(rich(text));
         let tag = |text: &str, color: Hsla| div().px_2().min_h(px(20.)).flex().items_center().rounded_full()
             .bg(color.opacity(0.14)).border_1().border_color(color.opacity(0.2))
             .text_size(px(11.)).text_color(color).font_weight(FontWeight::MEDIUM).child(rich(text));
-        let mono = |text: &str| div().p_2().rounded_md().bg(theme.muted).font_family(theme.mono_font_family.clone()).text_xs().whitespace_normal().child(text.to_owned());
-        let label = |text: &'static str| div().text_xs().font_weight(FontWeight::MEDIUM).text_color(theme.muted_foreground).child(text);
+        let mono = |text: &str| div().p_2().rounded_md().bg(theme.muted).font_family(theme.mono_font_family.clone()).text_size(META).whitespace_normal().child(text.to_owned());
+        let label = |text: &'static str| div().text_size(META).font_weight(FontWeight::MEDIUM).text_color(theme.muted_foreground).child(text);
         match answer {
             Answer::Review(review) => v_flex().gap_4()
                 .child(self.body(run, &Answer::Bugs(review.correctness.clone()), window, cx))
@@ -1099,7 +1110,7 @@ impl Assist {
                         h_flex().gap_2().items_start()
                             .child(div().mt(px(2.)).size(px(18.)).flex_shrink_0().rounded_full().flex().items_center().justify_center().bg(theme.warning.opacity(0.18))
                                 .text_size(px(10.)).text_color(theme.warning).child((i + 1).to_string()))
-                            .child(v_flex().gap_0p5().min_w_0().flex_1().child(div().text_sm().font_weight(FontWeight::MEDIUM).child(rich(&hint.title))).child(muted(&hint.body)))
+                            .child(v_flex().gap_0p5().min_w_0().flex_1().child(div().text_xs().font_weight(FontWeight::MEDIUM).child(rich(&hint.title))).child(muted(&hint.body)))
                             .with_animation(SharedString::from(format!("hint-{id}-{i}")), Animation::new(Duration::from_millis(300)).with_easing(gpui_kit::base::animation::ease_out_cubic), |el, t| el.opacity(t))
                     }))
                     .when(shown < hints.hints.len(), |el| el.child(h_flex().justify_between().items_center()
@@ -1115,7 +1126,7 @@ impl Assist {
                     v_flex().gap_1()
                         .child(h_flex().gap_2().items_center()
                             .child(tag(&format!("{:?}", case.kind).to_lowercase(), theme.success))
-                            .child(div().flex_1().min_w_0().text_sm().truncate().child(rich(&case.title)))
+                            .child(div().flex_1().min_w_0().text_xs().truncate().child(rich(&case.title)))
                             .child(Button::new(("test-add", id * 100 + i as u64)).ghost().xsmall().icon(if added { IconName::Check } else { IconName::Plus })
                                 .tooltip(if added { "Added to test cases" } else { "Add to test cases" }).disabled(added)
                                 .on_click(cx.listener(move |this, _, window, cx| this.add_case(id, i, input.clone(), expected.clone(), window, cx)))))
@@ -1128,9 +1139,9 @@ impl Assist {
                 .children(bugs.bugs.iter().enumerate().map(|(i, bug)| {
                     let color = match bug.severity { assist::Severity::Bug => theme.danger, assist::Severity::Risk => theme.warning, assist::Severity::Style => theme.info };
                     v_flex().gap_1().pl_2().border_l_2().border_color(color.opacity(0.7))
-                        .child(h_flex().gap_2().items_center().child(line_badge(bug.line, format!("bug-{id}-{i}").into())).child(div().text_sm().font_weight(FontWeight::MEDIUM).child(rich(&bug.title))))
+                        .child(h_flex().gap_2().items_center().child(line_badge(bug.line, format!("bug-{id}-{i}").into())).child(div().text_xs().font_weight(FontWeight::MEDIUM).child(rich(&bug.title))))
                         .child(muted(&bug.detail))
-                        .child(h_flex().gap_1p5().items_start().text_xs().child(Icon::new(IconName::Sparkles).size_3().text_color(theme.success)).child(div().text_color(theme.foreground).child(rich(&bug.fix))))
+                        .child(h_flex().gap_1p5().items_start().text_size(META).child(Icon::new(IconName::Sparkles).size_3().text_color(theme.success)).child(div().text_color(theme.foreground).child(rich(&bug.fix))))
                 }))
                 .when_some(bugs.failing_input.clone(), |el, input| {
                     let added = run.added.contains(&usize::MAX);
@@ -1147,20 +1158,20 @@ impl Assist {
                 .child(prose(&analysis.summary))
                 .children(analysis.lines.iter().enumerate().map(|(i, cost)| h_flex().gap_2().items_center()
                     .child(line_badge(cost.line, format!("cost-{id}-{i}").into()))
-                    .child(div().text_xs().font_family(theme.mono_font_family.clone()).text_color(theme.warning).child(rich(&cost.cost)))
-                    .child(div().flex_1().min_w_0().text_xs().text_color(theme.muted_foreground).child(rich(&cost.note)))))
+                    .child(div().text_size(META).font_family(theme.mono_font_family.clone()).text_color(theme.warning).child(rich(&cost.cost)))
+                    .child(div().flex_1().min_w_0().text_size(META).text_color(theme.muted_foreground).child(rich(&cost.note)))))
                 .into_any_element(),
             Answer::Stuck(stuck) => v_flex().gap_2()
                 .child(h_flex().gap_2().items_center().child(tag(&stuck.concept, theme.info)).when_some(stuck.line, |el, line| el.child(line_badge(line, format!("stuck-{id}").into()))))
                 .child(prose(&stuck.diagnosis))
                 .child(v_flex().gap_1().p_2().rounded_md().bg(theme.info.opacity(0.08)).child(label("Next step")).child(prose(&stuck.next_step)))
-                .child(h_flex().gap_1p5().items_start().child(Icon::new(IconName::Brain).size_3p5().text_color(theme.info)).child(div().text_sm().italic().text_color(theme.foreground).child(rich(&stuck.question))))
+                .child(h_flex().gap_1p5().items_start().child(Icon::new(IconName::Brain).size_3p5().text_color(theme.info)).child(div().text_xs().italic().text_color(theme.foreground).child(rich(&stuck.question))))
                 .into_any_element(),
             Answer::Explain(explain) => v_flex().gap_2()
                 .child(label("Intuition")).child(prose(&explain.intuition))
                 .child(h_flex().gap_2().child(tag(&explain.pattern, theme.info)))
                 .children(explain.approaches.iter().map(|a| v_flex().gap_0p5()
-                    .child(h_flex().gap_2().child(div().text_sm().font_weight(FontWeight::MEDIUM).child(rich(&a.name))).child(div().text_xs().font_family(theme.mono_font_family.clone()).text_color(theme.warning).child(rich(&format!("{} · {}", a.time, a.space)))))
+                    .child(h_flex().gap_2().child(div().text_xs().font_weight(FontWeight::MEDIUM).child(rich(&a.name))).child(div().text_size(META).font_family(theme.mono_font_family.clone()).text_color(theme.warning).child(rich(&format!("{} · {}", a.time, a.space)))))
                     .child(muted(&a.idea))))
                 .when(!explain.walkthrough.frames.is_empty(), |el| el.child(label("Walkthrough")).child(self.scene(run, &explain.walkthrough, None, window, cx)))
                 .when(!explain.pitfalls.is_empty(), |el| el.child(label("Pitfalls")).children(explain.pitfalls.iter().map(|p| muted(&format!("• {p}")))))
@@ -1188,7 +1199,7 @@ impl Assist {
                         let (workspace, slug) = (workspace.clone(), similar.slug.clone());
                         h_flex().id(("similar", id * 100 + i as u64)).gap_2().items_center().px_2().py_1().rounded_md().cursor_pointer().hover(|s| s.bg(theme.list_hover))
                             .child(Icon::new(IconName::ArrowUpRight).size_3p5().text_color(theme.info))
-                            .child(v_flex().min_w_0().flex_1().child(div().text_sm().child(rich(&similar.title))).child(div().text_xs().text_color(theme.muted_foreground).truncate().child(rich(&similar.why))))
+                            .child(v_flex().min_w_0().flex_1().child(div().text_xs().child(rich(&similar.title))).child(div().text_size(META).text_color(theme.muted_foreground).truncate().child(rich(&similar.why))))
                             .on_click(move |_, window, cx| {
                                 let (workspace, slug) = (workspace.clone(), slug.clone());
                                 window.defer(cx, move |window, cx| { let _ = workspace.update(cx, |ws, cx| ws.open_problem(slug, window, cx)); });
@@ -1199,7 +1210,7 @@ impl Assist {
             Answer::DryRun(dry) => v_flex().gap_2()
                 .child(self.scene(run, &dry.scene, dry.wrong_frame, window, cx))
                 .child(v_flex().gap_1().p_2().rounded_md().bg(theme.danger.opacity(0.08)).child(label("Where it goes wrong")).child(prose(&dry.explanation)))
-                .child(h_flex().gap_1p5().items_start().text_xs().child(Icon::new(IconName::Sparkles).size_3().text_color(theme.success)).child(div().text_color(theme.foreground).child(rich(&dry.fix_hint))))
+                .child(h_flex().gap_1p5().items_start().text_size(META).child(Icon::new(IconName::Sparkles).size_3().text_color(theme.success)).child(div().text_color(theme.foreground).child(rich(&dry.fix_hint))))
                 .into_any_element(),
             Answer::Solve(report) => v_flex().gap_1()
                 .child(h_flex().gap_2().child(tag(&report.time, theme.warning)).child(tag(&report.space, theme.info)))
@@ -1214,7 +1225,7 @@ impl Assist {
         if run.reveal {
             let copy = text.to_owned();
             v_flex().gap_1()
-                .child(div().min_w_0().p_2().rounded_md().bg(theme.muted).text_xs().child(crate::rich_text::markdown(
+                .child(div().min_w_0().p_2().rounded_md().bg(theme.muted).text_size(META).child(crate::rich_text::markdown(
                     SharedString::from(format!("reveal-{id}")),
                     if label == "Reveal the idea" { text.to_owned() } else { format!("```\n{text}\n```") })))
                 .child(h_flex().justify_end().child(Button::new(("reveal-copy", id)).ghost().xsmall().icon(IconName::Copy).label("Copy")
@@ -1238,10 +1249,10 @@ impl Assist {
         }, cx);
         let frame = scene.frames.get(index);
         v_flex().gap_2()
-            .when(!scene.title.is_empty(), |el| el.child(div().text_xs().text_color(theme.muted_foreground).child(crate::rich_text::markdown(SharedString::from(format!("scene-title-{id}")), &scene.title))))
+            .when(!scene.title.is_empty(), |el| el.child(div().text_size(META).text_color(theme.muted_foreground).child(crate::rich_text::markdown(SharedString::from(format!("scene-title-{id}")), &scene.title))))
             .child(div().p_3().rounded_lg().bg(theme.sidebar).border_1().border_color(if wrong == Some(index) { theme.danger.opacity(0.6) } else { theme.border })
                 .children(frame.map(|frame| crate::gen_ui::frame(&format!("scene-{id}"), frame, window, cx))))
-            .when_some(frame.and_then(|f| f.line), |el, line| el.child(h_flex().gap_1().text_xs().text_color(theme.muted_foreground).child("line").child(line.to_string())))
+            .when_some(frame.and_then(|f| f.line), |el, line| el.child(h_flex().gap_1().text_size(META).text_color(theme.muted_foreground).child("line").child(line.to_string())))
             .child(controls)
             .into_any_element()
     }
@@ -1270,9 +1281,9 @@ impl Assist {
 
 fn badge(title: &'static str, time: &str, space: &str, color: Hsla, theme: &Theme) -> Div {
     v_flex().flex_1().p_2().gap_0p5().rounded_lg().bg(color.opacity(0.08)).border_1().border_color(color.opacity(0.25))
-        .child(div().text_xs().text_color(theme.muted_foreground).child(title))
-        .child(div().text_lg().font_weight(FontWeight::SEMIBOLD).font_family(theme.mono_font_family.clone()).text_color(color).child(crate::rich_text::markdown(SharedString::from(format!("badge-{title}-time")), time)))
-        .when(!space.is_empty(), |el| el.child(div().text_xs().text_color(theme.muted_foreground).child(crate::rich_text::markdown(SharedString::from(format!("badge-{title}-space")), format!("space {space}")))))
+        .child(div().text_size(META).text_color(theme.muted_foreground).child(title))
+        .child(div().text_base().font_weight(FontWeight::SEMIBOLD).font_family(theme.mono_font_family.clone()).text_color(color).child(crate::rich_text::markdown(SharedString::from(format!("badge-{title}-time")), time)))
+        .when(!space.is_empty(), |el| el.child(div().text_size(META).text_color(theme.muted_foreground).child(crate::rich_text::markdown(SharedString::from(format!("badge-{title}-space")), format!("space {space}")))))
 }
 
 /// Your growth curve against the best one, on a log scale so both stay visible.

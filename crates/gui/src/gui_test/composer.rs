@@ -2,7 +2,7 @@
 use std::{path::Path, sync::Arc};
 use anyhow::{Result, ensure};
 use gpui_kit::*;
-use gpui_kit::component::{ActiveTheme as _, h_flex, v_flex};
+use gpui_kit::component::{ActiveTheme as _, v_flex};
 use gpui_kit::test::TestWindowExt as _;
 use practice::{config::Config, db::Db};
 use super::Assist;
@@ -84,14 +84,14 @@ impl Render for Fixture {
             return v_flex().size_full().bg(cx.theme().background).child(self.assist.clone());
         }
         if self.threads {
-            let new_chat = self.assist.update(cx, |assist, cx| assist.new_chat_button(cx).into_any_element());
-            let header = self.assist.update(cx, |assist, cx| assist.thread_header(window, cx));
-            let composer = self.assist.read(cx).threads.is_empty().then(|| self.assist.update(cx, |assist, cx| assist.render_composer(true, false, false, cx).into_any_element()));
-            return v_flex().key_context("AgentChat").size_full().bg(cx.theme().background)
+            let header = self.assist.update(cx, |assist, cx| assist.chat_header(cx));
+            let popover = self.assist.update(cx, |assist, cx| assist.thread_popover(cx));
+            let composer = self.assist.read(cx).threads.is_empty().then(|| self.assist.update(cx, |assist, cx| { assist.fit_composer(window, cx); assist.render_composer(true, false, false, cx).into_any_element() }));
+            return v_flex().key_context("AgentChat").relative().size_full().bg(cx.theme().background)
                 .on_action(cx.listener(|view, _: &super::NewChat, window, cx| view.assist.update(cx, |assist, cx| assist.new_thread(window, cx))))
-                .child(h_flex().justify_end().child(new_chat)).child(header).children(composer);
+                .child(header).child(div().flex_1()).children(composer).children(popover);
         }
-        let composer = self.assist.update(cx, |assist, cx| assist.render_composer(self.enabled, false, self.busy, cx).into_any_element());
+        let composer = self.assist.update(cx, |assist, cx| { assist.fit_composer(window, cx); assist.render_composer(self.enabled, false, self.busy, cx).into_any_element() });
         v_flex().size_full().bg(cx.theme().background).child(composer)
     }
 }
@@ -116,15 +116,26 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         })))?;
         let handle = handle.into();
         cx.run_until_parked();
-        cx.update_window(handle, |_, window, cx| -> Result<()> {
+        cx.update_window(handle, |_, window, cx| {
+            let search = fixture.read(cx).assist.read(cx).thread_search.focus_handle(cx);
+            search.focus(window, cx); window.render_frame(cx);
+        })?;
+        cx.run_until_parked();
+        let idle = cx.update_window(handle, |_, window, cx| -> Result<Pixels> {
             window.render_frame(cx);
-            window.click_at("chat-composer", point(px(16.), px(16.)), cx);
+            let idle = window.find("chat-composer").bounds().size.height;
+            window.click_at("chat-composer", point(px(16.), px(12.)), cx);
             window.press("enter", cx);
-            Ok(())
+            Ok(idle)
         })??;
+        cx.run_until_parked();
+        // Let the focus change settle before measuring the expanded prompt.
+        cx.update_window(handle, |_, window, cx| window.render_frame(cx))?;
         cx.run_until_parked();
         cx.update_window(handle, |_, window, cx| -> Result<()> {
             let assist = fixture.read(cx).assist.clone();
+            window.render_frame(cx);
+            ensure!(window.find("chat-composer").bounds().size.height > idle * 1.5, "Focused prompt did not expand from its one-line pill");
             ensure!(assist.read(cx).ai_tab == 1, "Empty Enter sent a chat");
             window.input("tell me more", cx);
             window.press("shift-enter", cx);
@@ -200,11 +211,11 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             window.render_frame(cx);
             window.hover("chat-thread-picker", cx);
             ensure!(!assist.read(cx).thread_selection_visible, "Opening history highlighted a row before navigation");
+            let header = window.find("chat-header").bounds();
             let container = window.find("chat-history-container").bounds();
-            let toolbar = window.find("chat-thread-toolbar").bounds();
             let search = window.find("chat-thread-search").bounds();
-            ensure!(container.left() < toolbar.left() && container.right() > toolbar.right() && container.top() < toolbar.top() && container.bottom() > search.bottom(), "History controls escaped their shared container");
-            ensure!(toolbar.left() == search.left() && toolbar.right() == search.right(), "History toolbar and search edges do not align");
+            ensure!(container.top() >= header.bottom() && container.right() <= window.viewport_size().width, "History dropdown covers the header or escapes the panel");
+            ensure!(container.left() < search.left() && container.right() > search.right() && container.top() < search.top() && container.bottom() > search.bottom(), "History search escaped its dropdown");
             ensure!(assist.read(cx).threads.len() == 3 && assist.read(cx).threads.iter().all(|thread| thread.title != "New chat"), "Empty New chat leaked into the list");
             Ok(())
         })??;
@@ -275,13 +286,14 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             let new_chat = window.find("chat-new-thread").bounds();
             let close = window.find("chat-hide").bounds();
             ensure!(new_chat.right() <= close.left() && new_chat.center().y == close.center().y, "Plus is not immediately before Close in the header");
-            ensure!(window.try_find("chat-thread-toolbar").is_none(), "Empty chat kept a second toolbar row");
-            ensure!(window.find("ai-tab-2").visible() && window.find("ai-tab-1").visible(), "Chats or Analysis is missing");
+            ensure!(window.try_find("chat-thread-picker").is_none(), "Empty chat offered a history picker");
+            let header = window.find("chat-header").bounds();
+            ensure!(header.size.height <= px(40.) && window.find("ai-tab-1").bounds().center().y == close.center().y, "Header is not a single slim row");
             ensure!(window.find("ai-action-grid").visible(), "Empty Chats lost the quick actions");
             window.click("ai-tab-1", cx);
             window.render_frame(cx);
             ensure!(window.find("ai-review").visible() && window.try_find("ai-action-grid").is_none(), "Analysis did not stay separate");
-            window.click("ai-tab-2", cx);
+            window.click("ai-tab-1", cx);
             window.render_frame(cx);
             ensure!(window.find("ai-action-grid").visible() && !assist.read(cx).show_threads, "Chats did not return to its empty state");
             Ok(())
@@ -300,6 +312,9 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             window.render_frame(cx);
             ensure!(window.try_find("ai-action-grid").is_none(), "Quick actions crowd the existing conversation");
             ensure!(window.find("assist-cards").visible(), "Chats lost its conversation");
+            let run = assist.read(cx).runs.iter().find(|run| run.thread_id == thread.id).map(|run| run.id).ok_or_else(|| anyhow::anyhow!("Restored turn is missing"))?;
+            let (list, bubble) = (window.find("assist-cards").bounds(), window.find(("chat-request", run)).bounds());
+            ensure!(list.right() - bubble.right() < px(24.) && bubble.left() > list.left() + px(48.), "Request is not a right-aligned bubble");
             Ok(())
         })??;
         cx.run_until_parked();
@@ -315,5 +330,5 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
     super::selection::fixture(cx, output, pixels)?;
     tooltip::native(cx, output, pixels)?;
     management::native(cx, output, pixels)?;
-    Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["archive icon, General settings restore and confirmed permanent deletion","Enter sends","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","send button input","send and stop containment","compact/light/zoom","wrapped tooltip width, viewport containment, shortcuts and dismissal","neutral history rows and visible keyboard selection","empty chats hidden","Ctrl+T / Ctrl+Shift+O / Ctrl+N","aligned toolbar and search","header Plus and no empty history row","merged Chats quick actions and Analysis navigation","quick-action tags and note follow-ups","first message names hidden chats","Alt+Q adds citation pills without sending","automatic selection menu Quote preserves the draft","Alt+E and Alt+F send selection prompts and preserve drafts","selection actions preserve editor content","citation source previews","normal replacement typing dismisses selection menu","workspace Alt+L accepts Copilot without quoting","annotation dropdown choices","long code wraps without source changes"]}))
+    Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["archive icon, General settings restore and confirmed permanent deletion","Enter sends","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","one-line prompt expands on focus","send button input","send and stop containment","compact/light/zoom","wrapped tooltip width, viewport containment, shortcuts and dismissal","neutral history rows and visible keyboard selection","empty chats hidden","Ctrl+T / Ctrl+Shift+O / Ctrl+N","history dropdown below the slim header","header Plus and no empty history row","merged Chats quick actions and Analysis toggle","quick-action tags and note follow-ups","first message names hidden chats","right-aligned request bubble","Alt+Q adds citation pills without sending","automatic selection menu Quote preserves the draft","Alt+E and Alt+F send selection prompts and preserve drafts","selection actions preserve editor content","citation source previews","normal replacement typing dismisses selection menu","workspace Alt+L accepts Copilot without quoting","annotation dropdown choices","long code wraps without source changes"]}))
 }

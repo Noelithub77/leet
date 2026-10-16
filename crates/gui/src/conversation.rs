@@ -49,6 +49,7 @@ impl Assist {
     pub(super) fn open_thread_list(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.persist_draft(cx); self.refresh_threads();
         self.show_threads = !self.threads.is_empty() || !self.thread_query.trim().is_empty();
+        if self.show_threads { self.ai_tab = 2; }
         self.thread_selection_visible = false;
         self.thread_selection = self.threads.iter().position(|thread| Some(thread.id) == self.selected_thread).unwrap_or(0);
         if self.show_threads { self.thread_search.focus_handle(cx).focus(window, cx); } else { self.composer.focus_handle(cx).focus(window, cx); }
@@ -161,53 +162,78 @@ impl Assist {
     }
 }
 
+const HEADER_H: f32 = 36.;
+const THREAD_ROW_H: f32 = 30.;
+
 impl Assist {
     pub(super) fn new_chat_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        Button::new("chat-new-thread").ghost().small().icon(IconName::Plus)
+        Button::new("chat-new-thread").ghost().xsmall().icon(IconName::Plus)
             .tooltip("New chat · Ctrl+T / Ctrl+Shift+O / Ctrl+N").accessibility_label("New chat")
             .disabled(self.slug.is_none()).on_click(cx.listener(|this, _, window, cx| this.new_thread(window, cx)))
     }
 
-    pub(super) fn thread_header(&self, _window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+    /// Compact header: the thread title opens history; Analysis is a toggle beside New chat.
+    pub(super) fn chat_header(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme().clone();
-        let title = if self.show_threads { "Chats".into() } else { self.selected_thread.and_then(|id| self.db.chat_thread(id).ok()).filter(|thread| thread.title != "New chat")
-            .map(|thread| Action::from_title(&thread.title).and_then(Action::tag).map_or(thread.title, str::to_owned)).unwrap_or_else(|| "Chats".into()) };
+        let analysis = self.ai_tab == 1;
         let has_history = !self.threads.is_empty() || !self.thread_query.trim().is_empty();
-        if !has_history && !self.db.can_undo_chat() { return div().into_any_element(); }
-        v_flex().px_3().pb_2()
-            .child(v_flex().id("chat-history-container").test_support().w_full().p_2().gap_2().border_1().border_color(theme.border).rounded_lg().bg(theme.secondary.opacity(0.3))
-            .child(h_flex().id("chat-thread-toolbar").test_support().w_full().gap_1().min_w_0()
-                .when(has_history, |el| el
-                    .child(Button::new("chat-thread-picker").ghost().small().icon(if self.show_threads { IconName::ChevronDown } else { IconName::ChevronRight }).label(title).flex_1().min_w_0()
-                        .tooltip("Conversation threads").on_click(cx.listener(|this, _, window, cx| { if this.show_threads { this.show_threads = false; cx.notify(); } else { this.open_thread_list(window, cx); } }))))
-                .when(!has_history, |el| el.child(div().flex_1()))
-                .when(self.db.can_undo_chat(), |el| el.child(Button::new("chat-undo").ghost().small().icon(IconName::Undo2).tooltip("Undo latest chat change").accessibility_label("Undo latest chat change")
-                    .on_click(cx.listener(|this, _, window, cx| this.undo_thread(window, cx))))))
-            .when(self.show_threads && has_history, |el| el
+        let title: SharedString = if analysis { "Analysis".into() } else { self.selected_thread.and_then(|id| self.db.chat_thread(id).ok()).filter(|thread| thread.title != "New chat")
+            .map(|thread| Action::from_title(&thread.title).and_then(Action::tag).map_or(thread.title, str::to_owned)).unwrap_or_else(|| "New chat".into()).into() };
+        h_flex().id("chat-header").test_support().h(px(HEADER_H)).flex_none().px_1p5().gap_0p5().items_center().min_w_0()
+            .child(if has_history && !analysis {
+                Button::new("chat-thread-picker").ghost().xsmall().label(title).dropdown_caret(true).min_w_0()
+                    .tooltip("Chat history").on_click(cx.listener(|this, _, window, cx| { if this.show_threads { this.show_threads = false; cx.notify(); } else { this.open_thread_list(window, cx); } }))
+                    .into_any_element()
+            } else {
+                div().px_2().min_w_0().truncate().font_weight(FontWeight::MEDIUM).text_color(theme.muted_foreground).child(title).into_any_element()
+            })
+            .child(div().flex_1())
+            .when(self.db.can_undo_chat(), |el| el.child(Button::new("chat-undo").ghost().xsmall().icon(IconName::Undo2).tooltip("Undo latest chat change").accessibility_label("Undo latest chat change")
+                .on_click(cx.listener(|this, _, window, cx| this.undo_thread(window, cx)))))
+            .child(crate::theme::selected_choice(Button::new("ai-tab-1").ghost().xsmall(), analysis, cx).icon(IconName::Gauge)
+                .tooltip("Analysis").accessibility_label("Analysis")
+                .on_click(cx.listener(|this, _, _, cx| { this.ai_tab = if this.ai_tab == 1 { 2 } else { 1 }; this.show_threads = false; cx.notify(); })))
+            .child(self.new_chat_button(cx))
+            .child(Button::new("chat-hide").ghost().xsmall().icon(IconName::X)
+                .tooltip_with_action("Hide AI", &crate::actions::ToggleRight, Some(crate::actions::WORKSPACE)).accessibility_label("Hide AI")
+                .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::actions::ToggleRight), cx)))
+            .into_any_element()
+    }
+
+    /// History dropdown over the conversation; clicking outside it below the header closes it.
+    pub(super) fn thread_popover(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let has_history = !self.threads.is_empty() || !self.thread_query.trim().is_empty();
+        if !self.show_threads || !has_history || self.ai_tab != 2 { return None; }
+        let theme = cx.theme().clone();
+        let close = cx.listener(|this, _: &MouseDownEvent, _, cx| { this.show_threads = false; cx.notify(); });
+        Some(div().absolute().top(px(HEADER_H)).left_0().right_0().bottom_0()
+            .child(div().id("chat-history-backdrop").absolute().size_full().occlude().on_mouse_down(MouseButton::Left, close))
+            .child(v_flex().id("chat-history-container").test_support().absolute().top_0().left_2().right_2().p_1().gap_1()
+                .rounded_lg().border_1().border_color(theme.border).bg(theme.popover).shadow_lg().occlude()
                 .child(v_flex().id("chat-thread-search").test_support().key_context("ChatThreads")
                     .on_action(cx.listener(|this, _: &NextThread, _, cx| this.navigate_threads(1, cx)))
                     .on_action(cx.listener(|this, _: &PreviousThread, _, cx| this.navigate_threads(-1, cx)))
                     .on_action(cx.listener(|this, _: &OpenThread, window, cx| { if let Some(thread) = this.threads.get(this.thread_selection) { this.select_thread(thread.id, window, cx); } }))
                     .on_action(cx.listener(|this, _: &CloseThreadList, window, cx| { this.show_threads = false; this.composer.focus_handle(cx).focus(window, cx); cx.notify(); }))
                     .child(gpui_kit::component::input::Input::new(&self.thread_search).small()))
-                .when(self.threads.is_empty(), |el| el.child(div().px_2().py_2().text_xs().text_color(theme.muted_foreground).child("No matching chats")))
+                .when(self.threads.is_empty(), |el| el.child(div().px_2().py_2().text_color(theme.muted_foreground).child("No matching chats")))
                 .when(!self.threads.is_empty(), |el| el.child(uniform_list("chat-thread-list", self.threads.len(), cx.processor(|this, range: std::ops::Range<usize>, _, cx| {
                     let theme = cx.theme().clone();
                     range.filter_map(|index| this.threads.get(index).map(|thread| {
                         let id = thread.id;
-                        h_flex().id(("chat-thread-row", id as u64)).h(px(40.)).w_full().px_3().gap_2().items_center().rounded_sm().border_b_1().border_color(if index + 1 < this.threads.len() { theme.border } else { theme.border.opacity(0.) }).cursor_pointer()
-                            .bg(if this.thread_selection_visible && index == this.thread_selection { theme.list_active } else { theme.background.opacity(0.) })
+                        h_flex().id(("chat-thread-row", id as u64)).h(px(THREAD_ROW_H)).w_full().px_2().gap_2().items_center().rounded_md().cursor_pointer()
+                            .bg(if this.thread_selection_visible && index == this.thread_selection { theme.list_active } else if Some(id) == this.selected_thread { theme.secondary } else { theme.background.opacity(0.) })
                             .hover(|el| el.bg(theme.list_hover))
                             .child(Icon::new(if thread.fork_of.is_some() { IconName::GitBranch } else { IconName::MessageCircle }).xsmall().text_color(theme.muted_foreground))
                             .child(match Action::from_title(&thread.title).and_then(|action| Some((action, action.tag()?))) {
                                 Some((action, tag)) => h_flex().flex_1().min_w_0().child(crate::note_card::chip(tag, accent(action, &theme))).into_any_element(),
-                                None => div().flex_1().min_w_0().truncate().text_sm().child(if thread.title == "New chat" { thread.draft.lines().find(|line| !line.trim().is_empty()).unwrap_or("Draft").trim().to_owned() } else { thread.title.clone() }).into_any_element(),
+                                None => div().flex_1().min_w_0().truncate().child(if thread.title == "New chat" { thread.draft.lines().find(|line| !line.trim().is_empty()).unwrap_or("Draft").trim().to_owned() } else { thread.title.clone() }).into_any_element(),
                             })
                             .child(Button::new(("chat-archive", id as u64)).ghost().xsmall().icon(IconName::Archive).accessibility_label("Archive chat").tooltip("Archive chat")
                                 .on_click(cx.listener(move |this, _, window, cx| this.archive_thread(id, window, cx))))
                             .on_click(cx.listener(move |this, _, window, cx| this.select_thread(id, window, cx))).into_any_element()
                     })).collect()
-                })).track_scroll(&self.thread_scroll).w_full().h(px(self.threads.len().min(5) as f32 * 40.))))))
-            .into_any_element()
+                })).track_scroll(&self.thread_scroll).w_full().h(px(self.threads.len().min(8) as f32 * THREAD_ROW_H)))))
+            .into_any_element())
     }
 }
