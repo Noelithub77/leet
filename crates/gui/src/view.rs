@@ -231,7 +231,8 @@ impl Render for Workspace {
             .child(body),
         )
         .child(self.render_status(window, cx))
-        .children(crate::assist::selection::render_menu(self))
+        .children(crate::assist::selection::render_menu(self, window, cx))
+        .children(crate::inline_edit::overlay(self, cx))
         .children(omnibar)
         .children(crate::update::panel(self, window, cx))
         .children(crate::tour::panel(self, window, cx))

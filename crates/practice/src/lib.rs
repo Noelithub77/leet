@@ -24,6 +24,7 @@ pub mod stdin_runner;
 
 pub mod lsp;
 pub mod copilot;
+pub mod focused_edit;
 
 pub mod description;
 pub mod rich_text;

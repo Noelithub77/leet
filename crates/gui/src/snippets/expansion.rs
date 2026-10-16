@@ -165,10 +165,11 @@ impl EditorPane {
         cx.notify();
     }
     fn accept_prediction(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        if !EditorMode::has_inline_completion(self.state.read(cx)) { return false; }
         let Some(predictions) = &self.predictions else { return false; };
         let editor = self.state.read(cx);
         let Some(suggestion) = predictions.current(editor.value().as_str(), editor.cursor(), cx) else { return false; };
+        if suggestion.is_next_edit() { if !predictions.alt.get() { return false; } }
+        else if !EditorMode::has_inline_completion(editor) { return false; }
         let before = editor.value().to_string();
         let selection = editor.selected_range();
         predictions.accepted(suggestion.clone(), cx);
@@ -468,6 +469,7 @@ impl Render for EditorPane {
                         menu.separator().menu("Quote", Box::new(crate::actions::QuoteSelection))
                             .menu("Explain", Box::new(crate::actions::ExplainSelection))
                             .menu("Fix", Box::new(crate::actions::FixSelection))
+                            .menu("Edit with agent", Box::new(crate::actions::InlineEdit))
                     }
                 }
             }))

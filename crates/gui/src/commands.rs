@@ -269,6 +269,8 @@ impl Workspace {
             .on_action(cx.listener(|this, _: &RevealHint, _, cx| this.reveal_hint(cx)))
             .on_action(cx.listener(|this, _: &HideHints, _, cx| this.hide_hints(cx)))
             .on_action(cx.listener(|this, _: &ResetSolution, window, cx| this.reset_solution(window, cx)))
+            .on_action(cx.listener(|this, _: &InlineEdit, window, cx| this.open_inline_edit(window, cx)))
+            .on_action(cx.listener(|this, _: &InlineEditHistory, window, cx| this.open_inline_history(window, cx)))
             .on_action(cx.listener(|this, _: &ZoomIn, window, cx| this.zoom(0.1, window, cx)))
             .on_action(cx.listener(|this, _: &ZoomOut, window, cx| this.zoom(-0.1, window, cx)))
             .on_action(cx.listener(|this, _: &ZoomReset, window, cx| {

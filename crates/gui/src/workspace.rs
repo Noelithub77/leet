@@ -130,6 +130,9 @@ pub struct Workspace {
     pub(crate) snippet_epoch: u64,
     pub(crate) snippet_library: std::rc::Rc<practice::snippets::search::Library>,
     pub snippet_editor: Option<Entity<crate::snippets::SnippetEditor>>,
+    pub(crate) inline_edit: Option<Entity<crate::inline_edit::InlineEdit>>,
+    /// Recent Ctrl+I instructions, newest first.
+    pub(crate) inline_history: Vec<String>,
     pub companion_task: Option<Task<()>>,
     pub intelligence: crate::language_server::Intelligence,
     pub onboarding: Option<Entity<crate::onboarding::Setup>>,
@@ -261,6 +264,7 @@ impl Workspace {
             if *editor == this.editor && matches!(event, InputEvent::Change) {
                 this.selection_menu = None; this.selection_epoch += 1;
                 this.schedule_save(window, cx);
+                this.sync_copilot_context(cx);
             }
         });
         // Shortcuts need a focused element inside the workspace from the first frame.
@@ -277,7 +281,7 @@ impl Workspace {
             this.save_config(window, cx);
             cx.notify();
         });
-        let copilot_observe = cx.observe(&copilot, |_, _, cx| cx.notify());
+        let copilot_observe = cx.observe(&copilot, |this, _, cx| { this.sync_copilot_context(cx); cx.notify(); });
         let snippet_library = std::rc::Rc::new(practice::snippets::search::Library::new(practice::snippets::store::effective(&[], &practice::snippets::builtin(), &config.snippets)));
         let mut this = Self {
             snippet_epoch: 0,
@@ -324,6 +328,8 @@ impl Workspace {
             tabs: vec![],
             active_tab: None,
             editor_pane: cx.new(|cx| EditorPane::new(editor.clone(), config.preferred_language, snippet_library, config.notes_view, window, cx)),
+            inline_edit: None,
+            inline_history: crate::inline_edit::load_history(&db),
             copilot: copilot.clone(),
             editor,
             vim_shared,
@@ -605,6 +611,7 @@ impl Workspace {
     }
 
     pub fn focus_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.sync_copilot_context(cx);
         self.focus_area = Focus::Editor;
         // Keep a mounted focus target while the center view changes.
         self.focus.focus(window, cx);
@@ -653,7 +660,7 @@ impl Workspace {
         }
         self.assist.update(cx, |assist, cx| assist.stop_solves(cx));
         self.save_now(cx);
-        self.park_tab();
+        self.park_tab(cx);
         self.new_editor(window, cx);
         self.active_tab = Some(self.tabs.len());
         self.tabs.push(None);

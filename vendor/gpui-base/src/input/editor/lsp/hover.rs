@@ -29,7 +29,12 @@ impl InputBaseState<EditorMode> {
         window: &mut Window,
         cx: &mut Context<InputBaseState<EditorMode>>,
     ) {
-        if self.selecting {
+        // A selection owns its space for selection actions; symbol hovers would cover them.
+        let selection = self.active_selection();
+        if self.selecting || (!selection.is_empty() && selection.contains(offset)) {
+            if self.extras.hover_popover.is_some() {
+                self.clear_hover_state(cx);
+            }
             return;
         }
 

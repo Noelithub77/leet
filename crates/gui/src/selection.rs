@@ -1,18 +1,22 @@
 //! Selection commands, citation previews, and the automatic selection menu.
 use gpui_kit::*;
 use gpui_kit::base::TextSelection;
-use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
-use gpui_kit::component::{ActiveTheme as _, h_flex, Icon};
+use gpui_kit::assets::IconName;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::{ActiveTheme as _, Sizable as _, h_flex, Icon};
+use gpui_kit::prelude::FluentBuilder as _;
 use practice::assist::Action;
 use practice::chat::history::Citation;
 use crate::workspace::Workspace;
 
+/// A compact toolbar beside the selection; it never takes focus, so typing still replaces the selection.
 pub(crate) struct SelectionMenu {
-    menu: Entity<PopupMenu>,
     position: Point<Pixels>,
+    anchor: Anchor,
     citation: Citation,
     return_focus: Option<FocusHandle>,
-    _dismiss: Subscription,
+    /// Editor code, as opposed to rendered text, which can also be edited in place.
+    editable: bool,
 }
 
 pub(super) fn citation_key(citation: &Citation) -> u64 {
@@ -36,9 +40,28 @@ pub(super) fn citation_pill(id: impl Into<ElementId>, citation: &Citation, theme
         })
 }
 
-pub(crate) fn render_menu(ws: &Workspace) -> Option<AnyElement> {
+pub(crate) fn render_menu(ws: &Workspace, window: &mut Window, cx: &mut Context<Workspace>) -> Option<AnyElement> {
     let selection = ws.selection_menu.as_ref()?;
-    Some(deferred(anchored().position(selection.position).child(div().id("selection-ai-menu").test_support().child(selection.menu.clone()))).into_any_element())
+    let theme = cx.theme().clone();
+    // Ctrl+I stays visible on the edit button; the other shortcuts live in tooltips.
+    let edit_key = gpui_kit::component::kbd::Kbd::binding_for_action(&crate::actions::InlineEdit, None, window).map(|kbd| kbd.appearance(false));
+    let command = |index: usize, icon: IconName, label: &'static str, tooltip: &'static str, action: &dyn gpui_kit::Action, command: Option<&'static str>, cx: &mut Context<Workspace>| {
+        let citation = selection.citation.clone();
+        Button::new(index).ghost().xsmall().icon(icon).label(label).tooltip_with_action(tooltip, action, None)
+            .on_click(cx.listener(move |ws, _, window, cx| ws.selection_ai_citation(command, citation.clone(), window, cx)))
+    };
+    let toolbar = h_flex().id("selection-ai-menu").test_support().occlude().items_center().gap_0p5().p_0p5()
+        .rounded_lg().border_1().border_color(theme.border).bg(theme.popover).shadow_md().text_xs()
+        .on_mouse_down_out(cx.listener(|ws, _, _, cx| { ws.selection_menu = None; cx.notify(); }))
+        .child(command(0, IconName::MessageCircle, "Quote", "Quote in chat", &crate::actions::QuoteSelection, None, cx))
+        .child(command(1, IconName::Lightbulb, "Explain", "Explain selection", &crate::actions::ExplainSelection, Some("Explain"), cx))
+        .child(command(2, IconName::WandSparkles, "Fix", "Fix selection", &crate::actions::FixSelection, Some("Fix"), cx))
+        .when(selection.editable, |toolbar| toolbar
+            .child(div().w_px().h_4().mx_0p5().bg(theme.border))
+            .child(Button::new(3usize).ghost().xsmall().icon(Icon::new(IconName::Sparkles).text_color(theme.magenta)).label("Edit")
+                .tooltip("Edit with agent").children(edit_key.map(|kbd| div().text_color(theme.muted_foreground).child(kbd)))
+                .on_click(cx.listener(|ws, _, window, cx| ws.open_inline_edit(window, cx)))));
+    Some(deferred(anchored().position(selection.position).anchor(selection.anchor).snap_to_window_with_margin(px(8.)).child(toolbar)).into_any_element())
 }
 
 impl Workspace {
@@ -64,27 +87,22 @@ impl Workspace {
         if self.session.is_none() || self.center != crate::workspace::Center::Editor || self.tour.is_some() || self.omni.open || self.debug_mode || self.composer_focused(window, cx) { self.selection_menu = None; cx.notify(); return; }
         let Some(citation) = self.selected_citation(window, cx) else { self.selection_menu = None; cx.notify(); return; };
         if self.selection_menu.as_ref().is_some_and(|selection| selection.citation == citation) { return; }
-        let workspace = cx.weak_entity();
-        let quoted = citation.clone();
-        let return_focus = window.focused(cx);
-        let action_context = return_focus.clone();
-        let menu = PopupMenu::build(window, cx, move |menu, _, _| {
-            let menu = if let Some(focus) = action_context.clone() { menu.action_context(focus) } else { menu };
-            [None, Some("Explain"), Some("Fix")].into_iter().fold(menu, |menu, command| {
-                let action: Box<dyn gpui_kit::Action> = match command {
-                    Some("Explain") => Box::new(crate::actions::ExplainSelection),
-                    Some("Fix") => Box::new(crate::actions::FixSelection),
-                    _ => Box::new(crate::actions::QuoteSelection),
-                };
-                let workspace = workspace.clone(); let citation = quoted.clone();
-                menu.item(PopupMenuItem::new(command.unwrap_or("Quote")).action(action).on_click(move |_, window, cx| {
-                    let _ = workspace.update(cx, |ws, cx| ws.selection_ai_citation(command, citation.clone(), window, cx));
-                }))
-            })
-        });
-        let dismiss = cx.subscribe(&menu, |ws, _, _: &DismissEvent, cx| { ws.selection_menu = None; cx.notify(); });
-        self.selection_menu = Some(SelectionMenu { menu, position: position + point(px(0.), px(8.)), citation, return_focus, _dismiss: dismiss });
+        let editable = TextSelection::selected_text(window, cx).trim().is_empty();
+        let (position, anchor) = if editable { self.selection_anchor(cx).unwrap_or((position + point(px(0.), px(8.)), Anchor::TopLeft)) } else { (position + point(px(0.), px(8.)), Anchor::TopLeft) };
+        self.selection_menu = Some(SelectionMenu { position, anchor, citation, return_focus: window.focused(cx), editable });
         cx.notify();
+    }
+
+    /// Above the selection's first line, or below its last line when the top is near the editor edge.
+    fn selection_anchor(&self, cx: &App) -> Option<(Point<Pixels>, Anchor)> {
+        let editor = self.editor.read(cx);
+        let range = editor.selected_range(); let viewport = editor.input_bounds();
+        let start = editor.range_to_bounds(&(range.start..range.start))?;
+        let end = if editor.value().get(..range.end)?.ends_with('\n') && range.end > range.start { range.end - 1 } else { range.end };
+        let end = editor.range_to_bounds(&(end..end))?;
+        let left = start.left().max(viewport.left());
+        if start.top() - px(36.) >= viewport.top() && start.top() <= viewport.bottom() { return Some((point(left, start.top() - px(4.)), Anchor::BottomLeft)); }
+        Some((point(left, end.bottom().min(viewport.bottom()) + px(4.)), Anchor::TopLeft))
     }
 
     pub(crate) fn dismiss_selection_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -360,6 +378,119 @@ pub(crate) fn fixture(cx: &mut HeadlessAppContext, output: &std::path::Path, pix
         workspace.read(cx).editor_pane.clone().update(cx, |pane, cx| pane.load_file("answer = 42\n".into(), window, cx));
         Ok(())
     })??;
-    cx.update_window(handle, |_, window, _| window.remove_window())?;
+    // The selection toolbar sits beside the code and opens Ctrl+I on that selection.
+    cx.update_window(handle, |_, window, cx| -> anyhow::Result<()> {
+        workspace.read(cx).editor_pane.clone().update(cx, |pane, cx| pane.load_file("answer = 42\nother = 1\n".into(), window, cx));
+        let editor = workspace.read(cx).editor.clone();
+        editor.update(cx, |editor, cx| { editor.focus(window, cx); editor.set_selected_range(0..11, cx); });
+        window.render_frame(cx);
+        workspace.update(cx, |ws, cx| ws.open_selection_menu(point(px(0.), px(0.)), window, cx));
+        window.render_frame(cx);
+        let toolbar = window.find("selection-ai-menu").bounds();
+        let selected = editor.read(cx).range_to_bounds(&(0..11)).context("Selection has no bounds")?;
+        ensure!(!toolbar.intersects(&selected), "Selection toolbar covers the selected code");
+        ensure!((toolbar.left() - selected.left()).abs() < px(24.), "Selection toolbar is not aligned with the selection");
+        window.within("selection-ai-menu").click(3usize, cx);
+        Ok(())
+    })??;
+    cx.run_until_parked();
+    if pixels { cx.capture_screenshot(handle)?.save(output.join("focused-edit-open.png"))?; }
+    let mark = cx.update_window(handle, |_, window, cx| -> anyhow::Result<_> {
+        window.render_frame(cx);
+        let edit = workspace.read(cx).inline_edit.clone().context("Selection toolbar Edit did not open the inline instruction box")?;
+        let mark = edit.read(cx).mark().context("Edit target is not highlighted")?;
+        ensure!(mark.get_ranges(cx) == vec![0..11, 0..11], "Edit target highlight has the wrong range: {:?}", mark.get_ranges(cx));
+        ensure!(edit.read(cx).input_focused(window, cx), "Instruction box did not take focus");
+        let card = window.find("inline-edit").bounds();
+        let selected = workspace.read(cx).editor.read(cx).range_to_bounds(&(0..11)).context("Selection has no bounds")?;
+        ensure!(card.top() >= selected.bottom(), "Edit card covers its target");
+        edit.update(cx, |edit, _| { edit.fixture_reply = Some("answer = 43".into()); edit.fixture_note = "Bumped the constant.".into(); });
+        window.input("Change the answer to 43", cx); window.press("enter", cx);
+        Ok(mark)
+    })??;
+    cx.run_until_parked();
+    let mark = cx.update_window(handle, |_, window, cx| -> anyhow::Result<_> {
+        let edit = workspace.read(cx).inline_edit.clone().context("Edit box closed after Enter")?;
+        window.render_frame(cx);
+        ensure!(window.try_find("inline-edit-diff").is_some(), "Focused edit has no review diff: {:?} / {:?}", edit.read(cx).error(), edit.read(cx).instruction(cx));
+        ensure!(window.find("inline-edit-note").visible(), "Agent note is not shown");
+        ensure!(window.find("inline-edit-note").bounds().bottom() <= window.find("inline-edit-diff").bounds().top(), "Agent note is not above the diff");
+        ensure!(workspace.read(cx).solution_text(cx) == "answer = 42\nother = 1\n", "Generating an edit changed the solution before Apply");
+        Ok(mark)
+    })??;
+    if pixels { cx.capture_screenshot(handle)?.save(output.join("focused-edit-review.png"))?; }
+    cx.update_window(handle, |_, window, cx| window.press("enter", cx))?;
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| -> anyhow::Result<()> {
+        ensure!(workspace.read(cx).solution_text(cx) == "answer = 43\nother = 1\n", "Enter did not apply the reviewed edit");
+        ensure!(workspace.read(cx).inline_edit.is_none(), "Applied review did not close");
+        ensure!(mark.get_ranges(cx).is_empty(), "Closing left the edit target highlighted");
+        window.press("ctrl-z", cx);
+        ensure!(workspace.read(cx).solution_text(cx) == "answer = 42\nother = 1\n", "Focused edit is not undoable");
+        // A right-click outside the selection keeps it for the context menu.
+        let editor = workspace.read(cx).editor.clone();
+        editor.update(cx, |editor, cx| { editor.focus(window, cx); editor.set_selected_range(12..21, cx); });
+        window.render_frame(cx);
+        let position = editor.read(cx).range_to_bounds(&(3..4)).context("First line has no bounds")?.center();
+        window.dispatch_event(PlatformInput::MouseDown(MouseDownEvent { button: MouseButton::Right, position, modifiers: Modifiers::default(), click_count: 1, first_mouse: false }), cx);
+        window.dispatch_event(PlatformInput::MouseUp(MouseUpEvent { button: MouseButton::Right, position, modifiers: Modifiers::default(), click_count: 1 }), cx);
+        Ok(())
+    })??;
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| -> anyhow::Result<()> {
+        window.render_frame(cx);
+        ensure!(workspace.read(cx).editor.read(cx).selected_range() == (12..21), "Right-click dropped the selection: {:?}", workspace.read(cx).editor.read(cx).selected_range());
+        ensure!(window.find("popup-menu").visible(), "Right-click did not open the context menu");
+        Ok(())
+    })??;
+    if pixels { cx.capture_screenshot(handle)?.save(output.join("selection-context-menu.png"))?; }
+    cx.update_window(handle, |_, window, cx| { window.press("escape", cx); window.render_frame(cx); window.press("ctrl-i", cx); })?;
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| -> anyhow::Result<()> {
+        let edit = workspace.read(cx).inline_edit.clone().context("Ctrl+I did not open on the right-clicked selection")?;
+        ensure!(edit.read(cx).mark().is_some_and(|mark| mark.get_ranges(cx).first() == Some(&(12..21))), "Ctrl+I lost the right-clicked selection");
+        edit.update(cx, |edit, _| edit.fixture_reply = Some("other = 2".into()));
+        window.input("Change to 2", cx); window.press("enter", cx); Ok(())
+    })??;
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| -> anyhow::Result<()> {
+        // A newer buffer makes the reviewed proposal stale.
+        workspace.read(cx).editor_pane.clone().update(cx, |pane, cx| pane.load_file("answer = 44\nother = 1\n".into(), window, cx));
+        window.render_frame(cx); window.click("inline-edit-apply", cx);
+        ensure!(workspace.read(cx).solution_text(cx) == "answer = 44\nother = 1\n", "Stale preview overwrote newer code");
+        ensure!(workspace.read(cx).inline_edit.is_some(), "Stale preview was falsely reported as applied");
+        window.click("inline-edit-discard", cx); Ok(())
+    })??;
+    cx.run_until_parked();
+    // Ctrl+Shift+I lists recent instructions; Up/Down walk them like a shell.
+    cx.update_window(handle, |_, window, cx| -> anyhow::Result<()> {
+        ensure!(workspace.read(cx).inline_edit.is_none(), "Discard did not close the inline review");
+        ensure!(crate::inline_edit::load_history(&workspace.read(cx).db) == vec!["Change to 2".to_owned(), "Change the answer to 43".to_owned()], "Recent instructions were not saved");
+        window.press("ctrl-shift-i", cx); Ok(())
+    })??;
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| -> anyhow::Result<()> {
+        window.render_frame(cx);
+        ensure!(window.find("inline-edit-history").visible(), "Ctrl+Shift+I did not show recent edits");
+        let edit = workspace.read(cx).inline_edit.clone().context("Ctrl+Shift+I did not open the edit box")?;
+        for (key, expected) in [("up", "Change to 2"), ("up", "Change the answer to 43"), ("down", "Change to 2"), ("down", "")] {
+            window.press(key, cx);
+            ensure!(edit.read(cx).instruction(cx) == expected, "{key} recalled {:?}, expected {expected:?}", edit.read(cx).instruction(cx));
+        }
+        window.render_frame(cx); window.click(("inline-edit-recent", 1usize), cx);
+        ensure!(edit.read(cx).instruction(cx) == "Change the answer to 43", "Picking a recent edit did not fill the instruction");
+        window.render_frame(cx);
+        ensure!(window.try_find("inline-edit-history").is_none(), "Picking a recent edit left the list open");
+        Ok(())
+    })??;
+    if pixels { cx.capture_screenshot(handle)?.save(output.join("focused-edit-history.png"))?; }
+    cx.update_window(handle, |_, window, cx| -> anyhow::Result<()> {
+        window.press("escape", cx); Ok(())
+    })??;
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| -> anyhow::Result<()> {
+        ensure!(workspace.read(cx).inline_edit.is_none(), "Escape did not close the edit box");
+        window.remove_window(); Ok(())
+    })??;
     cx.run_until_parked(); Ok(())
 }

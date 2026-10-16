@@ -15,7 +15,7 @@ use gpui_kit::component::input::{EditorState, InputEvent, TabSize};
 
 pub struct ProblemTab {
     pub session: Session,
-    editor: Entity<EditorState>,
+    pub(crate) editor: Entity<EditorState>,
     pane: Entity<EditorPane>,
     statement: Entity<Statement>,
     subscription: Option<Subscription>,
@@ -51,7 +51,8 @@ impl Workspace {
             tab.pane.update(cx, |pane, cx| { pane.library = self.snippet_library.clone(); pane.tab_expand = self.config.snippets.tab_expand; cx.notify(); });
         }
     }
-    pub fn park_tab(&mut self) {
+    pub fn park_tab(&mut self, cx: &mut App) {
+        self.close_inline_edit(cx);
         self.debug_mode = false;
         if let (Some(index), Some(session)) = (self.active_tab, self.session.take()) {
             self.tabs[index] = Some(ProblemTab {
@@ -98,7 +99,7 @@ impl Workspace {
         self.save_now(cx);
         if self.active_tab != Some(index) {
             self.assist.update(cx, |assist, cx| assist.stop_solves(cx));
-            self.park_tab();
+            self.park_tab(cx);
             self.take_tab(index);
         }
         if let Some(session) = &self.session {
@@ -132,7 +133,7 @@ impl Workspace {
         let focus = self.focus_area;
         if background {
             let Some(index) = self.tabs.iter().position(|tab| tab.as_ref().is_some_and(|tab| tab.session.slug == slug)) else { return; };
-            self.park_tab();
+            self.park_tab(cx);
             self.take_tab(index);
             self.focus_area = Focus::Home;
         }
@@ -147,7 +148,7 @@ impl Workspace {
             }),
         }
         if background {
-            self.park_tab();
+            self.park_tab(cx);
             if let Some(index) = previous { self.take_tab(index); }
             else { self.active_tab = None; }
             self.focus_area = focus;
@@ -262,7 +263,7 @@ impl Workspace {
 
     pub fn close_problem(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !self.save_before_close(window, cx) { return; }
-        self.park_tab();
+        self.park_tab(cx);
         if let Some(index) = self.active_tab.take() {
             if let Some(tab) = self.tabs.remove(index) { self.home.closed_tabs.push((index, tab)); }
             if !self.tabs.is_empty() {
@@ -271,6 +272,7 @@ impl Workspace {
                 return;
             }
         }
+        self.sync_copilot_context(cx);
         self.show_home(window, cx);
     }
 
@@ -281,7 +283,7 @@ impl Workspace {
             self.toast(gpui_kit::component::notification::Notification::warning("Wait for the current run to finish"), window, cx);
             return;
         }
-        self.park_tab();
+        self.park_tab(cx);
         self.active_tab = None;
         // Verify every save before removing any tabs.
         for index in 0..self.tabs.len() {
@@ -290,13 +292,14 @@ impl Workspace {
                 self.back_to_editor(window, cx);
                 return;
             }
-            self.park_tab();
+            self.park_tab(cx);
             self.active_tab = None;
         }
         self.assist.update(cx, |assist, cx| assist.stop_solves(cx));
         while let Some(tab) = self.tabs.pop() {
             if let Some(tab) = tab { self.home.closed_tabs.push((self.tabs.len(), tab)); }
         }
+        self.sync_copilot_context(cx);
         self.show_home(window, cx);
     }
 
@@ -312,7 +315,7 @@ impl Workspace {
             ReopenTarget::Restore(index) => {
                 self.save_now(cx);
                 self.assist.update(cx, |assist, cx| assist.stop_solves(cx));
-                self.park_tab();
+                self.park_tab(cx);
                 self.active_tab = None;
                 self.tabs.insert(index, Some(tab));
                 self.select_tab(index, window, cx);

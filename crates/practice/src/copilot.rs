@@ -1,5 +1,5 @@
 //! GitHub's completion protocol; the server owns authentication and credentials.
-use std::{ops::{ControlFlow, Range}, path::Path, process::Stdio, sync::{Arc, Mutex}, time::Duration};
+use std::{collections::BTreeMap, ops::{ControlFlow, Range}, path::Path, process::Stdio, sync::{Arc, Mutex}, time::Duration};
 use anyhow::{Context, Result, bail, ensure};
 use async_lsp::{MainLoop, ServerSocket, router::Router};
 use futures::future::{Either, select};
@@ -46,8 +46,10 @@ impl Quota {
         lines.join("\n")
     }
 }
-struct Document { uri: lsp::Url, language: Language, version: i32, text: String }
-pub struct Client { socket: ServerSocket, state: Arc<Mutex<State>>, document: Mutex<Option<Document>> }
+struct Document { language: Language, version: i32, text: String }
+#[derive(Default)]
+struct Documents { open: BTreeMap<lsp::Url, Document>, focused: Option<lsp::Url> }
+pub struct Client { socket: ServerSocket, state: Arc<Mutex<State>>, documents: Mutex<Documents> }
 impl Drop for Client { fn drop(&mut self) { let _ = self.socket.emit(Stop); } }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -86,12 +88,20 @@ enum SignOut {}
 impl request::Request for SignOut { type Params = SignInParams; type Result = Value; const METHOD: &'static str = "signOut"; }
 enum InlineRequest {}
 impl request::Request for InlineRequest { type Params = Value; type Result = Items; const METHOD: &'static str = "textDocument/inlineCompletion"; }
+enum NextEditRequest {}
+impl request::Request for NextEditRequest { type Params = Value; type Result = Edits; const METHOD: &'static str = "textDocument/copilotInlineEdit"; }
+#[derive(Deserialize, Serialize)] struct Edits { edits: Vec<NextEdit> }
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NextEdit { pub text: String, pub text_document: lsp::VersionedTextDocumentIdentifier, pub range: lsp::Range, pub command: Option<lsp::Command>, #[serde(flatten)] extra: BTreeMap<String, Value> }
 enum StatusChanged {}
 impl notification::Notification for StatusChanged { type Params = ServerStatus; const METHOD: &'static str = "didChangeStatus"; }
 enum FocusDocument {}
 impl notification::Notification for FocusDocument { type Params = Value; const METHOD: &'static str = "textDocument/didFocus"; }
 enum Shown {}
 impl notification::Notification for Shown { type Params = Value; const METHOD: &'static str = "textDocument/didShowCompletion"; }
+enum EditShown {}
+impl notification::Notification for EditShown { type Params = Value; const METHOD: &'static str = "textDocument/didShowInlineEdit"; }
 enum QuotaChanged {}
 impl notification::Notification for QuotaChanged { type Params = Quota; const METHOD: &'static str = "copilot/quotaChange"; }
 enum QuotaWarning {}
@@ -135,7 +145,7 @@ impl Client {
                 .event(|_, _: Stop| ControlFlow::Break(Ok(())));
             router
         });
-        let client = Arc::new(Self { socket: socket.clone(), state: state.clone(), document: Mutex::new(None) });
+        let client = Arc::new(Self { socket: socket.clone(), state: state.clone(), documents: Mutex::new(Documents::default()) });
         std::thread::Builder::new().name("leet-copilot".into()).spawn(move || {
             let outcome: Result<()> = async_io::block_on(async {
                 let mut process = async_process::Command::new(binary);
@@ -194,35 +204,63 @@ impl Client {
     async fn execute(&self, command: lsp::Command, seconds: u64) -> Result<()> {
         deadline(async { self.socket.request::<request::ExecuteCommand>(lsp::ExecuteCommandParams { command: command.command, arguments: command.arguments.unwrap_or_default(), work_done_progress_params: Default::default() }).await?; Ok(()) }, seconds).await
     }
-    fn sync(&self, path: &Path, language: Language, text: &str, offset: usize) -> Result<Value> {
+    fn sync(&self, path: &Path, language: Language, text: &str, offset: usize, focus: bool) -> Result<Value> {
         ensure!(offset <= text.len() && text.is_char_boundary(offset), "Invalid completion cursor");
         let uri = lsp::Url::from_file_path(path).map_err(|_| anyhow::anyhow!("Invalid Copilot document"))?;
-        let mut active = lock(&self.document);
-        if active.as_ref().is_some_and(|doc| doc.uri != uri || doc.language != language) {
-            if let Some(doc) = active.take() { self.socket.notify::<notification::DidCloseTextDocument>(lsp::DidCloseTextDocumentParams { text_document: lsp::TextDocumentIdentifier { uri: doc.uri } })?; }
+        let mut documents = lock(&self.documents);
+        if documents.open.get(&uri).is_some_and(|doc| doc.language != language) {
+            documents.open.remove(&uri);
+            self.socket.notify::<notification::DidCloseTextDocument>(lsp::DidCloseTextDocumentParams { text_document: lsp::TextDocumentIdentifier { uri: uri.clone() } })?;
         }
-        if active.is_none() {
+        if !documents.open.contains_key(&uri) {
             self.socket.notify::<notification::DidOpenTextDocument>(lsp::DidOpenTextDocumentParams { text_document: lsp::TextDocumentItem { uri: uri.clone(), language_id: language.id().into(), version: 1, text: text.into() } })?;
-            self.socket.notify::<FocusDocument>(json!({"textDocument":{"uri":uri}}))?;
-            *active = Some(Document { uri: uri.clone(), language, version: 1, text: text.into() });
+            documents.open.insert(uri.clone(), Document { language, version: 1, text: text.into() });
         }
-        let doc = active.as_mut().context("Copilot document")?;
+        if focus && documents.focused.as_ref() != Some(&uri) {
+            self.socket.notify::<FocusDocument>(json!({"textDocument":{"uri":uri}}))?;
+            documents.focused = Some(uri.clone());
+        }
+        let doc = documents.open.get_mut(&uri).context("Copilot document")?;
         if doc.text != text {
             doc.version += 1;
+            let (changed, replacement) = crate::notes::changed_bytes(&doc.text, text);
             self.socket.notify::<notification::DidChangeTextDocument>(lsp::DidChangeTextDocumentParams {
                 text_document: lsp::VersionedTextDocumentIdentifier { uri: uri.clone(), version: doc.version },
-                content_changes: vec![lsp::TextDocumentContentChangeEvent { range: Some(lsp::Range::new(lsp::Position::new(0, 0), position(&doc.text, doc.text.len()))), range_length: None, text: text.into() }] })?;
+                content_changes: vec![lsp::TextDocumentContentChangeEvent { range: Some(lsp::Range::new(position(&doc.text, changed.start), position(&doc.text, changed.end))), range_length: None, text: replacement }] })?;
             doc.text = text.into();
         }
         Ok(json!({"textDocument":{"uri":uri,"version":doc.version},"position":position(text,offset),"context":{"triggerKind":2},"formattingOptions":{"tabSize":4,"insertSpaces":true}}))
     }
     pub async fn predict(&self, path: &Path, language: Language, text: &str, offset: usize) -> Result<Option<Suggestion>> {
         self.ready().await?;
-        let params = self.sync(path, language, text, offset)?;
-        let response = deadline(async { Ok(self.socket.request::<InlineRequest>(params).await?) }, 15).await?;
-        Ok(response.items.into_iter().find_map(|item| Suggestion::from_item(text, offset, item)))
+        let params = self.sync(path, language, text, offset, true)?;
+        let response = deadline(async { Ok(self.socket.request::<InlineRequest>(params.clone()).await?) }, 15).await?;
+        if let Some(suggestion) = response.items.into_iter().find_map(|item| Suggestion::from_item(text, offset, item)) { return Ok(Some(suggestion)); }
+        let version = params["textDocument"]["version"].as_i64().context("Copilot document version")? as i32;
+        let uri = lsp::Url::from_file_path(path).map_err(|_| anyhow::anyhow!("Invalid Copilot document"))?;
+        let response = deadline(async { Ok(self.socket.request::<NextEditRequest>(json!({"textDocument":{"uri":uri,"version":version},"position":position(text,offset)})).await?) }, 15).await?;
+        Ok(response.edits.into_iter().find_map(|edit| Suggestion::from_edit(text, offset, &uri, version, edit)))
     }
-    pub fn shown(&self, suggestion: &Suggestion) { let _ = self.socket.notify::<Shown>(json!({"item":suggestion.item})); }
+    pub fn synchronize_open(&self, open: &[(std::path::PathBuf, Language, String)], focused: Option<&Path>) -> Result<()> {
+        if !lock(&self.state).initialized { return Ok(()); }
+        let retained: std::collections::BTreeSet<_> = open.iter().filter_map(|(path, _, _)| lsp::Url::from_file_path(path).ok()).collect();
+        let closed: Vec<_> = lock(&self.documents).open.keys().filter(|uri| !retained.contains(*uri)).filter_map(|uri| uri.to_file_path().ok()).collect();
+        for path in closed { self.close_document(&path); }
+        for (path, language, text) in open { self.sync(path, *language, text, 0, focused == Some(path.as_path()))?; }
+        Ok(())
+    }
+    pub fn close_document(&self, path: &Path) {
+        let Ok(uri) = lsp::Url::from_file_path(path) else { return; };
+        let mut documents = lock(&self.documents);
+        if documents.open.remove(&uri).is_some() {
+            let _ = self.socket.notify::<notification::DidCloseTextDocument>(lsp::DidCloseTextDocumentParams { text_document: lsp::TextDocumentIdentifier { uri: uri.clone() } });
+        }
+        if documents.focused.as_ref() == Some(&uri) { documents.focused = None; }
+    }
+    pub fn shown(&self, suggestion: &Suggestion) {
+        if let Some(item) = &suggestion.next_item { let _ = self.socket.notify::<EditShown>(json!({"item":item})); }
+        else { let _ = self.socket.notify::<Shown>(json!({"item":suggestion.item})); }
+    }
     pub async fn accepted(&self, suggestion: Suggestion) -> Result<()> { if let Some(command) = suggestion.item.command { self.execute(command, 10).await?; } Ok(()) }
 }
 
@@ -243,7 +281,7 @@ fn byte_offset(text: &str, position: lsp::Position) -> Option<usize> {
     None
 }
 #[derive(Clone, Debug)]
-pub struct Suggestion { source: String, offset: usize, text: String, item: Item }
+pub struct Suggestion { source: String, offset: usize, text: String, item: Item, range: Range<usize>, next_item: Option<NextEdit> }
 impl Suggestion {
     pub fn from_item(source: &str, offset: usize, item: Item) -> Option<Self> {
         if offset > source.len() || !source.is_char_boundary(offset) { return None; }
@@ -254,9 +292,22 @@ impl Suggestion {
         let before = source.get(range.start..offset)?; let after = source.get(offset..range.end)?;
         let inserted = normalized.strip_prefix(before)?.strip_suffix(after)?;
         if inserted.is_empty() { return None; }
-        Some(Self { source: source.into(), offset, text: inserted.into(), item })
+        Some(Self { source: source.into(), offset, text: inserted.into(), item, range: offset..offset, next_item: None })
     }
+    pub fn from_edit(source: &str, offset: usize, uri: &lsp::Url, version: i32, edit: NextEdit) -> Option<Self> {
+        if edit.text_document.uri != *uri || edit.text_document.version != version || offset > source.len() || !source.is_char_boundary(offset) { return None; }
+        let range = byte_offset(source, edit.range.start)?..byte_offset(source, edit.range.end)?;
+        let before = source.get(range.clone())?;
+        if before == edit.text || edit.text.len() > 256 * 1024 { return None; }
+        let item = Item { insert_text: edit.text.clone(), range: Some(edit.range), command: edit.command.clone(), extra: Default::default() };
+        Some(Self { source: source.into(), offset, text: edit.text.clone(), item, range, next_item: Some(edit) })
+    }
+    pub fn is_next_edit(&self) -> bool { self.next_item.is_some() }
+    pub fn diff(&self) -> Vec<(char, String)> {
+        crate::focused_edit::Edit::new(self.source.clone(), self.range.clone(), self.text.clone()).map(|edit| edit.diff()).unwrap_or_default()
+    }
+    pub fn line(&self) -> usize { self.source[..self.range.start].bytes().filter(|byte| *byte == b'\n').count() + 1 }
     pub fn matches(&self, text: &str, offset: usize) -> bool { self.source == text && self.offset == offset }
     pub fn text(&self) -> &str { &self.text }
-    pub fn range(&self) -> Range<usize> { self.offset..self.offset }
+    pub fn range(&self) -> Range<usize> { self.range.clone() }
 }

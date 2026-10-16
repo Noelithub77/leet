@@ -77,7 +77,11 @@ while True:
         send({'method':'didChangeStatus','params':{'kind':'Normal','message':'Ready'}})
         send({'method':'copilot/quotaChange','params':{'copilotPlan':'free','completions':{'percentRemaining':42.5,'unlimited':False},'chat':{'unlimited':True}}})
     elif method=='textDocument/inlineCompletion':
-        result={'items':[{'insertText':'nt(1)','command':{'title':'Accept','command':'github.copilot.didAcceptCompletionItem','arguments':['fixture-id']}}]}
+        result={'items':[] if request['params']['textDocument']['uri'].endswith(('rewrite.py','stale.py')) else [{'insertText':'nt(1)','command':{'title':'Accept','command':'github.copilot.didAcceptCompletionItem','arguments':['fixture-id']}}]}
+    elif method=='textDocument/copilotInlineEdit':
+        document=dict(request['params']['textDocument'])
+        if document['uri'].endswith('stale.py'): document['version']+=1
+        result={'edits':[{'text':'2','textDocument':document,'range':{'start':{'line':0,'character':8},'end':{'line':0,'character':9}},'command':{'title':'Accept','command':'github.copilot.didAcceptCompletionItem','arguments':['next-edit-id']}}]}
     if 'id' in request: send({'id':request['id'],'result':result})
 "#).unwrap();
     async_io::block_on(async {
@@ -99,6 +103,14 @@ while True:
         client.accepted(suggestion).await.unwrap();
         client.predict(&path, Language::Python, "😀\npr", "😀\npr".len()).await.unwrap();
         client.predict(&root.path().join("next.py"), Language::Python, "pri", 3).await.unwrap();
+        client.close_document(&path);
+        let rewrite = "value = 1\npass\n";
+        let suggestion = client.predict(&root.path().join("rewrite.py"), Language::Python, rewrite, rewrite.len()).await.unwrap().unwrap();
+        assert!(suggestion.is_next_edit());
+        assert_eq!(suggestion.range(), 8..9);
+        assert_eq!(suggestion.text(), "2");
+        client.shown(&suggestion); client.accepted(suggestion).await.unwrap();
+        assert!(client.predict(&root.path().join("stale.py"), Language::Python, rewrite, rewrite.len()).await.unwrap().is_none(), "Stale next edit document version was accepted");
         let events: Vec<Value> = std::fs::read_to_string(&log).unwrap().lines().map(|line| serde_json::from_str(line).unwrap()).collect();
         assert_eq!(events[0]["params"]["capabilities"]["window"]["showDocument"]["support"], true);
         let predictions: Vec<_> = events.iter().filter(|event| event["method"] == InlineRequest::METHOD).collect();
@@ -110,6 +122,7 @@ while True:
         let change = events.iter().find(|event| event["method"] == "textDocument/didChange").unwrap();
         assert_eq!(change["params"]["contentChanges"][0]["range"]["end"], json!({"line":1,"character":3}));
         assert!(events.iter().any(|event| event["method"] == "textDocument/didShowCompletion"));
+        assert!(events.iter().any(|event| event["method"] == "textDocument/didShowInlineEdit"));
         assert!(events.iter().any(|event| event["params"]["command"] == "github.copilot.didAcceptCompletionItem"));
         assert!(client.sign_out().await.is_err(), "A failed server sign-out must not be reported as success");
         assert!(client.account().await.unwrap().signed_in());

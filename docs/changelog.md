@@ -1,8 +1,14 @@
 <details open>
 <summary>Feat</summary>
 
+- Edit selected code with Ctrl+I in a floating card at the selection, with a distinct highlight, a reviewable diff, and an optional agent note.
+- Reopen recent Ctrl+I instructions with Ctrl+Shift+I or Up and Down.
+- Send the whole file, problem statement, examples, and tests with Ctrl+I, using a fast completion mode.
+- Use a compact icon toolbar beside selected code, including Edit with Ctrl+I.
+- Preview Copilot next-edit suggestions as a diff, using context from every open solution tab.
 - Redesign AI chat with right-aligned requests, flat replies, and smaller text.
 - Give chat more room with a one-row header, a history dropdown, and a one-line prompt that expands on focus.
+- Turn quick actions into removable cards in the chat prompt, so you can add details before sending.
 - Toggle Copilot completions from its status icon, with a crossed logo when disabled and a quick menu for usage and Settings.
 - Show the connected Copilot account in Settings and sign out separately from disabling completions.
 - Reset the current solution to its template from the editor toolbar, with Undo support.
@@ -19,6 +25,9 @@
 <details>
 <summary>Fix</summary>
 
+- Show an agent's plain-text reply as chat instead of an error when it skips the structured format.
+- Keep the selection when right-clicking so context-menu actions apply to it.
+- Hide code hover cards over selected text.
 - Simplify the status bar by removing the LeetCode account label and showing only the search shortcut.
 - Keep the Copilot preview cue inside parameter hints so it cannot cover the signature.
 - Give parameter hints a full-width strip above completions, with overload shortcuts on the arrows.

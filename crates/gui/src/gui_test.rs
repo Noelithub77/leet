@@ -50,7 +50,7 @@ pub fn run() -> Result<()> {
         match args[i].as_str() {
             "--output" if output.is_none() => { i += 1; output = Some(PathBuf::from(args.get(i).context("--output requires a path")?)); }
             "--statement" if !statement_view => statement_view = true,
-            "--fixture" if fixture.is_none() => { i += 1; let name = args.get(i).context("--fixture requires a name")?.as_str(); ensure!(matches!(name, "snippets" | "copilot" | "chat" | "statement" | "notes" | "tour" | "vim"), "Supported focused fixtures: snippets, copilot, chat, statement, notes, tour, vim"); fixture = Some(name); }
+            "--fixture" if fixture.is_none() => { i += 1; let name = args.get(i).context("--fixture requires a name")?.as_str(); ensure!(matches!(name, "snippets" | "copilot" | "chat" | "selection" | "statement" | "notes" | "tour" | "vim"), "Supported focused fixtures: snippets, copilot, chat, selection, statement, notes, tour, vim"); fixture = Some(name); }
             "--video" if !video => video = true,
             "--wayland" if !wayland => wayland = true,
             "--explore" if !explore => { explore = true; wayland = true; }
@@ -71,6 +71,11 @@ pub fn run() -> Result<()> {
     cx.update(init);
     if let Some(name) = fixture {
         let fixture = if name == "chat" { crate::assist::composer_fixture::native(&mut cx, &output, pixels)? }
+            else if name == "selection" {
+                cx.update(|cx| crate::theme::apply("Vesper", cx));
+                crate::assist::selection::fixture(&mut cx, &output, pixels)?;
+                json!({"fixture":"selection","passed":true,"pixels":pixels,"checks":["annotation dropdown choices","long code wraps","reset to template and undo","selection toolbar beside the code","toolbar Edit opens Ctrl+I","edit target highlight while the card has focus","card below its target","agent note above the diff","Enter applies and Ctrl+Z undoes","right-click keeps the selection","stale proposals are refused","Ctrl+Shift+I recent edits with Up/Down recall"]})
+            }
             else if name == "statement" { statement::native(&mut cx, &output, pixels)? }
             else if name == "tour" { tour::native(&mut cx, &output, pixels, false)? }
             else if name == "notes" { crate::notes::fixture::native(&mut cx, &output, pixels)? }

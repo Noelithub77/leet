@@ -707,7 +707,7 @@ fn workspace_input(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -> 
     let second_session = fixture_session(&db, second_path.clone(), "second")?;
     cx.update_window(handle, |_, window, cx| {
         workspace.update(cx, |workspace, cx| {
-            workspace.park_tab();
+            workspace.park_tab(cx);
             workspace.new_editor(window, cx);
             workspace.session = Some(second_session);
             workspace.tabs.push(None);

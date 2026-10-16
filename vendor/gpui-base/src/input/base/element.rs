@@ -988,7 +988,7 @@ impl<M: InputModeKind> TextElement<M> {
         cx: &mut App,
     ) -> Vec<Path<Pixels>> {
         let state = self.state.read(cx);
-        if !state.focus_handle.is_focused(window) {
+        if !state.focus_handle.is_focused(window) && !state.selection_menu_open {
             return vec![];
         }
 

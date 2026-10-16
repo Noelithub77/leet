@@ -473,6 +473,8 @@ pub struct InputBaseState<M: InputModeKind> {
         Rc<dyn Fn(NativeMenu, InputContextMenuCapabilities, Point<Pixels>, &mut Window, &mut App)>,
     >,
     pending_context_menu: Option<(Point<Pixels>, usize)>,
+    /// Keeps the selection painted while the right-click menu holds focus.
+    pub(crate) selection_menu_open: bool,
 
     /// Whether the context menu that shows on right-click is enabled.
     ///
@@ -812,6 +814,7 @@ impl<M: InputModeKind> InputBaseState<M> {
             diagnostic_popover: None,
             context_menu_handler: None,
             pending_context_menu: None,
+            selection_menu_open: false,
             enable_context_menu: true,
             completion_inserting: false,
             overlay_action_handler: None,
@@ -2168,7 +2171,8 @@ impl<M: InputModeKind> InputBaseState<M> {
             return;
         }
 
-        if !self.active_selection().contains(offset) {
+        // A selection survives a right-click anywhere so the menu acts on it.
+        if self.active_selection().is_empty() {
             self.move_to(offset, None, cx);
         }
 
@@ -2177,6 +2181,7 @@ impl<M: InputModeKind> InputBaseState<M> {
         }
 
         if let Some(handler) = self.context_menu_handler.clone() {
+            self.selection_menu_open = true;
             let capabilities = self.context_menu_capabilities();
             cx.defer_in(window, move |_, window, cx| {
                 handler(NativeMenu::new(), capabilities, position, window, cx);
@@ -2346,6 +2351,7 @@ impl<M: InputModeKind> InputBaseState<M> {
             self.finish_modal_input(window, cx);
         }
         self.vim_cursor = None;
+        self.selection_menu_open = false;
         self.undo_manager.break_transaction_coalescing();
         // Input has its own text selection; suppress the window-level text
         // selection (Root) so it does not start a drag from here.
@@ -2400,9 +2406,6 @@ impl<M: InputModeKind> InputBaseState<M> {
         // Show Mouse context menu
         if event.button == MouseButton::Right {
             if self.enable_context_menu {
-                if !self.active_selection().contains(offset) {
-                    self.move_to(offset, None, cx);
-                }
                 self.pending_context_menu = Some((event.position, offset));
             }
             return;
@@ -3432,6 +3435,7 @@ impl<M: InputModeKind> InputBaseState<M> {
     }
 
     fn on_focus(&mut self, _: &mut Window, cx: &mut Context<Self>) {
+        self.selection_menu_open = false;
         self.blink_cursor.update(cx, |cursor, cx| {
             cursor.start(cx);
         });

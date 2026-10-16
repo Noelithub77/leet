@@ -12,6 +12,17 @@ use practice::copilot::{Client, Status, Suggestion};
 pub(crate) mod fixture;
 
 pub struct Enabled(pub bool);
+impl crate::workspace::Workspace {
+    pub(crate) fn sync_copilot_context(&self, cx: &App) {
+        let connection = self.copilot.read(cx);
+        if !connection.enabled() { return; }
+        let Some(client) = &connection.client else { return; };
+        let mut documents: Vec<_> = self.tabs.iter().flatten().map(|tab| (tab.session.path.clone(), tab.session.language, tab.editor.read(cx).value().to_string())).collect();
+        let focused = self.session.as_ref().map(|session| session.path.as_path());
+        if let Some(session) = &self.session { documents.push((session.path.clone(), session.language, self.editor.read(cx).value().to_string())); }
+        let _ = client.synchronize_open(&documents, focused);
+    }
+}
 impl EventEmitter<Enabled> for Connection {}
 pub struct Connection {
     client: Option<Arc<Client>>,
@@ -180,7 +191,7 @@ impl Predictions {
     pub fn invalidate(&self) { self.generation.set(self.generation.get().wrapping_add(1)); self.cache.borrow_mut().take(); self.preview.borrow_mut().take(); *self.warm_task.borrow_mut() = Task::ready(()); }
     fn cache(&self, suggestion: Suggestion, source: &str, offset: usize) {
         let prefix = source[..offset].rsplit('\n').next().unwrap_or("");
-        let code = format!("{prefix}{}", suggestion.text());
+        let code = if suggestion.is_next_edit() { suggestion.text().to_owned() } else { format!("{prefix}{}", suggestion.text()) };
         let mut highlighter = gpui_kit::component::highlighter::SyntaxHighlighter::new(self.language.get().id());
         highlighter.update(None, &ropey::Rope::from_str(&code), None);
         *self.preview.borrow_mut() = Some((code, highlighter));
@@ -193,6 +204,7 @@ impl Predictions {
     pub(crate) fn inline_highlights(&self, text: &str, offset: usize, cx: &App) -> Option<(String, Vec<(std::ops::Range<usize>, HighlightStyle)>)> {
         use gpui_kit::component::ActiveTheme as _;
         let suggestion = self.current(text, offset, cx)?;
+        if suggestion.is_next_edit() { return None; }
         let preview = self.preview.borrow();
         let (code, highlighter) = preview.as_ref()?;
         let prefix = code.len() - suggestion.text().len();
@@ -291,7 +303,8 @@ pub(crate) fn preview_overlay(pane: &crate::snippets::expansion::EditorPane, win
     let top = if below + height > input.size.height { (position.y - height - px(4.)).max(px(0.)) } else { below.max(px(0.)) };
     let theme = cx.theme();
     let preview = predictions.preview.borrow();
-    let code = if expanded {
+    let next_edit = predictions.current(editor.value().as_str(), editor.cursor(), cx).filter(|suggestion| suggestion.is_next_edit());
+    let code = if expanded && next_edit.is_none() {
         preview.as_ref().map(|(code, highlighter)| div().id("copilot-full-preview").test_support()
             .overflow_y_scroll().max_h((height - px(30.)).max(px(30.))).p_2().font_family(theme.mono_font_family.clone()).text_xs()
             .child(div().id("copilot-preview-code").test_support()
@@ -300,9 +313,14 @@ pub(crate) fn preview_overlay(pane: &crate::snippets::expansion::EditorPane, win
     Some(deferred(div().id("copilot-preview-popover").test_support().absolute().left(left).top(top).rounded_md().bg(theme.popover)
         .when(expanded, |view| view.w(width).border_1().border_color(theme.border).shadow_md()
             .on_scroll_wheel(|_, _, cx| cx.stop_propagation()))
-        .child(hint).children(code)).into_any_element())
+        .child(hint).children(code)
+        .when_some(if expanded { next_edit } else { None }, |view, suggestion| view
+            .child(div().px_2().text_xs().text_color(theme.muted_foreground).child(format!("Next edit · line {}", suggestion.line())))
+            .child(gpui_kit::component::v_flex().id("copilot-next-edit-diff").test_support().max_h((height - px(54.)).max(px(30.))).overflow_y_scroll().p_2().font_family(theme.mono_font_family.clone()).text_xs()
+                .children(suggestion.diff().into_iter().map(|(kind, line)| div().whitespace_normal().text_color(match kind { '-' => theme.danger, '+' => theme.success, _ => theme.muted_foreground }).child(format!("{kind} {line}"))))))).into_any_element())
 }
 fn inline(suggestion: &Suggestion) -> lsp_types::InlineCompletionResponse {
+    if suggestion.is_next_edit() { return lsp_types::InlineCompletionResponse::Array(vec![]); }
     lsp_types::InlineCompletionResponse::Array(vec![lsp_types::InlineCompletionItem { insert_text: suggestion.text().into(), filter_text: None, range: None, command: None, insert_text_format: None }])
 }
 

@@ -23,6 +23,7 @@ mod onboarding;
 mod tool_install;
 mod language_server;
 mod copilot;
+mod inline_edit;
 mod language_picker;
 mod sources;
 mod source_menu;

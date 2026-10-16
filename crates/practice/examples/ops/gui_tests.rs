@@ -18,7 +18,7 @@ impl Drop for Process {
 
 pub fn run(args: &[String]) -> Result<()> {
     if args.iter().any(|a| matches!(a.as_str(), "--help" | "-h")) {
-        println!("./ops gui:test [--backend native|cage] [--fixture snippets|copilot|chat|statement|notes|tour|vim] [--interaction-only] [--video] [--output /absolute/new-directory] [--json]\nLocal fixture-only GUI checks. Native: real GPUI input and offscreen PNGs; --fixture selects focused snippet, Copilot, chat, statement, notes, tour, or Vim checks; --video captures 60 fps motion with FFmpeg. Cage: private headless Wayland window smoke test (requires cage and grim). No user desktop input, accounts, services, or saved data. Fails rather than falling back to your active display. Results and logs remain in the output directory; temporary session data is removed."); return Ok(());
+        println!("./ops gui:test [--backend native|cage] [--fixture snippets|copilot|chat|selection|statement|notes|tour|vim] [--interaction-only] [--video] [--output /absolute/new-directory] [--json]\nLocal fixture-only GUI checks. Native: real GPUI input and offscreen PNGs; --fixture selects focused snippet, Copilot, chat, selection and Ctrl+I, statement, notes, tour, or Vim checks; --video captures 60 fps motion with FFmpeg. Cage: private headless Wayland window smoke test (requires cage and grim). No user desktop input, accounts, services, or saved data. Fails rather than falling back to your active display. Results and logs remain in the output directory; temporary session data is removed."); return Ok(());
     }
     let mut backend = "native"; let mut video = false; let mut interaction_only = false; let mut output = None; let mut i = 0;
     let mut fixture = None;
@@ -28,7 +28,7 @@ pub fn run(args: &[String]) -> Result<()> {
             "--output" if output.is_none() => { i += 1; output = Some(PathBuf::from(args.get(i).context("--output needs a path")?)); }
             "--video" if !video => video = true,
             "--interaction-only" if !interaction_only => interaction_only = true,
-            "--fixture" if fixture.is_none() => { i += 1; let name = args.get(i).context("--fixture requires a name")?.as_str(); ensure!(matches!(name, "snippets" | "copilot" | "chat" | "statement" | "notes" | "tour" | "vim"), "Supported focused fixtures: snippets, copilot, chat, statement, notes, tour, vim"); fixture = Some(name); }
+            "--fixture" if fixture.is_none() => { i += 1; let name = args.get(i).context("--fixture requires a name")?.as_str(); ensure!(matches!(name, "snippets" | "copilot" | "chat" | "selection" | "statement" | "notes" | "tour" | "vim"), "Supported focused fixtures: snippets, copilot, chat, selection, statement, notes, tour, vim"); fixture = Some(name); }
             "--json" => {},
             option => bail!("Unknown GUI-test option: {option}"),
         }
