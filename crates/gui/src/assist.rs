@@ -221,6 +221,8 @@ pub struct Assist {
     pub(crate) composer: Entity<TextareaState>,
     composer_thread: Option<i64>,
     composer_citations: Vec<practice::chat::history::Citation>,
+    /// The action card the next message sends; plain chat when empty.
+    composer_action: Option<Action>,
     composer_expanded: bool,
     threads: Vec<practice::chat::history::Thread>,
     selected_thread: Option<i64>,
@@ -264,7 +266,7 @@ impl Assist {
             if matches!(event, InputEvent::Change) { this.thread_query = input.read(cx).value().to_string(); this.thread_selection = 0; this.thread_selection_visible = false; this.refresh_threads(); cx.notify(); }
         }).detach();
         let mut this = Self { workspace, db, agents: vec![], detecting: false, catalogs, catalog_cache, requested_catalogs: HashSet::new(), installing: None,
-            runs: vec![], next_id: 0, slug: None, ticker: None, scroll: ScrollHandle::new(), composer, composer_thread: None, composer_citations: vec![], composer_expanded: false, threads: vec![], selected_thread: None, loaded_threads: HashSet::new(), show_threads: false, thread_scroll: UniformListScrollHandle::new(), thread_search, thread_query: String::new(), thread_selection: 0, thread_selection_visible: false, conversation_error: None, editing: None, ai_tab: 2, context_key: None,
+            runs: vec![], next_id: 0, slug: None, ticker: None, scroll: ScrollHandle::new(), composer, composer_thread: None, composer_citations: vec![], composer_action: None, composer_expanded: false, threads: vec![], selected_thread: None, loaded_threads: HashSet::new(), show_threads: false, thread_scroll: UniformListScrollHandle::new(), thread_search, thread_query: String::new(), thread_selection: 0, thread_selection_visible: false, conversation_error: None, editing: None, ai_tab: 2, context_key: None,
             #[cfg(feature = "gui-test")] fixture_no_transport: false };
         if let Err(error) = this.db.migrate_chats() { this.conversation_error = Some(error.to_string()); }
         this.refresh_threads();
@@ -371,15 +373,14 @@ impl Assist {
         self.runs.iter().find(|run| run.phase.active()).map(|run| (run, run.time()))
     }
 
-    /// Starts `action`, or opens the web chat when no agent is installed.
+    /// Sends the composer's text and citations as `action`, or opens the web chat when no
+    /// agent is installed. The draft's action card is consumed only when it is `action`.
     pub fn start(&mut self, action: Action, snapshot: Snapshot, target: Target, window: &mut Window, cx: &mut Context<Self>) {
         self.set_problem((!snapshot.slug.is_empty()).then_some(snapshot.slug.as_str()), cx);
         self.sync_composer(window, cx);
         let instructions = self.composer.read(cx).value().trim().to_string();
         let citations = self.composer_citations.clone();
         let prompt_instructions = practice::chat::history::with_citations(&instructions, &citations);
-        let editing = self.editing.is_some();
-        let action = self.editing.and_then(|id| self.runs.iter().find(|run| run.id == id)).map_or(action, |run| run.action);
         if action == Action::Ask && instructions.is_empty() && citations.is_empty() { return; }
         if prompt_instructions.chars().count() > practice::chat::INSTRUCTIONS_LIMIT {
             use gpui_kit::component::WindowExt as _;
@@ -407,7 +408,7 @@ impl Assist {
             run.thread_id = thread_id; run.problem_title = snapshot.title.clone(); run.instructions = instructions; run.citations = citations.clone();
             run.phase = Phase::Done; run.elapsed = Some(Duration::ZERO);
             match self.db.append_chat(thread_id, &run.saved()) { Ok(message) => { run.message_id = message; self.runs.insert(0, run); }, Err(error) => self.conversation_error = Some(error.to_string()) }
-            self.composer_citations.clear();
+            self.composer_citations.clear(); if self.composer_action == Some(action) { self.composer_action = None; }
             self.composer.update(cx, |input, cx| input.set_value("", window, cx)); self.refresh_threads(); cx.notify();
             return;
         }
@@ -419,12 +420,12 @@ impl Assist {
         let mut run = Run::new(id, snapshot.slug.clone(), action, Some(agent.kind), model, Some(snapshot.clone()), Some(target.clone()));
         if action == Action::Solve { run.solve = Some(SolveState { attempt: 1, session: None, log: vec![], accepted: false }); }
         run.thread_id = thread_id; run.problem_title = snapshot.title.clone();
-        run.request_prompt = if editing && action != Action::Ask { instructions.clone() } else { action.instructions().to_owned() };
+        run.request_prompt = action.instructions().to_owned();
         run.citations = citations;
-        run.instructions = if editing && action != Action::Ask { String::new() } else { instructions }; run.history = history;
+        run.instructions = instructions; run.history = history;
         match self.db.append_chat(thread_id, &run.saved()) { Ok(message) => run.message_id = message, Err(error) => { self.conversation_error = Some(error.to_string()); cx.notify(); return; } }
         self.refresh_threads();
-        self.composer_citations.clear();
+        self.composer_citations.clear(); if self.composer_action == Some(action) { self.composer_action = None; }
         self.composer.update(cx, |input, cx| input.set_value("", window, cx));
         self.runs.insert(0, run);
         self.save(&snapshot.slug);
@@ -585,7 +586,7 @@ impl Assist {
                 run.phase = Phase::Thinking;
             }
             Msg::Event(agents::Event::Thinking(text)) => { run.thinking.push_str(&text); run.phase = Phase::Thinking; }
-            Msg::Event(agents::Event::Text(text)) => { if run.action == Action::Ask { run.reply.push_str(&text); } run.phase = Phase::Writing; },
+            Msg::Event(agents::Event::Text(text)) => { run.reply.push_str(&text); run.phase = Phase::Writing; },
             Msg::Event(agents::Event::Tool { title, done, .. }) => run.phase = if done { Phase::Thinking } else { Phase::Tool(title) },
             Msg::Event(agents::Event::Usage { input_tokens, output_tokens }) => run.tokens = input_tokens + output_tokens,
             Msg::Selected(selection) => {
@@ -941,6 +942,14 @@ pub fn accent(action: Action, theme: &Theme) -> Hsla {
     }
 }
 
+/// The card an action adds to a message; hovering shows the prompt it sends.
+pub(crate) fn action_card(id: impl Into<ElementId>, action: Action, prompt: String, theme: &Theme) -> impl IntoElement {
+    let color = accent(action, theme);
+    h_flex().id(id).test_support().flex_none().gap_1().items_center().h(px(22.)).px_2().rounded_full().border_1().border_color(color.opacity(0.25)).bg(color.opacity(0.12))
+        .text_size(META).child(Icon::new(icon(action)).size_3().text_color(color)).child(action.label())
+        .tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(prompt.clone()).build(window, cx))
+}
+
 fn clock(duration: Duration) -> String {
     let secs = duration.as_secs_f32();
     if secs < 60. { format!("{secs:.1}s") } else { format!("{}:{:02}", secs as u64 / 60, secs as u64 % 60) }
@@ -953,13 +962,11 @@ impl Assist {
         let color = accent(run.action, &theme);
         let id = run.id;
         let active = run.phase.active();
-        let request_prompt = run.request_prompt.clone();
         let group = SharedString::from(format!("chat-turn-{id}"));
         let request = h_flex().w_full().justify_end().child(v_flex().id(("chat-request", id)).test_support().max_w(relative(0.88)).min_w_0().px_3().py_2().gap_1p5()
             .rounded(px(14.)).bg(theme.secondary)
             .children(run.citations.iter().map(|citation| selection::citation_pill(ElementId::NamedInteger(SharedString::from(format!("sent-citation-{id}")), selection::citation_key(citation)), citation, &theme)))
-            .when(run.action != Action::Ask, |el| el.child(h_flex().id(("chat-action-prompt", id)).gap_1p5().items_center().child(Icon::new(icon(run.action)).size_3p5().text_color(color)).child(run.action.label())
-                .tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(request_prompt.clone()).build(window, cx))))
+            .when(run.action != Action::Ask, |el| el.child(action_card(("chat-action-prompt", id), run.action, run.request_prompt.clone(), &theme)))
             .when(!run.instructions.is_empty(), |el| el.child(crate::rich_text::markdown(SharedString::from(format!("chat-request-{id}")), run.instructions.clone()).selectable(true))));
         let finished = !active && run.phase != Phase::Confirm;
         let summary = match &run.phase {

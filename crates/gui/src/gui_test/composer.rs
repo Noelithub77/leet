@@ -58,13 +58,34 @@ fn launch_inside_workspace(cx: &mut HeadlessAppContext, output: &Path) -> Result
     let handle = handle.into(); cx.run_until_parked();
     cx.update_window(handle, |_, window, cx| { window.render_frame(cx); window.click("fixture-ai-run", cx); })?;
     cx.run_until_parked();
-    cx.update_window(handle, |_, window, cx| -> Result<()> {
+    cx.update_window(handle, |_, _, cx| -> Result<()> {
         let ws = fixture.read(cx).workspace.read(cx);
         let assist = ws.assist.read(cx);
         let run = assist.runs.first().ok_or_else(|| anyhow::anyhow!("AI run was not created"))?;
         ensure!(ws.db.chat_thread(run.thread_id)?.title == "Hints", "First quick action remained an unnamed draft");
         ensure!(run.generation == 1, "Deferred launch did not prepare the run");
         ensure!(run.snippet_before.as_ref().is_some_and(|(dir, _)| dir == &ws.snippet_dir), "Launch did not capture workspace context");
+        Ok(())
+    })??;
+    // An action card and the user's text travel as one message; other sends leave the card in place.
+    cx.update_window(handle, |_, window, cx| -> Result<()> {
+        let fixture = fixture.read(cx);
+        let (assist, snapshot) = (fixture.workspace.read(cx).assist.clone(), fixture.snapshot.clone());
+        let target = || super::Target::Agent(practice::agents::Detected { kind: practice::agents::AgentKind::OpenCode, path: "/fixture/no-agent".into(), version: None }, None);
+        assist.update(cx, |assist, cx| {
+            assist.prefill_action(super::Action::Explain, window, cx);
+            assist.composer.update(cx, |input, cx| input.set_value("Focus on the map", window, cx));
+            assist.start(super::Action::Ask, snapshot.clone(), target(), window, cx);
+        });
+        ensure!(assist.read(cx).composer_action == Some(super::Action::Explain), "A plain send consumed the draft's action card");
+        assist.update(cx, |assist, cx| {
+            assist.composer.update(cx, |input, cx| input.set_value("Focus on the map", window, cx));
+            assist.start(super::Action::Explain, snapshot, target(), window, cx);
+        });
+        let assist = assist.read(cx);
+        let run = assist.runs.first().ok_or_else(|| anyhow::anyhow!("Card message was not created"))?;
+        ensure!(run.action == super::Action::Explain && run.request_prompt == super::Action::Explain.instructions() && run.instructions == "Focus on the map", "Card message lost its prompt or the user's text");
+        ensure!(assist.composer_action.is_none() && assist.composer.read(cx).value().is_empty(), "Sending kept the action card in the prompt");
         window.remove_window(); Ok(())
     })??;
     cx.run_until_parked(); Ok(())
@@ -169,6 +190,15 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             let button = window.find("chat-send").bounds();
             ensure!(button.left() >= group.left() && button.right() < group.right() && button.top() >= group.top() && button.bottom() < group.bottom(), "Send escaped the prompt box");
             ensure!(group.right() <= window.viewport_size().width && group.bottom() <= window.viewport_size().height, "Composer escaped the window");
+            let runs = assist.read(cx).runs.len();
+            assist.update(cx, |assist, cx| { assist.composer.update(cx, |input, cx| input.set_value("", window, cx)); assist.prefill_action(super::Action::Hints, window, cx); });
+            window.render_frame(cx);
+            let (group, card) = (window.find("chat-composer").bounds(), window.find("composer-action").bounds());
+            ensure!(card.left() >= group.left() && card.right() < group.right() && card.top() >= group.top() && card.bottom() < group.bottom(), "Action card escaped the prompt box");
+            ensure!(assist.read(cx).runs.len() == runs && assist.read(cx).composer.focus_handle(cx).is_focused(window), "Quick action sent instead of prefilling the prompt");
+            ensure!(!assist.read(cx).composer_empty(cx), "A prompt with only an action card counts as empty");
+            window.click("remove-composer-action", cx);
+            ensure!(assist.read(cx).composer_action.is_none() && assist.read(cx).composer_empty(cx), "Action card could not be removed");
             Ok(())
         })??;
         if pixels {
@@ -330,5 +360,5 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
     super::selection::fixture(cx, output, pixels)?;
     tooltip::native(cx, output, pixels)?;
     management::native(cx, output, pixels)?;
-    Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["archive icon, General settings restore and confirmed permanent deletion","Enter sends","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","one-line prompt expands on focus","send button input","send and stop containment","compact/light/zoom","wrapped tooltip width, viewport containment, shortcuts and dismissal","neutral history rows and visible keyboard selection","empty chats hidden","Ctrl+T / Ctrl+Shift+O / Ctrl+N","history dropdown below the slim header","header Plus and no empty history row","merged Chats quick actions and Analysis toggle","quick-action tags and note follow-ups","first message names hidden chats","right-aligned request bubble","Alt+Q adds citation pills without sending","automatic selection menu Quote preserves the draft","Alt+E and Alt+F send selection prompts and preserve drafts","selection actions preserve editor content","citation source previews","normal replacement typing dismisses selection menu","workspace Alt+L accepts Copilot without quoting","annotation dropdown choices","long code wraps without source changes"]}))
+    Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["archive icon, General settings restore and confirmed permanent deletion","Enter sends","quick actions prefill a removable action card","action card and text send as one message","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","one-line prompt expands on focus","send button input","send and stop containment","compact/light/zoom","wrapped tooltip width, viewport containment, shortcuts and dismissal","neutral history rows and visible keyboard selection","empty chats hidden","Ctrl+T / Ctrl+Shift+O / Ctrl+N","history dropdown below the slim header","header Plus and no empty history row","merged Chats quick actions and Analysis toggle","quick-action tags and note follow-ups","first message names hidden chats","right-aligned request bubble","Alt+Q adds citation pills without sending","automatic selection menu Quote preserves the draft","Alt+E and Alt+F send selection prompts and preserve drafts","selection actions preserve editor content","citation source previews","normal replacement typing dismisses selection menu","workspace Alt+L accepts Copilot without quoting","annotation dropdown choices","long code wraps without source changes"]}))
 }

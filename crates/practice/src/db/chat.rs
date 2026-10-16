@@ -173,10 +173,15 @@ impl Db {
     pub fn chat_draft_citations(&self, id: i64) -> Result<Vec<crate::chat::history::Citation>> {
         self.get(&format!("chat:citations:{id}"))?.map(|body| serde_json::from_str(&body).map_err(Into::into)).unwrap_or_else(|| Ok(vec![]))
     }
-    pub fn save_chat_composer(&self, id: i64, draft: &str, citations: &[crate::chat::history::Citation]) -> Result<()> {
+    /// The action card attached to a thread's unsent draft.
+    pub fn chat_draft_action(&self, id: i64) -> Result<Option<crate::assist::Action>> {
+        Ok(self.get(&format!("chat:action:{id}"))?.and_then(|id| crate::assist::Action::from_id(&id)))
+    }
+    pub fn save_chat_composer(&self, id: i64, draft: &str, citations: &[crate::chat::history::Citation], action: Option<crate::assist::Action>) -> Result<()> {
         self.conn().transaction::<_, anyhow::Error, _>(|conn| {
             diesel::update(chat_threads::table.find(id)).set(chat_threads::draft.eq(draft)).execute(conn)?;
             diesel::replace_into(kv::table).values((kv::key.eq(format!("chat:citations:{id}")), kv::value.eq(serde_json::to_string(citations)?))).execute(conn)?;
+            diesel::replace_into(kv::table).values((kv::key.eq(format!("chat:action:{id}")), kv::value.eq(action.map_or("", |action| action.id())))).execute(conn)?;
             Ok(())
         })
     }
@@ -314,16 +319,18 @@ mod tests {
         let dir = tempfile::tempdir().unwrap(); let path = dir.path().join("test.db");
         let db = Db::open_unseeded(&path).unwrap(); let thread = db.create_chat(Some("two-sum"), "New chat").unwrap();
         let citation = crate::chat::history::Citation { label: "solution.py:1-2".into(), text: "x = 1\ny = 2".into(), preview: "1  x = 1\n2  y = 2".into() };
-        db.save_chat_composer(thread.id, "", &[citation.clone()]).unwrap();
+        db.save_chat_composer(thread.id, "", &[citation.clone()], Some(crate::assist::Action::Explain)).unwrap();
         assert_eq!(db.visible_chat_threads(Some("two-sum"), "x = 1").unwrap().len(), 1);
         drop(db); let db = Db::open_unseeded(&path).unwrap();
         assert_eq!(db.chat_draft_citations(thread.id).unwrap(), [citation.clone()]);
+        assert_eq!(db.chat_draft_action(thread.id).unwrap(), Some(crate::assist::Action::Explain));
         let mut message = turn("two-sum", "Why?"); message.citations.push(citation.clone());
         db.append_chat(thread.id, &message).unwrap();
         assert_eq!(db.chat_messages(thread.id).unwrap()[0].turn.citations, [citation]);
         let prompt = crate::chat::history::with_citations(&message.instructions, &message.citations);
         assert!(prompt.contains("solution.py:1-2") && prompt.contains("x = 1\ny = 2"));
-        db.save_chat_composer(thread.id, "", &[]).unwrap(); assert!(db.chat_draft_citations(thread.id).unwrap().is_empty());
+        db.save_chat_composer(thread.id, "", &[], None).unwrap(); assert!(db.chat_draft_citations(thread.id).unwrap().is_empty());
+        assert_eq!(db.chat_draft_action(thread.id).unwrap(), None);
         assert_eq!(db.visible_chat_threads(Some("two-sum"), "y = 2").unwrap().len(), 1);
     }
 

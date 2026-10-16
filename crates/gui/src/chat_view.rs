@@ -28,6 +28,10 @@ impl Assist {
             Some(id) => match self.db.chat_draft_citations(id) { Ok(citations) => citations, Err(error) => { self.conversation_error = Some(error.to_string()); vec![] } },
             None => vec![],
         };
+        self.composer_action = match self.selected_thread {
+            Some(id) => match self.db.chat_draft_action(id) { Ok(action) => action, Err(error) => { self.conversation_error = Some(error.to_string()); None } },
+            None => None,
+        };
         self.composer_thread = self.selected_thread;
         self.composer.update(cx, |input, cx| input.set_value(draft, window, cx));
         self.scroll.scroll_to_bottom();
@@ -46,11 +50,27 @@ impl Assist {
         window.defer(cx, move |window, cx| { let _ = workspace.update(cx, |ws, cx| ws.run_assist(action, window, cx)); });
     }
 
+    /// Puts an action card in the composer so the user can add to it before sending.
+    pub(super) fn prefill_action(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
+        self.sync_composer(window, cx);
+        self.composer_action = Some(action);
+        self.ai_tab = 2;
+        self.show_threads = false;
+        self.persist_draft(cx);
+        self.composer.focus_handle(cx).focus(window, cx);
+        cx.notify();
+    }
+
+    pub(super) fn composer_empty(&self, cx: &App) -> bool {
+        self.composer_action.is_none() && self.composer_citations.is_empty() && self.composer.read(cx).value().trim().is_empty()
+    }
+
+    /// Sends the composer as one message: its action card, citations, and text.
     pub(super) fn send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.composer.read(cx).value().trim().is_empty() && self.composer_citations.is_empty() && self.editing.is_none() { return; }
+        if self.composer_empty(cx) && self.editing.is_none() { return; }
         if self.runs.iter().any(|run| Some(run.thread_id) == self.selected_thread && (run.phase.active() || run.phase == Phase::Confirm)) { return; }
         self.ai_tab = 2;
-        self.run_action(Action::Ask, window, cx);
+        self.run_action(self.composer_action.unwrap_or(Action::Ask), window, cx);
     }
 }
 
@@ -98,7 +118,7 @@ impl Render for Assist {
                             .child(Icon::new(icon(action)).size_4().text_color(color)))
                         .child(div().text_size(super::META).child(action.label()))
                         .tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(action.instructions()).build(window, cx))
-                        .on_click(cx.listener(move |this, _, window, cx| { if !disabled { this.run_action(action, window, cx); } }))
+                        .on_click(cx.listener(move |this, _, window, cx| { if !disabled { this.prefill_action(action, window, cx); } }))
                 }))))
                 .children(cards)))
             .child(self.render_composer(has_problem, web, busy, cx))
@@ -115,8 +135,13 @@ impl Assist {
                     .child(Button::new("cancel-chat-edit").ghost().xsmall().icon(IconName::X).tooltip("Cancel edit").on_click(cx.listener(|this, _, window, cx| this.cancel_edit(window, cx))))))
                 .child(InputGroup::new("chat-composer").disabled(!has_problem).focus_ring(false).rounded(px(16.)).text_xs()
                     .input(Textarea::new(&self.composer).min_h_0().aria_label("Message or action instructions"))
-                    .when(!self.composer_citations.is_empty(), |group| group.addon(InputGroupAddon::new("chat-citations").align(InputGroupAddonAlignment::BlockStart)
-                        .child(h_flex().gap_1().flex_wrap().children(self.composer_citations.iter().enumerate().map(|(index, citation)| {
+                    .when(self.composer_action.is_some() || !self.composer_citations.is_empty(), |group| group.addon(InputGroupAddon::new("chat-citations").align(InputGroupAddonAlignment::BlockStart)
+                        .child(h_flex().gap_1().flex_wrap()
+                        .children(self.composer_action.map(|action| h_flex().gap_0p5().items_center()
+                            .child(super::action_card("composer-action", action, action.instructions().to_owned(), &theme))
+                            .child(Button::new("remove-composer-action").ghost().xsmall().icon(IconName::X).accessibility_label("Remove action")
+                                .on_click(cx.listener(|this, _, _, cx| { this.composer_action = None; this.persist_draft(cx); cx.notify(); })))))
+                        .children(self.composer_citations.iter().enumerate().map(|(index, citation)| {
                             h_flex().gap_0p5().items_center().child(super::selection::citation_pill(("draft-citation", super::selection::citation_key(citation)), citation, &theme))
                                 .child(Button::new(("remove-citation", super::selection::citation_key(citation))).ghost().xsmall().icon(IconName::X).accessibility_label("Remove citation")
                                     .on_click(cx.listener(move |this, _, _, cx| { this.composer_citations.remove(index); this.persist_draft(cx); cx.notify(); })))
@@ -128,7 +153,7 @@ impl Assist {
                     } else {
                         Button::new("chat-send").primary().xsmall().rounded(ButtonRounded::Large).icon(if web { IconName::ExternalLink } else { IconName::ArrowUp })
                             .tooltip(if web { "Open question in web chat" } else { "Send question" }).accessibility_label("Send question")
-                            .disabled((!has_problem) || (self.editing.is_none() && self.composer.read(cx).value().trim().is_empty() && self.composer_citations.is_empty()))
+                            .disabled((!has_problem) || (self.editing.is_none() && self.composer_empty(cx)))
                             .on_click(cx.listener(|this, _, window, cx| this.send(window, cx))).into_any_element()
                     })))
     }

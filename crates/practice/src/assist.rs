@@ -80,6 +80,10 @@ impl Action {
     }
 
     /// The action that named a chat, for chats titled after a bare quick action.
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().chain([Self::Ask, Self::Review]).find(|action| action.id() == id)
+    }
+
     pub fn from_title(title: &str) -> Option<Self> {
         let title = title.strip_suffix(" · branch").unwrap_or(title);
         Self::ALL.into_iter().chain([Self::Review]).find(|action| action.label() == title)
@@ -366,7 +370,8 @@ impl Answer {
 }
 
 /// Runs an action on a local agent and parses its typed answer, asking once for a
-/// corrected answer when the first does not match. Solve returns its report when parseable.
+/// corrected answer when the first does not match. Prose after the repair becomes a Markdown
+/// chat answer. Solve returns its report when parseable.
 pub fn execute(action: Action, request: &crate::agents::Request, events: &mut dyn FnMut(crate::agents::Event), cancel: &crate::agents::Cancel) -> anyhow::Result<(Option<Answer>, crate::agents::Outcome)> {
     execute_with(action, request, &mut |request| crate::agents::run(request, events, cancel))
 }
@@ -383,7 +388,7 @@ pub fn execute_artifact(action: Action, request: &crate::agents::Request, path: 
 fn execute_with_artifact(action: Action, request: &crate::agents::Request, run: &mut dyn FnMut(&crate::agents::Request) -> anyhow::Result<crate::agents::Outcome>, artifact: Option<&std::path::Path>) -> anyhow::Result<(Option<Answer>, crate::agents::Outcome)> {
     let outcome = run(request)?;
     if let Some(path) = artifact.filter(|path| path.exists()) { return Ok((Some(crate::chat::artifacts::load(path)?), outcome)); }
-    if action == Action::Ask && request.schema.is_none() { return Ok((Some(Answer::Chat(outcome.text.clone())), outcome)); }
+    if request.schema.is_none() { return Ok((Some(Answer::Chat(outcome.text.clone())), outcome)); }
     match parse(action, &outcome) {
         Ok(answer) => Ok((Some(answer), outcome)),
         Err(_) if action == Action::Solve => Ok((None, outcome)),
@@ -393,6 +398,10 @@ fn execute_with_artifact(action: Action, request: &crate::agents::Request, run: 
             let prompt = if resume.is_some() { repair } else { format!("{}\n\n{repair}", request.prompt) };
             let retry = crate::agents::Request { prompt, resume, ..request.clone() };
             let outcome = run(&retry)?;
+            // An agent that keeps answering in prose still gets a readable Markdown turn; malformed JSON stays an error.
+            if outcome.structured.is_none() && json_in(&outcome.text).is_none() && !outcome.text.trim().is_empty() {
+                return Ok((Some(Answer::Chat(outcome.text.clone())), outcome));
+            }
             let answer = parse(action, &outcome).map_err(|error| anyhow::anyhow!("The agent's answer was not valid: {error}"))?;
             Ok((Some(answer), outcome))
         }
@@ -782,7 +791,13 @@ mod reliability_tests {
             Ok(Outcome { text: "Wrote the artifact".into(), session: None, structured: None })
         }, Some(&path)).unwrap();
         assert_eq!(answer, Some(Answer::Chat("Artifact content".into())));
-        for action in Action::ALL { assert_eq!(action.schema(), Action::Ask.schema()); assert_eq!(action.access(), Access::Full); }
+        let context = super::tests::ctx("latest_code()", vec![]);
+        for action in Action::ALL {
+            assert_eq!(action.schema(), Action::Ask.schema()); assert_eq!(action.access(), Access::Full);
+            let prompt = prompt(action, &context);
+            assert!(prompt.contains("Leet renders validated native response kinds"), "{action:?}");
+            assert_eq!(prompt.contains("## Visual structures"), action != Action::Solve, "{action:?}");
+        }
         assert!(environment_prompt(false).contains("submission confirmation"));
         assert!(environment_prompt(true).contains("exposes no local file"));
     }
@@ -814,9 +829,15 @@ mod reliability_tests {
         }
         let mut calls = 0;
         assert!(execute_with(Action::Hints, &request(AgentKind::Codex), &mut |_| {
-            calls += 1; Ok(Outcome { text: "invalid".into(), session: None, structured: None })
+            calls += 1; Ok(Outcome { text: "{\"hints\":\"broken\"}".into(), session: None, structured: None })
         }).is_err());
         assert_eq!(calls, 2);
+        calls = 0;
+        let (answer, _) = execute_with(Action::Explain, &request(AgentKind::Cursor), &mut |_| {
+            calls += 1; Ok(Outcome { text: "Use a **hash map**.".into(), session: None, structured: None })
+        }).unwrap();
+        assert_eq!(calls, 2);
+        assert_eq!(answer, Some(Answer::Chat("Use a **hash map**.".into())));
         calls = 0;
         let error = execute_with(Action::Hints, &request(AgentKind::Codex), &mut |_| {
             calls += 1; anyhow::bail!("transport failed")
