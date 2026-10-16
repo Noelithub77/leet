@@ -11,6 +11,7 @@ diesel::table! {
         updated_at -> BigInt,
         draft -> Text,
         fork_of -> Nullable<BigInt>,
+        archived -> Bool,
     }
 }
 diesel::table! {
@@ -23,9 +24,9 @@ diesel::table! {
 
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = chat_threads)]
-struct ThreadRow { id: i64, problem: Option<String>, title: String, updated_at: i64, draft: String, fork_of: Option<i64> }
+struct ThreadRow { id: i64, problem: Option<String>, title: String, updated_at: i64, draft: String, fork_of: Option<i64>, archived: bool }
 impl From<ThreadRow> for Thread {
-    fn from(row: ThreadRow) -> Self { Self { id: row.id, problem: row.problem, title: row.title, updated_at: row.updated_at, draft: row.draft, fork_of: row.fork_of } }
+    fn from(row: ThreadRow) -> Self { Self { id: row.id, problem: row.problem, title: row.title, updated_at: row.updated_at, draft: row.draft, fork_of: row.fork_of, archived: row.archived } }
 }
 
 fn thread(conn: &mut SqliteConnection, id: i64) -> Result<Thread> {
@@ -94,7 +95,32 @@ impl Db {
     pub fn visible_chat_threads(&self, problem: Option<&str>, query: &str) -> Result<Vec<Thread>> {
         match problem { Some(problem) => self.search_chat_threads(Some(problem), query), None => Ok(vec![]) }
     }
+    pub fn archived_chat_threads(&self) -> Result<Vec<Thread>> {
+        Ok(chat_threads::table.filter(chat_threads::archived.eq(true)).filter(chat_threads::problem.is_not_null())
+            .order((chat_threads::updated_at.desc(), chat_threads::id.desc())).select(ThreadRow::as_select())
+            .load::<ThreadRow>(&mut *self.conn())?.into_iter().map(Into::into).collect())
+    }
+    pub fn delete_chat_permanently(&self, id: i64) -> Result<()> {
+        self.conn().transaction::<_, anyhow::Error, _>(|conn| {
+            if !thread(conn, id)?.archived { return Err(anyhow!("Archive the chat before deleting it permanently")); }
+            remove_thread(conn, id)?;
+            diesel::delete(kv::table.filter(kv::key.eq(format!("chat:citations:{id}")))).execute(conn)?;
+            let undo: Option<String> = kv::table.find("chat:undo").select(kv::value).first(conn).optional()?;
+            if let Some(undo) = undo {
+                let references_chat = match serde_json::from_str::<Undo>(&undo)? {
+                    Undo::RemoveThread { id: removed, previous } => removed == id || previous == Some(id),
+                    Undo::RestoreThread { thread, .. } => thread.id == id,
+                    Undo::SetArchived { id: changed, .. } => changed == id,
+                };
+                if references_chat { diesel::delete(kv::table.find("chat:undo")).execute(conn)?; }
+            }
+            Ok(())
+        })
+    }
     pub fn search_chat_threads(&self, problem: Option<&str>, query: &str) -> Result<Vec<Thread>> {
+        self.search_chat_archive(problem, query, false)
+    }
+    fn search_chat_archive(&self, problem: Option<&str>, query: &str, archived: bool) -> Result<Vec<Thread>> {
         #[derive(QueryableByName)]
         struct SearchRow {
             #[diesel(sql_type = diesel::sql_types::BigInt)] id: i64,
@@ -103,10 +129,11 @@ impl Db {
             #[diesel(sql_type = diesel::sql_types::BigInt)] updated_at: i64,
             #[diesel(sql_type = diesel::sql_types::Text)] draft: String,
             #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::BigInt>)] fork_of: Option<i64>,
+            #[diesel(sql_type = diesel::sql_types::Bool)] archived: bool,
         }
         let escaped = query.trim().replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
         let pattern = format!("%{escaped}%");
-        let rows = diesel::sql_query(r"SELECT t.* FROM chat_threads t WHERE t.problem IS ? AND
+        let rows = diesel::sql_query(r"SELECT t.* FROM chat_threads t WHERE t.problem IS ? AND t.archived = ? AND
             (EXISTS (SELECT 1 FROM kv c WHERE c.key = 'chat:citations:' || t.id AND c.value <> '[]') OR trim(t.draft, char(9) || char(10) || char(13) || ' ') <> '' OR EXISTS (SELECT 1 FROM chat_messages present WHERE present.thread_id = t.id)) AND
             (t.draft LIKE ? ESCAPE '\' OR t.title LIKE ? ESCAPE '\'
                 OR EXISTS (SELECT 1 FROM kv c, json_tree(c.value) quote WHERE c.key = 'chat:citations:' || t.id AND quote.type = 'text' AND quote.atom LIKE ? ESCAPE '\') OR EXISTS (SELECT 1 FROM chat_messages m WHERE m.thread_id = t.id AND
@@ -117,12 +144,13 @@ impl Db {
                 OR EXISTS (SELECT 1 FROM json_tree(m.body, '$.answer.answer') a WHERE a.type = 'text' AND a.atom LIKE ? ESCAPE '\'))))
             ORDER BY t.updated_at DESC, t.id DESC")
             .bind::<diesel::sql_types::Nullable<diesel::sql_types::Text>, _>(problem)
+            .bind::<diesel::sql_types::Bool, _>(archived)
             .bind::<diesel::sql_types::Text, _>(&pattern).bind::<diesel::sql_types::Text, _>(&pattern)
             .bind::<diesel::sql_types::Text, _>(&pattern).bind::<diesel::sql_types::Text, _>(&pattern)
             .bind::<diesel::sql_types::Text, _>(&pattern).bind::<diesel::sql_types::Text, _>(&pattern)
             .bind::<diesel::sql_types::Text, _>(&pattern).bind::<diesel::sql_types::Text, _>(&pattern)
             .load::<SearchRow>(&mut *self.conn())?;
-        Ok(rows.into_iter().map(|row| Thread { id: row.id, problem: row.problem, title: row.title, updated_at: row.updated_at, draft: row.draft, fork_of: row.fork_of }).collect())
+        Ok(rows.into_iter().map(|row| Thread { id: row.id, problem: row.problem, title: row.title, updated_at: row.updated_at, draft: row.draft, fork_of: row.fork_of, archived: row.archived }).collect())
     }
     /// Latest native review for a problem, independent of which thread is selected.
     pub fn latest_chat_review(&self, problem: &str) -> Result<Option<Message>> {
@@ -183,6 +211,14 @@ impl Db {
             Ok(fork)
         })
     }
+    pub fn set_chat_archived(&self, id: i64, archived: bool) -> Result<()> {
+        self.conn().transaction::<_, anyhow::Error, _>(|conn| {
+            let current = thread(conn, id)?;
+            if current.archived == archived { return Ok(()); }
+            diesel::update(chat_threads::table.find(id)).set(chat_threads::archived.eq(archived)).execute(conn)?;
+            set_undo(conn, Undo::SetArchived { id, archived: current.archived })
+        })
+    }
     pub fn delete_chat(&self, id: i64) -> Result<()> {
         self.conn().transaction::<_, anyhow::Error, _>(|conn| {
             let undo = Undo::RestoreThread { thread: thread(conn, id)?, messages: messages(conn, id)? };
@@ -196,9 +232,13 @@ impl Db {
             let saved: Option<String> = kv::table.find("chat:undo").select(kv::value).first(conn).optional()?;
             let Some(saved) = saved else { return Ok(None) };
             let selected = match serde_json::from_str::<Undo>(&saved)? {
+                Undo::SetArchived { id, archived } => {
+                    diesel::update(chat_threads::table.find(id)).set(chat_threads::archived.eq(archived)).execute(conn)?;
+                    Some(id)
+                }
                 Undo::RemoveThread { id, previous } => { remove_thread(conn, id)?; previous }
                 Undo::RestoreThread { thread, messages } => {
-                    diesel::insert_into(chat_threads::table).values((chat_threads::id.eq(thread.id), chat_threads::problem.eq(thread.problem), chat_threads::title.eq(thread.title), chat_threads::updated_at.eq(thread.updated_at), chat_threads::draft.eq(thread.draft), chat_threads::fork_of.eq(thread.fork_of))).execute(conn)?;
+                    diesel::insert_into(chat_threads::table).values((chat_threads::id.eq(thread.id), chat_threads::problem.eq(thread.problem), chat_threads::title.eq(thread.title), chat_threads::updated_at.eq(thread.updated_at), chat_threads::draft.eq(thread.draft), chat_threads::fork_of.eq(thread.fork_of), chat_threads::archived.eq(thread.archived))).execute(conn)?;
                     for message in messages {
                         diesel::insert_into(chat_messages::table).values((chat_messages::id.eq(message.id), chat_messages::thread_id.eq(thread.id), chat_messages::body.eq(serde_json::to_string(&message.turn)?))).execute(conn)?;
                     }
@@ -217,6 +257,57 @@ mod tests {
     use crate::assist::{Action, Answer};
     fn turn(problem: &str, text: &str) -> SavedTurn {
         SavedTurn { citations: vec![], model: "model".into(), agent: None, answer: Some(Answer::Chat(text.into())), instructions: text.into(), request_prompt: String::new(), action: Some(Action::Ask), phase: Default::default(), problem: problem.into(), problem_title: problem.into() }
+    }
+    #[test]
+    fn permanent_deletion_removes_archived_chats_and_their_undo_snapshot() {
+        let dir = tempfile::tempdir().unwrap(); let path = dir.path().join("test.db");
+        let db = Db::open_unseeded(&path).unwrap();
+        let first = db.create_chat(Some("one"), "One").unwrap();
+        let second = db.create_chat(Some("two"), "Two").unwrap();
+        db.save_chat_draft(first.id, "draft").unwrap();
+        db.append_chat(second.id, &turn("two", "message")).unwrap();
+        assert!(db.delete_chat_permanently(first.id).is_err());
+        db.set_chat_archived(first.id, true).unwrap();
+        db.set_chat_archived(second.id, true).unwrap();
+        assert_eq!(db.archived_chat_threads().unwrap().len(), 2);
+        db.delete_chat_permanently(second.id).unwrap();
+        assert!(!db.can_undo_chat());
+        assert!(db.chat_messages(second.id).unwrap().is_empty());
+        drop(db);
+        let db = Db::open_unseeded(&path).unwrap();
+        assert!(db.chat_thread(second.id).is_err());
+        assert_eq!(db.archived_chat_threads().unwrap()[0].id, first.id);
+        assert_eq!(db.undo_chat().unwrap(), None);
+    }
+    #[test]
+    fn archive_search_restore_and_delete_survive_reopening() {
+        let dir = tempfile::tempdir().unwrap(); let path = dir.path().join("test.db");
+        let db = Db::open_unseeded(&path).unwrap();
+        let chat = db.create_chat(Some("two-sum"), "Lookup").unwrap();
+        let message = db.append_chat(chat.id, &turn("two-sum", "Find the complement")).unwrap();
+        db.save_chat_draft(chat.id, "Try a map").unwrap();
+        db.set_chat_archived(chat.id, true).unwrap();
+        assert!(db.visible_chat_threads(Some("two-sum"), "complement").unwrap().is_empty());
+        assert_eq!(db.archived_chat_threads().unwrap()[0].id, chat.id);
+        drop(db);
+        let db = Db::open_unseeded(&path).unwrap();
+        assert!(db.chat_thread(chat.id).unwrap().archived);
+        assert_eq!(db.undo_chat().unwrap(), Some(chat.id));
+        assert!(!db.chat_thread(chat.id).unwrap().archived);
+        db.set_chat_archived(chat.id, true).unwrap();
+        db.set_chat_archived(chat.id, false).unwrap();
+        assert_eq!(db.visible_chat_threads(Some("two-sum"), "Try a map").unwrap()[0].id, chat.id);
+        db.undo_chat().unwrap();
+        db.delete_chat(chat.id).unwrap();
+        assert!(db.archived_chat_threads().unwrap().is_empty());
+        drop(db);
+        let db = Db::open_unseeded(&path).unwrap();
+        assert_eq!(db.undo_chat().unwrap(), Some(chat.id));
+        assert!(db.chat_thread(chat.id).unwrap().archived);
+        assert_eq!(db.chat_thread(chat.id).unwrap().draft, "Try a map");
+        assert_eq!(db.chat_messages(chat.id).unwrap()[0].id, message);
+        let fork = db.fork_chat(chat.id, message, true).unwrap();
+        assert!(!fork.archived);
     }
     #[test]
     fn citations_survive_draft_and_message_reopening() {

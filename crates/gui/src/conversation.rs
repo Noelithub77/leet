@@ -4,7 +4,7 @@ use gpui_kit::component::notification::Notification;
 
 impl Assist {
     pub(super) fn selection_key(&self) -> String { format!("chat:selected:{}", self.slug.as_deref().unwrap_or("")) }
-    pub(super) fn refresh_threads(&mut self) {
+    pub(crate) fn refresh_threads(&mut self) {
         match self.db.visible_chat_threads(self.slug.as_deref(), &self.thread_query) {
             Ok(threads) => { self.threads = threads; self.thread_selection = self.thread_selection.min(self.threads.len().saturating_sub(1)); },
             Err(error) => self.conversation_error = Some(error.to_string()),
@@ -100,16 +100,21 @@ impl Assist {
         self.thread_selection = self.thread_selection.saturating_add_signed(direction).min(self.threads.len().saturating_sub(1));
         self.thread_scroll.scroll_to_item(self.thread_selection, ScrollStrategy::Nearest); cx.notify();
     }
-    pub(super) fn delete_thread(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(id) = self.selected_thread else { return };
+    fn archive_thread(&mut self, id: i64, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.db.chat_thread(id).is_ok_and(|thread| thread.problem.is_some() && thread.problem.as_deref() == self.slug.as_deref()) { return; }
         self.persist_draft(cx);
-        if let Err(error) = self.db.delete_chat(id) { self.conversation_error = Some(error.to_string()); cx.notify(); return; }
+        if let Err(error) = self.db.set_chat_archived(id, true) { self.conversation_error = Some(error.to_string()); cx.notify(); return; }
+        self.refresh_threads();
+        if self.selected_thread == Some(id) {
+            self.selected_thread = None; self.composer_thread = None; self.editing = None;
+            if let Some(thread) = self.threads.first() { self.load_thread(thread.id); }
+            self.composer.update(cx, |input, cx| input.set_value("", window, cx)); self.sync_composer(window, cx);
+        }
+        self.show_threads = true; self.thread_selection_visible = false; cx.notify();
+    }
+    pub(crate) fn forget_thread(&mut self, id: i64) {
         for run in self.runs.iter().filter(|run| run.thread_id == id) { run.cancel.cancel(); }
         self.runs.retain(|run| run.thread_id != id); self.loaded_threads.remove(&id);
-        self.selected_thread = None; self.composer_thread = None; self.refresh_threads();
-        if let Some(thread) = self.threads.first() { self.load_thread(thread.id); }
-        self.composer.update(cx, |input, cx| input.set_value("", window, cx)); self.sync_composer(window, cx);
-        self.show_threads = true; self.editing = None; cx.notify();
     }
     pub(super) fn undo_thread(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.persist_draft(cx);
@@ -164,12 +169,9 @@ impl Assist {
     }
 
     pub(super) fn thread_header(&self, _window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
-        use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
         let theme = cx.theme().clone();
         let title = if self.show_threads { "Chats".into() } else { self.selected_thread.and_then(|id| self.db.chat_thread(id).ok()).filter(|thread| thread.title != "New chat")
             .map(|thread| Action::from_title(&thread.title).and_then(Action::tag).map_or(thread.title, str::to_owned)).unwrap_or_else(|| "Chats".into()) };
-        let weak = cx.entity().downgrade();
-        let has_thread = self.threads.iter().any(|thread| Some(thread.id) == self.selected_thread);
         let has_history = !self.threads.is_empty() || !self.thread_query.trim().is_empty();
         if !has_history && !self.db.can_undo_chat() { return div().into_any_element(); }
         v_flex().px_3().pb_2()
@@ -179,10 +181,8 @@ impl Assist {
                     .child(Button::new("chat-thread-picker").ghost().small().icon(if self.show_threads { IconName::ChevronDown } else { IconName::ChevronRight }).label(title).flex_1().min_w_0()
                         .tooltip("Conversation threads").on_click(cx.listener(|this, _, window, cx| { if this.show_threads { this.show_threads = false; cx.notify(); } else { this.open_thread_list(window, cx); } }))))
                 .when(!has_history, |el| el.child(div().flex_1()))
-                .when(self.db.can_undo_chat(), |el| el.child(Button::new("chat-undo").ghost().small().icon(IconName::Undo2).tooltip("Undo latest branch or deletion").accessibility_label("Undo latest branch or deletion")
-                    .on_click(cx.listener(|this, _, window, cx| this.undo_thread(window, cx)))))
-                .when(has_thread, |el| el.child(Button::new("chat-thread-options").ghost().small().icon(IconName::Ellipsis).tooltip("Thread options")
-                    .dropdown_menu(move |menu, _, _| { let weak = weak.clone(); menu.item(PopupMenuItem::new("Delete thread").icon(IconName::Trash).on_click(move |_, window, cx| { let _ = weak.update(cx, |this, cx| this.delete_thread(window, cx)); })) }))))
+                .when(self.db.can_undo_chat(), |el| el.child(Button::new("chat-undo").ghost().small().icon(IconName::Undo2).tooltip("Undo latest chat change").accessibility_label("Undo latest chat change")
+                    .on_click(cx.listener(|this, _, window, cx| this.undo_thread(window, cx))))))
             .when(self.show_threads && has_history, |el| el
                 .child(v_flex().id("chat-thread-search").test_support().key_context("ChatThreads")
                     .on_action(cx.listener(|this, _: &NextThread, _, cx| this.navigate_threads(1, cx)))
@@ -203,6 +203,8 @@ impl Assist {
                                 Some((action, tag)) => h_flex().flex_1().min_w_0().child(crate::note_card::chip(tag, accent(action, &theme))).into_any_element(),
                                 None => div().flex_1().min_w_0().truncate().text_sm().child(if thread.title == "New chat" { thread.draft.lines().find(|line| !line.trim().is_empty()).unwrap_or("Draft").trim().to_owned() } else { thread.title.clone() }).into_any_element(),
                             })
+                            .child(Button::new(("chat-archive", id as u64)).ghost().xsmall().icon(IconName::Archive).accessibility_label("Archive chat").tooltip("Archive chat")
+                                .on_click(cx.listener(move |this, _, window, cx| this.archive_thread(id, window, cx))))
                             .on_click(cx.listener(move |this, _, window, cx| this.select_thread(id, window, cx))).into_any_element()
                     })).collect()
                 })).track_scroll(&self.thread_scroll).w_full().h(px(self.threads.len().min(5) as f32 * 40.))))))

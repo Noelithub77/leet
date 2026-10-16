@@ -11,6 +11,7 @@ pub struct Thread {
     pub updated_at: i64,
     pub draft: String,
     pub fork_of: Option<i64>,
+    #[serde(default)] pub archived: bool,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -76,5 +77,6 @@ impl SavedTurn {
 #[derive(serde::Serialize, serde::Deserialize)]
 pub(crate) enum Undo {
     RemoveThread { id: i64, previous: Option<i64> },
+    SetArchived { id: i64, archived: bool },
     RestoreThread { thread: Thread, messages: Vec<Message> },
 }

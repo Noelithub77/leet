@@ -9,6 +9,8 @@ use super::Assist;
 
 #[path = "tooltip.rs"]
 mod tooltip;
+#[path = "chat_management.rs"]
+mod management;
 
 fn stuck_answer() -> practice::assist::Answer {
     practice::assist::Answer::Stuck(practice::assist::Stuck {
@@ -312,5 +314,6 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
     launch_inside_workspace(cx, output)?;
     super::selection::fixture(cx, output, pixels)?;
     tooltip::native(cx, output, pixels)?;
-    Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["Enter sends","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","send button input","send and stop containment","compact/light/zoom","wrapped tooltip width, viewport containment, shortcuts and dismissal","neutral history rows and visible keyboard selection","empty chats hidden","Ctrl+T / Ctrl+Shift+O / Ctrl+N","aligned toolbar and search","header Plus and no empty history row","merged Chats quick actions and Analysis navigation","quick-action tags and note follow-ups","first message names hidden chats","Alt+Q adds citation pills without sending","automatic selection menu Quote preserves the draft","Alt+E and Alt+F send selection prompts and preserve drafts","selection actions preserve editor content","citation source previews","normal replacement typing dismisses selection menu","workspace Alt+L accepts Copilot without quoting","annotation dropdown choices","long code wraps without source changes"]}))
+    management::native(cx, output, pixels)?;
+    Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["archive icon, General settings restore and confirmed permanent deletion","Enter sends","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","send button input","send and stop containment","compact/light/zoom","wrapped tooltip width, viewport containment, shortcuts and dismissal","neutral history rows and visible keyboard selection","empty chats hidden","Ctrl+T / Ctrl+Shift+O / Ctrl+N","aligned toolbar and search","header Plus and no empty history row","merged Chats quick actions and Analysis navigation","quick-action tags and note follow-ups","first message names hidden chats","Alt+Q adds citation pills without sending","automatic selection menu Quote preserves the draft","Alt+E and Alt+F send selection prompts and preserve drafts","selection actions preserve editor content","citation source previews","normal replacement typing dismisses selection menu","workspace Alt+L accepts Copilot without quoting","annotation dropdown choices","long code wraps without source changes"]}))
 }

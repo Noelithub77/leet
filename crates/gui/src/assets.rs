@@ -1,6 +1,6 @@
 use gpui_kit::*;
 
-gpui_kit::assets::icon_assets!(HomeIcons, [House, Map, X, Star, ExternalLink, Play, ArrowLeft, ChevronDown, Brackets, ArrowLeftRight, Layers, Search, PanelTop, Link, Network, GitBranch, ListOrdered, Undo2, CalendarRange, Zap, Share2, Workflow, ChartColumn, Grid2x2, Binary, Calculator, FileText, Lightbulb, Copy, Info, RefreshCw, Plus, Pencil, Tags, ArrowDownAZ, Download, PanelLeft, PanelBottom, PanelRight, LifeBuoy, Bug, FlaskConical, Gauge, Rocket, Sparkles, Footprints, Puzzle, BookOpen, WandSparkles, BugPlay, Timer, CircleStop, SkipBack, SkipForward, Pause, ChevronLeft, ChevronRight, Code, Bot, CircleCheck, CircleX, Brain, Globe, Terminal, ArrowUpRight, Send, Undo, Check, CornerDownRight, CornerUpLeft, TriangleAlert, ArrowRight, CircleDot, SquareFunction, MessageCircle, ArrowUp, Settings2, Box, Folder, Hash, Key]);
+gpui_kit::assets::icon_assets!(HomeIcons, [House, Map, X, Star, ExternalLink, Play, ArrowLeft, ChevronDown, Brackets, ArrowLeftRight, Layers, Search, PanelTop, Link, Network, GitBranch, ListOrdered, Undo2, CalendarRange, Zap, Share2, Workflow, ChartColumn, Grid2x2, Binary, Calculator, FileText, Lightbulb, Copy, Info, RefreshCw, Plus, Pencil, Tags, ArrowDownAZ, Download, PanelLeft, PanelBottom, PanelRight, LifeBuoy, Bug, FlaskConical, Gauge, Rocket, Sparkles, Footprints, Puzzle, BookOpen, WandSparkles, BugPlay, Timer, CircleStop, SkipBack, SkipForward, Pause, ChevronLeft, ChevronRight, Code, Bot, CircleCheck, CircleX, Brain, Globe, Terminal, ArrowUpRight, Send, Undo, Check, CornerDownRight, CornerUpLeft, TriangleAlert, ArrowRight, CircleDot, SquareFunction, MessageCircle, ArrowUp, Settings2, Box, Folder, Hash, Key, Archive, Trash]);
 
 pub struct Assets;
 
@@ -80,7 +80,7 @@ mod tests {
     }
     #[::core::prelude::v1::test]
     fn chat_icons_are_embedded() {
-        for name in [gpui_kit::assets::IconName::MessageCircle, gpui_kit::assets::IconName::ArrowUp, gpui_kit::assets::IconName::Settings2] {
+        for name in [gpui_kit::assets::IconName::MessageCircle, gpui_kit::assets::IconName::ArrowUp, gpui_kit::assets::IconName::Settings2, gpui_kit::assets::IconName::Archive, gpui_kit::assets::IconName::Trash] {
             assert!(!HomeIcons.load(&name.path()).unwrap().expect("Chat icons must be bundled").is_empty());
         }
     }

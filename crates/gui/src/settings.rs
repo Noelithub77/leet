@@ -14,6 +14,9 @@ use practice::language::Source;
 use crate::assist::Target;
 use crate::workspace::{Center, Focus, Workspace};
 
+#[path = "archived_chats.rs"]
+pub(crate) mod archived_chats;
+
 gpui_kit::actions!(settings, [NextSettingsTab, PreviousSettingsTab]);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -21,6 +24,7 @@ pub enum Setting {
     PlatformGroup(Source),
     Onboarding,
     ResetSettings,
+    ArchivedChats,
     Language,
     LanguageServer,
     Copilot,
@@ -53,9 +57,10 @@ pub enum Kind {
 }
 
 impl Setting {
-    pub const ALL: [Setting; 24] = [
+    pub const ALL: [Setting; 25] = [
         Setting::Onboarding,
         Setting::ResetSettings,
+        Setting::ArchivedChats,
         Setting::Language,
         Setting::LanguageServer,
         Setting::Copilot,
@@ -85,6 +90,7 @@ impl Setting {
             Setting::PlatformGroup(source) => source.label(),
             Setting::Onboarding => "Run onboarding again",
             Setting::ResetSettings => "Reset app settings",
+            Setting::ArchivedChats => "Archived chats",
             Setting::Language => "Preferred language",
             Setting::LanguageServer => "Restart language server",
             Setting::Copilot => "Copilot completions",
@@ -117,6 +123,7 @@ impl Setting {
             Setting::PlatformGroup(_) => "platform provider account settings",
             Setting::Onboarding => "setup onboarding welcome language account sign in",
             Setting::ResetSettings => "reset defaults preferences fresh start onboarding",
+            Setting::ArchivedChats => "ai chat history archive restore delete conversations",
             Setting::Language => "language python cpp c++ go c java preferred",
             Setting::LanguageServer => "lsp intellisense completion diagnostics hover definitions restart",
             Setting::Copilot => "github copilot completions predictions tab alt sign in zen subtle",
@@ -146,14 +153,14 @@ impl Setting {
             Setting::AiFast => Kind::Toggle,
             Setting::AiModel | Setting::Install(_) | Setting::PlatformGroup(_) => Kind::Action,
             Setting::Python | Setting::ExternalEditor | Setting::Workspace | Setting::Keybinding(_) => Kind::Text,
-            Setting::Onboarding | Setting::ResetSettings | Setting::LanguageServer | Setting::Copilot | Setting::Codeforces | Setting::OpenFile | Setting::Font | Setting::Keybindings | Setting::LeetCode | Setting::NeetCode => Kind::Action,
+            Setting::ArchivedChats | Setting::Onboarding | Setting::ResetSettings | Setting::LanguageServer | Setting::Copilot | Setting::Codeforces | Setting::OpenFile | Setting::Font | Setting::Keybindings | Setting::LeetCode | Setting::NeetCode => Kind::Action,
         }
     }
 
     pub fn value(self, ws: &Workspace, cx: &App) -> String {
         let c = &ws.config;
         match self {
-            Setting::Onboarding | Setting::ResetSettings | Setting::PlatformGroup(_) => String::new(),
+            Setting::ArchivedChats | Setting::Onboarding | Setting::ResetSettings | Setting::PlatformGroup(_) => String::new(),
             Setting::Language => c.preferred_language.label().into(),
             Setting::LanguageServer => ws.intelligence.label(ws.session.as_ref().map_or(c.preferred_language, |session| session.language)),
             Setting::Copilot => ws.copilot.read(cx).label(),
@@ -198,7 +205,7 @@ impl SettingsTab {
     }
     fn settings(self) -> &'static [Setting] {
         match self {
-            Self::General => &[Setting::List, Setting::Workspace, Setting::Onboarding, Setting::OpenFile, Setting::ResetSettings],
+            Self::General => &[Setting::ArchivedChats, Setting::List, Setting::Workspace, Setting::Onboarding, Setting::OpenFile, Setting::ResetSettings],
             Self::Editor => &[Setting::Language, Setting::Python, Setting::ExternalEditor, Setting::TestTimeout, Setting::LanguageServer, Setting::Copilot],
             Self::Appearance => &[Setting::Theme, Setting::Font],
             Self::Platform => &[Setting::LeetCode, Setting::NeetCode, Setting::Codeforces],
@@ -444,6 +451,7 @@ impl Workspace {
                 if connection.enabled() || connection.busy { connection.disable(cx); } else { connection.connect(self.config.workspace.clone(), true, window, cx); }
             }),
             Kind::Action if setting == Setting::Onboarding => self.begin_onboarding(false, window, cx),
+            Kind::Action if setting == Setting::ArchivedChats => archived_chats::open(self.db.clone(), self.assist.downgrade(), window, cx),
             Kind::Action if setting == Setting::ResetSettings => crate::dialogs::open_reset_settings(window, cx),
             Kind::Action if setting == Setting::Codeforces => self.begin_onboarding(true, window, cx),
             Kind::Action if setting == Setting::Font => {
@@ -586,7 +594,7 @@ impl Workspace {
                             (None, Kind::Action) => div().text_color(theme.link).child(if value.is_empty() { "Open".into() } else { value }).into_any_element(),
                         };
                         h_flex()
-                            .id(("setting", i))
+                            .id(("setting", i)).test_support()
                             .flex_shrink_0()
                             .px_4()
                             .py_3()

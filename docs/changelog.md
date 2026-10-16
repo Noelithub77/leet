@@ -1,6 +1,7 @@
 <details open>
 <summary>Feat</summary>
 
+- Archive chats from history; restore or permanently delete them in General settings.
 - Use Frizbee for typo-tolerant autocomplete while keeping local symbols first.
 - Show parameter hints automatically inside calls and alongside Ctrl+Space completions.
 - Show subtle cyan feedback when a guided-tour shortcut is used.
