@@ -27,6 +27,8 @@ Run `./ops gui:test --fixture selection --json` for the selection toolbar and Ct
 
 Chat management checks archive from history, undo archiving without losing the draft, and open Archived chats in General settings. They restore and permanently delete chats from different problems, including cancellation and confirmation. Captures are saved as `chat-archive-icon-*.png`, `chat-archived-settings-*.png`, and `chat-delete-confirm-*.png`.
 
+Prompt navigation checks click the chronological side rail and dispatch Shift+Up/Shift+Down through the focused composer, verify first/last boundaries and draft preservation, and assert the selected request scrolls to the top. Captures are saved as `chat-prompt-list-*.png`.
+
 The chat composer fixture checks the one-line prompt expanding on focus, quick actions prefilling a removable action card, the card and text sending as one message, Enter sending, Shift+Enter line breaks, removal of Ctrl+Enter, empty and disabled input, and send/stop containment. It renders compact, light, dark, and 140%-zoom variants. It uses the production composer with a dropped fixture workspace, so sends do not start agents or open web chats. Its history includes an I'm stuck chat that renders as a colored Stuck tag in `threads-*.png`; asking about that chat's note must open it, unloaded, with the prompt prefilled and focused.
 
 The snippet fixture checks C++ range-loop placeholder alignment in padded, zoomed, and scrolled editors, plus Tab/Shift+Tab and the final caret. It saves `snippet-cursor-regular.png` and `snippet-cursor-zoom-scroll.png`.

@@ -8,6 +8,7 @@
 - Preview Copilot next-edit suggestions as a diff, using context from every open solution tab.
 - Redesign AI chat with right-aligned requests, flat replies, and smaller text.
 - Give chat more room with a one-row header, a history dropdown, and a one-line prompt that expands on focus.
+- Jump through chat prompts from a compact side rail or with Shift+Up and Shift+Down.
 - Turn quick actions into removable cards in the chat prompt, so you can add details before sending.
 - Toggle Copilot completions from its status icon, with a crossed logo when disabled and a quick menu for usage and Settings.
 - Show the connected Copilot account in Settings and sign out separately from disabling completions.

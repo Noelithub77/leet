@@ -8,7 +8,7 @@ use gpui_kit::component::button::{Button, ButtonRounded, ButtonVariants as _};
 use gpui_kit::component::input::{InputGroup, InputGroupAddon, InputGroupAddonAlignment, Textarea};
 use gpui_kit::component::{ActiveTheme as _, FocusableExt as _, Theme, Icon, Sizable as _, h_flex, v_flex};
 
-use super::{Assist, Action, Phase, SendChat, NewChat, Target, icon, accent};
+use super::{Assist, Action, Phase, SendChat, NewChat, PreviousPrompt, NextPrompt, Target, icon, accent};
 
 impl Assist {
     pub(crate) fn refresh_context(&mut self, slug: Option<String>, has_problem: bool, has_attempt: bool, web: bool, window: &mut Window, cx: &mut Context<Self>) {
@@ -33,8 +33,56 @@ impl Assist {
             None => None,
         };
         self.composer_thread = self.selected_thread;
+        self.prompt_cursor = None;
         self.composer.update(cx, |input, cx| input.set_value(draft, window, cx));
         self.scroll.scroll_to_bottom();
+    }
+
+    fn prompt_ids(&self) -> Vec<u64> {
+        self.runs.iter().rev().filter(|run| Some(run.thread_id) == self.selected_thread).map(|run| run.id).collect()
+    }
+
+    fn jump_to_prompt(&mut self, id: u64, cx: &mut Context<Self>) {
+        let Some(index) = self.prompt_ids().iter().position(|candidate| *candidate == id) else { return; };
+        self.prompt_cursor = Some(id);
+        self.scroll.scroll_to_top_of_item(index);
+        cx.notify();
+    }
+
+    fn move_prompt(&mut self, forward: bool, cx: &mut Context<Self>) {
+        let ids = self.prompt_ids();
+        if ids.is_empty() { return; }
+        let current = self.prompt_cursor.and_then(|id| ids.iter().position(|candidate| *candidate == id));
+        let index = match (current, forward) {
+            (Some(index), true) if index + 1 == ids.len() => {
+                self.prompt_cursor = None;
+                self.scroll.scroll_to_bottom();
+                cx.notify();
+                return;
+            }
+            (Some(index), true) => index + 1,
+            (Some(index), false) => index.saturating_sub(1),
+            (None, _) => ids.len() - 1,
+        };
+        self.jump_to_prompt(ids[index], cx);
+    }
+
+    fn prompt_rail(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme().clone();
+        v_flex().id("chat-prompt-list").test_support().flex_none().w_6().min_h_0().py_3().overflow_y_scroll()
+            .children(self.runs.iter().rev().filter(|run| Some(run.thread_id) == self.selected_thread).enumerate().map(|(index, run)| {
+                let id = run.id;
+                let text = if !run.instructions.trim().is_empty() { run.instructions.split_whitespace().collect::<Vec<_>>().join(" ") }
+                    else if run.action != Action::Ask { run.action.label().to_owned() }
+                    else { "Quoted code".to_owned() };
+                let preview: String = text.chars().take(160).collect();
+                Button::new(("chat-prompt-jump", id)).ghost().xsmall().w_full()
+                    .accessibility_label(format!("Go to prompt {}: {preview}", index + 1))
+                    .tooltip(format!("{}. {preview} · Shift+↑ / Shift+↓", index + 1))
+                    .child(div().h_0p5().w_2().when(self.prompt_cursor == Some(id), |marker| marker.w_3p5()).rounded_full()
+                        .bg(if self.prompt_cursor == Some(id) { theme.primary } else { theme.muted_foreground.opacity(0.5) }))
+                    .on_click(cx.listener(move |this, _, _, cx| this.jump_to_prompt(id, cx)))
+            }))
     }
 
     /// Keeps the prompt a one-line pill until focused, then lets it grow with its content.
@@ -94,6 +142,12 @@ impl Render for Assist {
         let review = self.runs.iter().filter(|run| Some(&run.slug) == slug.as_ref() && (run.action == Action::Review || matches!(run.answer, Some(super::Answer::Review(_))))).max_by_key(|run| run.message_id)
             .map(|run| self.card(run, window, cx));
         v_flex().key_context("AgentChat").relative().size_full().min_h_0().text_xs()
+            .on_action(cx.listener(|this, _: &PreviousPrompt, _, cx| {
+                if this.ai_tab == 2 && !this.show_threads { this.move_prompt(false, cx); } else { cx.propagate(); }
+            }))
+            .on_action(cx.listener(|this, _: &NextPrompt, _, cx| {
+                if this.ai_tab == 2 && !this.show_threads { this.move_prompt(true, cx); } else { cx.propagate(); }
+            }))
             .on_action(cx.listener(|this, _: &SendChat, window, cx| this.send(window, cx)))
             .on_action(cx.listener(|this, _: &NewChat, window, cx| this.new_thread(window, cx)))
             .child(self.chat_header(cx))
@@ -106,7 +160,9 @@ impl Render for Assist {
                     .disabled(!has_problem || !has_attempt || busy)
                     .on_click(cx.listener(|this, _, window, cx| this.run_action(Action::Review, window, cx)))))
                 .children(review)))
-            .when(self.ai_tab == 2, |el| el.child(v_flex().id("assist-cards").test_support().flex_1().min_h_0().overflow_y_scroll().track_scroll(&self.scroll).px_3().pt_3().pb_4().gap_5()
+            .when(self.ai_tab == 2, |el| el.child(h_flex().w_full().flex_1().min_h_0().items_stretch()
+                .when(!empty, |area| area.child(self.prompt_rail(cx)))
+                .child(v_flex().id("assist-cards").test_support().w_full().flex_1().min_w_0().min_h_0().overflow_y_scroll().track_scroll(&self.scroll).px_3().pt_3().pb_4().gap_5()
                 .when(empty, |area| area.justify_center()
                 .child(div().id("ai-action-grid").test_support().flex_none().w_full().max_w(px(300.)).mx_auto().grid().grid_cols(3).gap_1p5()
                 .children([Action::Hints, Action::Stuck, Action::Explain, Action::Visualize, Action::Pattern, Action::Solve].into_iter().map(|action| {
@@ -120,7 +176,7 @@ impl Render for Assist {
                         .tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(action.instructions()).build(window, cx))
                         .on_click(cx.listener(move |this, _, window, cx| { if !disabled { this.prefill_action(action, window, cx); } }))
                 }))))
-                .children(cards)))
+                .children(cards))))
             .child(self.render_composer(has_problem, web, busy, cx))
             .children(self.thread_popover(cx))
     }

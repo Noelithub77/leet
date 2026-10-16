@@ -29,10 +29,15 @@ use crate::workspace::Workspace;
 #[path = "selection.rs"]
 pub(crate) mod selection;
 
-gpui_kit::actions!(chat, [SendChat, NewChat, NextThread, PreviousThread, OpenThread, CloseThreadList]);
+gpui_kit::actions!(chat, [SendChat, NewChat, NextThread, PreviousThread, OpenThread, CloseThreadList, PreviousPrompt, NextPrompt]);
 
 pub fn bind_keys(cx: &mut App) {
-    cx.bind_keys([KeyBinding::new("ctrl-t", NewChat, Some("AgentChat")),
+    cx.bind_keys([
+        KeyBinding::new("shift-up", PreviousPrompt, Some("AgentChat")),
+        KeyBinding::new("shift-down", NextPrompt, Some("AgentChat")),
+        KeyBinding::new("shift-up", PreviousPrompt, Some("AgentChat > Input")),
+        KeyBinding::new("shift-down", NextPrompt, Some("AgentChat > Input")),
+        KeyBinding::new("ctrl-t", NewChat, Some("AgentChat")),
         KeyBinding::new("ctrl-shift-o", NewChat, Some("AgentChat")),
         KeyBinding::new("ctrl-n", NewChat, Some("AgentChat")),
         KeyBinding::new("down", NextThread, Some("ChatThreads")),
@@ -218,6 +223,7 @@ pub struct Assist {
     slug: Option<String>,
     ticker: Option<Task<()>>,
     scroll: ScrollHandle,
+    prompt_cursor: Option<u64>,
     pub(crate) composer: Entity<TextareaState>,
     composer_thread: Option<i64>,
     composer_citations: Vec<practice::chat::history::Citation>,
@@ -266,7 +272,7 @@ impl Assist {
             if matches!(event, InputEvent::Change) { this.thread_query = input.read(cx).value().to_string(); this.thread_selection = 0; this.thread_selection_visible = false; this.refresh_threads(); cx.notify(); }
         }).detach();
         let mut this = Self { workspace, db, agents: vec![], detecting: false, catalogs, catalog_cache, requested_catalogs: HashSet::new(), installing: None,
-            runs: vec![], next_id: 0, slug: None, ticker: None, scroll: ScrollHandle::new(), composer, composer_thread: None, composer_citations: vec![], composer_action: None, composer_expanded: false, threads: vec![], selected_thread: None, loaded_threads: HashSet::new(), show_threads: false, thread_scroll: UniformListScrollHandle::new(), thread_search, thread_query: String::new(), thread_selection: 0, thread_selection_visible: false, conversation_error: None, editing: None, ai_tab: 2, context_key: None,
+            runs: vec![], next_id: 0, slug: None, ticker: None, scroll: ScrollHandle::new(), prompt_cursor: None, composer, composer_thread: None, composer_citations: vec![], composer_action: None, composer_expanded: false, threads: vec![], selected_thread: None, loaded_threads: HashSet::new(), show_threads: false, thread_scroll: UniformListScrollHandle::new(), thread_search, thread_query: String::new(), thread_selection: 0, thread_selection_visible: false, conversation_error: None, editing: None, ai_tab: 2, context_key: None,
             #[cfg(feature = "gui-test")] fixture_no_transport: false };
         if let Err(error) = this.db.migrate_chats() { this.conversation_error = Some(error.to_string()); }
         this.refresh_threads();
@@ -429,6 +435,7 @@ impl Assist {
         self.composer.update(cx, |input, cx| input.set_value("", window, cx));
         self.runs.insert(0, run);
         self.save(&snapshot.slug);
+        self.prompt_cursor = None;
         self.scroll.scroll_to_bottom();
         let assist = cx.weak_entity();
         // Launch reads workspace context, so release the caller's workspace update first.
@@ -499,6 +506,7 @@ impl Assist {
         self.ai_tab = 2;
         self.show_threads = false;
         self.composer.focus_handle(cx).focus(window, cx);
+        self.prompt_cursor = None;
         self.scroll.scroll_to_bottom();
         cx.notify();
     }
@@ -963,7 +971,7 @@ impl Assist {
         let id = run.id;
         let active = run.phase.active();
         let group = SharedString::from(format!("chat-turn-{id}"));
-        let request = h_flex().w_full().justify_end().child(v_flex().id(("chat-request", id)).test_support().max_w(relative(0.88)).min_w_0().px_3().py_2().gap_1p5()
+        let request = h_flex().w_full().justify_end().child(v_flex().id(("chat-request", id)).test_support().w(relative(0.88)).min_w_0().px_3().py_2().gap_1p5()
             .rounded(px(14.)).bg(theme.secondary)
             .children(run.citations.iter().map(|citation| selection::citation_pill(ElementId::NamedInteger(SharedString::from(format!("sent-citation-{id}")), selection::citation_key(citation)), citation, &theme)))
             .when(run.action != Action::Ask, |el| el.child(action_card(("chat-action-prompt", id), run.action, run.request_prompt.clone(), &theme)))

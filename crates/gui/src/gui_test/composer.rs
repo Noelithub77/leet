@@ -344,11 +344,58 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             ensure!(window.find("assist-cards").visible(), "Chats lost its conversation");
             let run = assist.read(cx).runs.iter().find(|run| run.thread_id == thread.id).map(|run| run.id).ok_or_else(|| anyhow::anyhow!("Restored turn is missing"))?;
             let (list, bubble) = (window.find("assist-cards").bounds(), window.find(("chat-request", run)).bounds());
-            ensure!(list.right() - bubble.right() < px(24.) && bubble.left() > list.left() + px(48.), "Request is not a right-aligned bubble");
+            ensure!(bubble.size.height < px(70.), "Short prompt wrapped into a narrow column: list={list:?}, bubble={bubble:?}");
+            ensure!(list.right() - bubble.right() < px(24.) && bubble.left() > list.left() + list.size.width * 0.1, "Request is not a right-aligned bubble");
             Ok(())
         })??;
         cx.run_until_parked();
         if pixels { cx.capture_screenshot(handle)?.save(output.join(format!("chats-populated-{name}.png")))?; }
+        cx.update_window(handle, |_, window, cx| -> Result<()> {
+            let assist = fixture.read(cx).assist.clone();
+            let thread = assist.read(cx).selected_thread.unwrap();
+            let mut turn = db.chat_messages(thread)?.remove(0).turn;
+            for prompt in ["Explain the first approach", "Compare it with a hash map", "Trace the final example"] {
+                turn.instructions = prompt.into();
+                turn.answer = Some(practice::assist::Answer::Chat("A detailed explanation.\n\n".repeat(25)));
+                let message_id = db.append_chat(thread, &turn)?;
+                let message = db.chat_messages(thread)?.into_iter().find(|message| message.id == message_id).unwrap();
+                assist.update(cx, |assist, cx| { assist.restore_message(message); cx.notify(); });
+            }
+            assist.update(cx, |assist, cx| {
+                assist.composer.update(cx, |input, cx| input.set_value("Keep this unsent draft", window, cx));
+                assist.composer.focus_handle(cx).focus(window, cx);
+            });
+            window.render_frame(cx);
+            Ok(())
+        })??;
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| -> Result<()> {
+            let assist = fixture.read(cx).assist.clone();
+            let ids: Vec<_> = assist.read(cx).runs.iter().rev().filter(|run| Some(run.thread_id) == assist.read(cx).selected_thread).map(|run| run.id).collect();
+            window.render_frame(cx);
+            window.press("shift-up", cx);
+            ensure!(assist.read(cx).prompt_cursor == ids.last().copied(), "Shift+Up did not start at the latest prompt (focus={}, tab={}, history={}, cursor={:?})", assist.read(cx).composer.focus_handle(cx).is_focused(window), assist.read(cx).ai_tab, assist.read(cx).show_threads, assist.read(cx).prompt_cursor);
+            window.press("shift-up", cx);
+            ensure!(assist.read(cx).prompt_cursor == Some(ids[ids.len() - 2]), "Shift+Up did not move to the previous prompt");
+            window.press("shift-down", cx);
+            ensure!(assist.read(cx).prompt_cursor == ids.last().copied(), "Shift+Down did not move forward");
+            window.press("shift-down", cx);
+            ensure!(assist.read(cx).prompt_cursor.is_none(), "Shift+Down did not return to the latest reply");
+            window.click(("chat-prompt-jump", ids[0]), cx);
+            window.render_frame(cx);
+            ensure!(assist.read(cx).prompt_cursor == Some(ids[0]), "Prompt marker did not jump");
+            let list = window.find("assist-cards").bounds();
+            let request = window.find(("chat-request", ids[0])).bounds();
+            ensure!(request.top() >= list.top() && request.top() < list.top() + px(40.), "Jump did not bring the prompt to the top of the conversation");
+            assist.read(cx).composer.focus_handle(cx).focus(window, cx);
+            window.press("shift-up", cx);
+            ensure!(assist.read(cx).prompt_cursor == Some(ids[0]), "Previous prompt wrapped past the oldest message");
+            ensure!(assist.read(cx).composer.read(cx).value().as_ref() == "Keep this unsent draft", "Prompt navigation changed the draft");
+            window.hover(("chat-prompt-jump", ids[1]), cx);
+            Ok(())
+        })??;
+        cx.run_until_parked();
+        if pixels { cx.capture_screenshot(handle)?.save(output.join(format!("chat-prompt-list-{name}.png")))?; }
         cx.update_window(handle, |_, window, _cx| -> Result<()> {
             window.remove_window();
             Ok(())
@@ -360,5 +407,5 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
     super::selection::fixture(cx, output, pixels)?;
     tooltip::native(cx, output, pixels)?;
     management::native(cx, output, pixels)?;
-    Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["archive icon, General settings restore and confirmed permanent deletion","Enter sends","quick actions prefill a removable action card","action card and text send as one message","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","one-line prompt expands on focus","send button input","send and stop containment","compact/light/zoom","wrapped tooltip width, viewport containment, shortcuts and dismissal","neutral history rows and visible keyboard selection","empty chats hidden","Ctrl+T / Ctrl+Shift+O / Ctrl+N","history dropdown below the slim header","header Plus and no empty history row","merged Chats quick actions and Analysis toggle","quick-action tags and note follow-ups","first message names hidden chats","right-aligned request bubble","Alt+Q adds citation pills without sending","automatic selection menu Quote preserves the draft","Alt+E and Alt+F send selection prompts and preserve drafts","selection actions preserve editor content","citation source previews","normal replacement typing dismisses selection menu","workspace Alt+L accepts Copilot without quoting","annotation dropdown choices","long code wraps without source changes"]}))
+    Ok(serde_json::json!({"fixture":"chat-composer","passed":true,"pixels":pixels,"checks":["archive icon, General settings restore and confirmed permanent deletion","Enter sends","quick actions prefill a removable action card","action card and text send as one message","Shift+Enter adds a line","Ctrl+Enter removed","empty and disabled guards","one-line prompt expands on focus","send button input","send and stop containment","compact/light/zoom","wrapped tooltip width, viewport containment, shortcuts and dismissal","neutral history rows and visible keyboard selection","empty chats hidden","Ctrl+T / Ctrl+Shift+O / Ctrl+N","history dropdown below the slim header","header Plus and no empty history row","merged Chats quick actions and Analysis toggle","quick-action tags and note follow-ups","first message names hidden chats","right-aligned request bubble","chronological prompt rail and focused Shift+Up/Shift+Down navigation preserve drafts","Alt+Q adds citation pills without sending","automatic selection menu Quote preserves the draft","Alt+E and Alt+F send selection prompts and preserve drafts","selection actions preserve editor content","citation source previews","normal replacement typing dismisses selection menu","workspace Alt+L accepts Copilot without quoting","annotation dropdown choices","long code wraps without source changes"]}))
 }
