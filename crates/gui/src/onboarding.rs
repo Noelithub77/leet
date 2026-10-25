@@ -193,7 +193,7 @@ impl Setup {
 impl Render for Setup {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme().clone();
-        let accounts = self.workspace.upgrade().map(|ws| ws.read(cx).account_names.clone()).unwrap_or(["Signed out".into(), "Signed out".into()]);
+        let accounts = self.workspace.upgrade().map(|ws| ws.read(cx).account_names.clone()).unwrap_or_else(|| std::array::from_fn(|_| "Signed out".into()));
         let current_step = self.step;
         v_flex().id("onboarding").test_support().size_full().items_center().justify_center().key_context("Onboarding").track_focus(&self.focus)
             .on_action(cx.listener(|this, _: &ContinueSetup, window, cx| this.advance(window, cx)))
@@ -254,7 +254,7 @@ impl Render for Setup {
                         .child(crate::view::key("tab")).child("Accept").child(crate::view::key("escape")).child("Dismiss"))
                     .child(crate::copilot::controls(&self.copilot, self.workspace.upgrade().map(|ws| ws.read(cx).config.workspace.clone()).unwrap_or_default(), cx)))
                 .when(current_step == 3, |view| view
-                    .child(v_flex().gap_3().children([Account::LeetCode, Account::NeetCode].into_iter().map(|account| {
+                    .child(v_flex().gap_3().children([Account::LeetCode, Account::NeetCode, Account::TakeUForward].into_iter().map(|account| {
                         let workspace = self.workspace.clone();
                         let status = accounts[account.index()].clone();
                         let signed_in = status != "Signed out";

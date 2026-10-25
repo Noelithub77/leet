@@ -65,7 +65,7 @@ pub fn render(ws: &Workspace, anchor: SourceMenuAnchor, label: String, cx: &mut 
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Choice { Source(Source), List(List) }
+enum Choice { Source(Source), List(List), Striver }
 
 struct MenuSelection {
     source: usize,
@@ -82,18 +82,18 @@ impl MenuSelection {
 
     fn hover_source(&mut self, index: usize) {
         self.source = index;
-        self.lists_open = Source::ALL[index] == Source::NeetCode;
+        self.lists_open = Source::ALL.get(index) == Some(&Source::NeetCode);
         self.in_lists = false;
     }
 
     fn choice(&self) -> Choice {
-        if self.in_lists { Choice::List(LISTS[self.list]) } else { Choice::Source(Source::ALL[self.source]) }
+        if self.in_lists { Choice::List(LISTS[self.list]) } else if self.source == Source::ALL.len() { Choice::Striver } else { Choice::Source(Source::ALL[self.source]) }
     }
 
     fn step(&mut self, delta: isize) {
         if self.in_lists { self.list = (self.list as isize + delta).rem_euclid(LISTS.len() as isize) as usize; }
         else {
-            self.source = (self.source as isize + delta).rem_euclid(Source::ALL.len() as isize) as usize;
+            self.source = (self.source as isize + delta).rem_euclid((Source::ALL.len() + 1) as isize) as usize;
             self.lists_open = false;
         }
     }
@@ -110,7 +110,7 @@ impl SourceMenu {
         match key {
             "up" => self.selection.step(-1),
             "down" => self.selection.step(1),
-            "right" if Source::ALL[self.selection.source] == Source::NeetCode => {
+            "right" if Source::ALL.get(self.selection.source) == Some(&Source::NeetCode) => {
                 self.selection.lists_open = true; self.selection.in_lists = true;
             }
             "left" => { self.selection.lists_open = false; self.selection.in_lists = false; }
@@ -124,6 +124,7 @@ impl SourceMenu {
     fn choose(&self, choice: Choice, window: &mut Window, cx: &mut Context<Self>) {
         let _ = self.workspace.update(cx, |ws, cx| {
             let source = match choice {
+                Choice::Striver => { ws.open_striver(window, cx); return; }
                 Choice::Source(source) => source,
                 Choice::List(list) => {
                     ws.config.roadmap_list = list;
@@ -162,7 +163,11 @@ impl Render for SourceMenu {
                         if *hovered { this.selection.hover_source(index); cx.notify(); }
                     }))
                     .on_click(cx.listener(move |this, _, window, cx| this.choose(Choice::Source(source), window, cx)))
-            })))
+            })).child(Button::new("striver-source").ghost().small().w_full().justify_start().h(px(28.))
+                .icon(IconName::ListOrdered).label("Striver sheets").child(div().flex_1())
+                .selected(self.selection.source == Source::ALL.len())
+                .on_hover(cx.listener(|this, hovered, _, cx| { if *hovered { this.selection.hover_source(Source::ALL.len()); cx.notify(); } }))
+                .on_click(cx.listener(|this, _, window, cx| this.choose(Choice::Striver, window, cx)))))
             .when(self.selection.lists_open, |row| row.child(v_flex().w(px(155.)).gap_0p5().pl_2().border_l_1().border_color(theme.border)
                 .children(LISTS.into_iter().enumerate().map(|(index, choice)| {
                     Button::new(("neetcode-list-option", index)).ghost().small().w_full().justify_start().h(px(28.))
@@ -200,7 +205,7 @@ mod tests {
     fn arrows_wrap_in_each_column_without_selecting_a_list_when_moving_sources() {
         let mut menu = MenuSelection::new(Source::NeetCode, List::NeetCode150);
         menu.step(-1);
-        assert_eq!(menu.choice(), Choice::Source(Source::CodeChef));
+        assert_eq!(menu.choice(), Choice::Striver);
         menu.step(1);
         assert_eq!(menu.choice(), Choice::Source(Source::NeetCode));
         assert!(!menu.lists_open);

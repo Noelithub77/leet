@@ -61,6 +61,7 @@ pub enum Center {
     Roadmap,
     Settings,
     Snippets,
+    Sheets,
 }
 
 pub enum Judge {
@@ -148,7 +149,8 @@ pub struct Workspace {
     pub neetcode: Arc<practice::neetcode::Client>,
     pub neetcode_solved: HashSet<String>,
     pub neetcode_syncing: bool,
-    pub account_names: [String; 2],
+    pub striver: crate::striver::State,
+    pub account_names: [String; 3],
     pub config: Config,
     pub catalog: Rc<Vec<CatalogItem>>,
     pub by_slug: HashMap<String, usize>,
@@ -210,6 +212,10 @@ impl Workspace {
         let db = Arc::new(Db::open(&practice::config::database_path()).expect("open leet database"));
         let accounts = [Account::LeetCode, Account::NeetCode].map(|account| creds::load(account).ok());
         let mut this = Self::from_storage(config, db, accounts.clone(), window, cx);
+        if let Ok(session) = creds::load(Account::TakeUForward) {
+            this.account_names[2] = session.display_name().unwrap_or("Account").to_owned();
+            this.striver.restore(&this.db, &session.user_id);
+        }
         this.snippet_dir = practice::snippets::store::dir();
         this.reload_snippets(cx);
         let language_servers = this.start_language_servers(window, cx);
@@ -242,7 +248,8 @@ impl Workspace {
     pub(crate) fn from_storage(config: Config, db: Arc<Db>, accounts: [Option<creds::Creds>; 2], window: &mut Window, cx: &mut Context<Self>) -> Self {
         let recent_slugs = db.get("recent").ok().flatten().map(|text| text.lines().map(str::to_owned).take(RECENT_LIMIT).collect()).unwrap_or_default();
         let client = Arc::new(Client::new(accounts[0].clone()));
-        let account_names = accounts.each_ref().map(|session| session.as_ref().map_or("Signed out".into(), |s| s.display_name().unwrap_or("Account").to_owned()));
+        let names = accounts.each_ref().map(|session| session.as_ref().map_or("Signed out".into(), |s| s.display_name().unwrap_or("Account").to_owned()));
+        let account_names = [names[0].clone(), names[1].clone(), "Signed out".into()];
         let neetcode_solved = accounts[1].as_ref().and_then(|s| db.get(&format!("neetcode-progress:{}", s.user_id)).ok().flatten())
             .map(|text| text.lines().map(str::to_owned).collect()).unwrap_or_default();
         let vim_shared = Rc::new(RefCell::new(VimShared::default()));
@@ -303,6 +310,7 @@ impl Workspace {
             neetcode: Arc::new(practice::neetcode::Client::default()),
             neetcode_solved,
             neetcode_syncing: false,
+            striver: crate::striver::State::default(),
             account_names,
             config: config.clone(),
             catalog: Rc::default(),

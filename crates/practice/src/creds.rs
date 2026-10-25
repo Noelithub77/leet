@@ -17,19 +17,21 @@ const SERVICE: &str = "verd";
 pub enum Account {
     LeetCode,
     NeetCode,
+    TakeUForward,
 }
 
 impl Account {
     pub fn label(self) -> &'static str {
-        match self { Self::LeetCode => "LeetCode", Self::NeetCode => "NeetCode" }
+        match self { Self::LeetCode => "LeetCode", Self::NeetCode => "NeetCode", Self::TakeUForward => "Take U Forward" }
     }
     pub fn index(self) -> usize {
-        match self { Self::LeetCode => 0, Self::NeetCode => 1 }
+        match self { Self::LeetCode => 0, Self::NeetCode => 1, Self::TakeUForward => 2 }
     }
     fn name(self) -> &'static str {
         match self {
             Account::LeetCode => "leetcode",
             Account::NeetCode => "neetcode",
+            Account::TakeUForward => "takeuforward",
         }
     }
 

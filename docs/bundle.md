@@ -32,3 +32,33 @@ The builder compacts SQLite and checkpoints its WAL before completing. Commit th
 - [Open-R1 Codeforces](https://huggingface.co/datasets/open-r1/codeforces): approved historical snapshot through early 2025, licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Attribution: the Open-R1 authors/Hugging Face, with problem content originating from Codeforces. leet bundles only catalog metadata, preserves aliases, and omits statements, editorials, hidden tests, and checkers. On-demand statements try Codeforces and fall back to indexed Open-R1 rows when the live request fails; successful results persist in the private cache. This is not proof that every current Codeforces problem is bundled. Original provider links remain available in the app.
 
 The snapshot contains no progress marks, account sessions, submissions, personal Git history, or custom tests. Use the adjacent JSON reports and `SELECT COUNT(*)` on the bundle to audit actual coverage.
+
+## Striver sheets
+
+Public curriculum metadata was captured on 2026-10-25 from
+[Striver A2Z](https://takeuforward.org/prep-hub/strivers-a2z-dsa-sheet) and
+[Striver SDE](https://takeuforward.org/prep-hub/strivers-sde-sheet).
+`crates/practice/data/striver.json` contains titles, section paths, provider item
+IDs, lesson/exercise kinds, provider links, and optional LeetCode mappings. It
+does not copy statements, editorials, videos, paid content, or account data.
+
+A2Z has 511 published entry occurrences across 100 sections (497 distinct IDs,
+42 lesson occurrences, 289 LeetCode-linked occurrences). Repeated exercises are
+preserved in their sections. Its page-level progress counter says 495; that
+counter is not used as a curriculum inventory. SDE has 156 entries across 27
+sections, including one lesson and 126 LeetCode links. These are the current
+Prep Hub lists; historical sheet sizes may differ.
+
+Refresh from downloaded public pages through the tracked Rust operator:
+
+```sh
+curl -fsSL https://takeuforward.org/prep-hub/strivers-a2z-dsa-sheet -o /tmp/striver-a2z.html
+curl -fsSL https://takeuforward.org/prep-hub/strivers-sde-sheet -o /tmp/striver-sde.html
+./ops snapshot:striver --a2z-html /tmp/striver-a2z.html --sde-html /tmp/striver-sde.html --output crates/practice/data/striver.json
+```
+
+`./ops snapshot:striver --help` documents the inputs and effects. It parses both
+pages before writing and reports public-metadata counts as JSON. It never loads
+accounts or writes personal progress. Review the diff and run the focused
+`striver::tests` tests after refreshing. A changed provider payload fails with
+an error instead of producing an empty sheet.

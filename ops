@@ -6,6 +6,10 @@ if [ "${1:-}" = "release:package" ]; then
     shift
     exec cargo run --quiet -p practice --example release -- "$@"
 fi
+if [ "${1:-}" = "snapshot:striver" ]; then
+    shift
+    exec cargo run --quiet --jobs 2 -p practice --example striver_snapshot -- "$@"
+fi
 if [ "${1:-}" = "snapshot" ]; then
     shift
     exec cargo run --quiet -p practice --example snapshot -- "$@"

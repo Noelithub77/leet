@@ -283,6 +283,18 @@ Open **LeetCode account** or **NeetCode account** in Settings. These forms and
 network clients run in Rust; leet does not invoke `verd login`. Both apps share
 the existing OS keyring/private-file credential format.
 
+On Windows and macOS, **Sign in…** opens a dedicated [Wry](https://docs.rs/wry/0.57.1/wry/) window using WebView2
+or WKWebView. Its browser storage is temporary. Leet captures only messages from
+the provider's HTTPS origin, validates the resulting account with the provider,
+then persists it using the existing credential store. Closing the window cancels
+capture; an unfinished login expires after five minutes. Credentials are never
+put in URLs or clipboard transfers by this flow.
+
+**Manual import** retains the flows below. Google sign-in can reject embedded
+browsers; use manual import for that case. The Windows WebView2 runtime must be
+available. Linux continues using manual import. Native provider sign-in still
+requires Windows/macOS runtime testing; headless sheet fixtures cannot prove it.
+
 For LeetCode, open the browser, sign in, and copy the Cookie and User-Agent
 values from the same `leetcode.com/graphql/` Network request into the form.
 The Cookie field is masked. The session's signed-in identity is validated
@@ -309,6 +321,30 @@ The sign-out action removes the shared leet/verd session, leaving browser login
 and Solution files untouched. Settings distinguish saved sessions from a
 verified login or successful progress sync. NeetCode's callable endpoint is an
 integration with its current website, rather than a documented public API.
+
+## Striver sheets and Take U Forward
+
+Choose **Striver sheets** from the practice source picker, then **Striver A2Z**
+or **Striver SDE**. The selected sheet is saved in `striver_sheet`. Sections
+expand independently. Linked LeetCode entries open the existing editor and judge
+flow; theory and TUF-only exercises open their provider URL in the browser.
+Escape returns to Home. TUF judge execution is not implemented.
+
+**Connect TUF…** opens the Take U Forward account form, also available in
+Platform settings and onboarding. Its embedded window uses the provider's
+normal email/OTP flow; Google sign-in may require manual import. The session is
+checked against `/api/v1/auth/me` before saving. Manual import uses Cookie and
+User-Agent from a `backend-go.takeuforward.org` request. **Sync** reads both
+sheets' completion IDs. Cached marks are scoped by account identity; signing out
+clears displayed TUF marks. LeetCode Accepted results also mark linked entries
+complete. Sync failures retain previous marks. Expired TUF sessions require
+reconnection; automatic TUF session-cookie rotation is not implemented.
+
+Curriculum metadata is public and bundled in `crates/practice/data/striver.json`.
+No account, subscription, progress, or personal data enters that file. See
+[bundle provenance](bundle.md#striver-sheets) for source counts and refresh steps.
+The account and progress endpoints reflect TUF's current website and are not a
+documented public integration contract.
 
 Both Rust application crates enforce `#![forbid(unsafe_code)]`. This applies to
 project-owned Rust code; GPUI, graphics drivers, SQLite and other dependencies

@@ -32,6 +32,7 @@ pub enum Setting {
     Codeforces,
     LeetCode,
     NeetCode,
+    TakeUForward,
     Theme,
     Font,
     List,
@@ -58,7 +59,7 @@ pub enum Kind {
 }
 
 impl Setting {
-    pub const ALL: [Setting; 26] = [
+    pub const ALL: [Setting; 27] = [
         Setting::Onboarding,
         Setting::ResetSettings,
         Setting::ArchivedChats,
@@ -69,6 +70,7 @@ impl Setting {
         Setting::Codeforces,
         Setting::LeetCode,
         Setting::NeetCode,
+        Setting::TakeUForward,
         Setting::Theme,
         Setting::Font,
         Setting::List,
@@ -100,6 +102,7 @@ impl Setting {
             Setting::Codeforces => "Codeforces handle",
             Setting::LeetCode => "LeetCode account",
             Setting::NeetCode => "NeetCode account",
+            Setting::TakeUForward => "Take U Forward account",
             Setting::Theme => "Theme",
             Setting::Font => "Font",
             Setting::List => "Roadmap list",
@@ -132,7 +135,7 @@ impl Setting {
             Setting::Copilot => "github copilot completions predictions tab alt sign in zen subtle",
             Setting::Vim => "vim modal normal insert visual block keyboard",
             Setting::Codeforces => "codeforces handle account sign in",
-            Setting::LeetCode | Setting::NeetCode => "login session account sign in sync",
+            Setting::LeetCode | Setting::NeetCode | Setting::TakeUForward => "login session account sign in sync",
             Setting::Theme => "color appearance dark light vesper",
             Setting::Font => "fonts typography font family liberation sans system",
             Setting::List => "neetcode 150 250 all",
@@ -157,7 +160,7 @@ impl Setting {
             Setting::AiFast | Setting::Vim => Kind::Toggle,
             Setting::AiModel | Setting::Install(_) | Setting::PlatformGroup(_) => Kind::Action,
             Setting::Python | Setting::ExternalEditor | Setting::Workspace | Setting::Keybinding(_) => Kind::Text,
-            Setting::ArchivedChats | Setting::Onboarding | Setting::ResetSettings | Setting::LanguageServer | Setting::Copilot | Setting::Codeforces | Setting::OpenFile | Setting::Font | Setting::Keybindings | Setting::LeetCode | Setting::NeetCode => Kind::Action,
+            Setting::ArchivedChats | Setting::Onboarding | Setting::ResetSettings | Setting::LanguageServer | Setting::Copilot | Setting::Codeforces | Setting::OpenFile | Setting::Font | Setting::Keybindings | Setting::LeetCode | Setting::NeetCode | Setting::TakeUForward => Kind::Action,
         }
     }
 
@@ -172,6 +175,7 @@ impl Setting {
             Setting::Codeforces => if c.codeforces_handle.is_empty() { "Not set".into() } else { c.codeforces_handle.clone() },
             Setting::LeetCode => ws.account_names[0].clone(),
             Setting::NeetCode => ws.account_names[1].clone(),
+            Setting::TakeUForward => ws.account_names[2].clone(),
             Setting::Theme => cx.theme().theme_name().to_string(),
             Setting::Font => c.font_family.clone(),
             Setting::List => c.roadmap_list.label().into(),
@@ -214,7 +218,7 @@ impl SettingsTab {
             Self::General => &[Setting::ArchivedChats, Setting::List, Setting::Workspace, Setting::Onboarding, Setting::OpenFile, Setting::ResetSettings],
             Self::Editor => &[Setting::Language, Setting::Python, Setting::ExternalEditor, Setting::TestTimeout, Setting::LanguageServer, Setting::Copilot, Setting::Vim],
             Self::Appearance => &[Setting::Theme, Setting::Font],
-            Self::Platform => &[Setting::LeetCode, Setting::NeetCode, Setting::Codeforces],
+            Self::Platform => &[Setting::LeetCode, Setting::NeetCode, Setting::Codeforces, Setting::TakeUForward],
             Self::Ai => &[Setting::AiAgent, Setting::AiModel, Setting::AiReasoning, Setting::AiFast, Setting::WebChat, Setting::Install(AgentKind::OpenCode), Setting::Install(AgentKind::Antigravity)],
             Self::Keybindings => &[],
         }
@@ -249,6 +253,7 @@ fn platform_rows(open: [bool; 4], codeforces_configured: bool) -> Vec<Setting> {
             }));
         }
     }
+    rows.push(Setting::TakeUForward);
     rows
 }
 
@@ -465,8 +470,8 @@ impl Workspace {
             Kind::Action if setting == Setting::Font => {
                 self.omni_open(crate::omnibar::Scope::Fonts, window, cx);
             }
-            Kind::Action if matches!(setting, Setting::LeetCode | Setting::NeetCode) => {
-                let account = if setting == Setting::LeetCode { practice::creds::Account::LeetCode } else { practice::creds::Account::NeetCode };
+            Kind::Action if matches!(setting, Setting::LeetCode | Setting::NeetCode | Setting::TakeUForward) => {
+                let account = match setting { Setting::LeetCode => practice::creds::Account::LeetCode, Setting::TakeUForward => practice::creds::Account::TakeUForward, _ => practice::creds::Account::NeetCode };
                 crate::accounts::open(account, self.account_names[account.index()] != "Signed out", window, cx);
             }
             Kind::Action if setting == Setting::AiModel => self.ai_chip.update(cx, |chip, cx| chip.open(window, cx)),
@@ -568,7 +573,7 @@ impl Workspace {
                                     gpui_kit::assets::IconName::ChevronDown
                                 } else { gpui_kit::assets::IconName::ChevronRight }).into_any_element()
                             }
-                            (None, _) if matches!(setting, Setting::LeetCode | Setting::NeetCode | Setting::Codeforces) => {
+                            (None, _) if matches!(setting, Setting::LeetCode | Setting::NeetCode | Setting::TakeUForward | Setting::Codeforces) => {
                                 let codeforces = setting == Setting::Codeforces;
                                 let signed_in = if codeforces { !self.config.codeforces_handle.is_empty() } else { value != "Signed out" };
                                 h_flex().gap_3().items_center()
@@ -654,6 +659,7 @@ mod tests {
             Setting::PlatformGroup(Source::NeetCode), Setting::NeetCode,
             Setting::PlatformGroup(Source::Codeforces), Setting::Codeforces,
             Setting::PlatformGroup(Source::CodeChef),
+            Setting::TakeUForward,
         ]);
     }
 
@@ -694,8 +700,8 @@ mod tests {
     fn collapsed_platforms_keep_headers_and_expose_only_their_own_settings() {
         use super::platform_rows;
         let closed = platform_rows([false; 4], true);
-        assert_eq!(closed.len(), 4);
-        assert!(closed.iter().all(|row| matches!(row, Setting::PlatformGroup(_))));
+        assert_eq!(closed.len(), 5);
+        assert!(closed.iter().all(|row| matches!(row, Setting::PlatformGroup(_) | Setting::TakeUForward)));
         let rows = platform_rows([true, false, false, false], true);
         assert!(rows.contains(&Setting::LeetCode));
         assert!(!rows.contains(&Setting::NeetCode));

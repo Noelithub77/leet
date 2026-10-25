@@ -24,6 +24,7 @@ pub struct Config {
     pub show_tags: bool,
     pub external_editor: String,
     pub roadmap_list: List,
+    pub striver_sheet: crate::striver::Sheet,
     /// Web chat for Assist when no local agent is chosen.
     #[serde(alias = "prompt_provider")]
     pub web_chat: Provider,
@@ -60,6 +61,7 @@ impl Default for Config {
             show_tags: false,
             external_editor: "zed".into(),
             roadmap_list: List::NeetCode150,
+            striver_sheet: Default::default(),
             web_chat: Provider::ChatGpt,
             agent: None,
             ai_web: false,

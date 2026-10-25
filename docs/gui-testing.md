@@ -48,6 +48,15 @@ Hint controls share the problem toolbar. Statement captures verify their contain
 The onboarding fixture renders the production setup view with missing clangd, a missing compiler, and pending tool checks. Hit-tested Continue clicks advance in every case. The retained workspace receives deterministic installer events after leaving setup: progress stays visible, a hit-tested Retry restarts a failed job, and success shows Ready. Prerequisite results are deterministic; this fixture never detects or downloads tools. Setup PNGs are saved alongside the other captures. The ignored `live_private_python_and_cpp_servers` core test verifies completion, hover, definition, and diagnostics against managed tools; isolate its data directory and install the tools there before running it.
 
 Run `./ops gui:test --fixture tour --json` for focused guided-tour checks.
+
+Run `./ops gui:test --fixture striver --json` for native A2Z/SDE sheet navigation.
+It opens sheets through the production source picker, expands a real curriculum
+section, switches and persists the sheet choice, and opens/dismisses the TUF
+account dialog. It saves `striver-a2z.png` and `striver-sde.png`. It never opens
+a provider login window, accesses credentials, or sends provider requests.
+This fixture proves sheet interaction and pixels; it does not prove native
+WebView2/WKWebView login or authenticated progress sync.
+
 The guided-tour fixture uses isolated SQLite storage and a bundled public
 question. It checks startup defaults, automatic display, search actions, Skip
 and Done persistence, replay, Escape after shortcut reload, all eight steps,

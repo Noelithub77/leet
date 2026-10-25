@@ -1,6 +1,9 @@
 <details open>
 <summary>Feat</summary>
 
+- Sign in to LeetCode, NeetCode, and Take U Forward in a private window on Windows and macOS, with manual import available.
+- Browse Striver A2Z and SDE sheets by section; open linked LeetCode problems in the editor and other entries on TUF.
+- Connect a TUF account and sync sheet completion marks.
 - Edit selected code with Ctrl+I in a floating card at the selection, with a distinct highlight, a reviewable diff, and an optional agent note.
 - Reopen recent Ctrl+I instructions with Ctrl+Shift+I or Up and Down.
 - Send the whole file, problem statement, examples, and tests with Ctrl+I, using a fast completion mode.

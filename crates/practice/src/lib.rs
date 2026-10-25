@@ -19,6 +19,7 @@ pub mod search;
 pub mod snippets;
 pub mod workspace;
 pub mod neetcode;
+pub mod striver;
 
 pub mod stdin_runner;
 

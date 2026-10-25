@@ -99,6 +99,7 @@ impl Render for Workspace {
             Center::Snippets => div().flex_1().h_full().children(self.snippet_editor.clone()).into_any_element(),
             Center::Onboarding => div().flex_1().h_full().children(self.onboarding.clone()).into_any_element(),
             Center::Home => self.render_home(window, cx).into_any_element(),
+            Center::Sheets => self.render_striver(cx).into_any_element(),
             Center::Editor => v_flex()
                 .flex_1()
                 .min_h_0()
@@ -226,7 +227,9 @@ impl Render for Workspace {
             }))
             .on_key_down(cx.listener(|this, event, window, cx| this.home_type(event, window, cx))).child(tabs).child(
             h_flex().flex_1().min_h_0().mx_2().gap_2().track_focus(&self.nav_focus)
-                .when(self.nav_focus.is_focused(window), |view| Workspace::register_nav(view, cx))
+                .when(self.nav_focus.is_focused(window) && self.center != Center::Sheets, |view| Workspace::register_nav(view, cx))
+                .when(self.center == Center::Sheets, |view| view.key_context("VgNav")
+                    .on_action(cx.listener(|this, _: &crate::actions::Back, window, cx| this.show_home(window, cx))))
                 .when(self.nav_focus.is_focused(window) && self.center == Center::Settings, |view| view.key_context("VgNav Settings"))
             .child(body),
         )
