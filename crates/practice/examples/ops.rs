@@ -139,7 +139,7 @@ fn execute()->Result<()> {
     }
     if args.iter().skip(1).any(|arg|arg!="--json"){bail!("Unexpected argument; use ./ops --help");}
     match command {
-        "check"=>{run("cargo",&["test","--workspace"])?;run("python3",&["tests/install.py"])?;},
+        "check"=>{run("python3",&["scripts/no-em-dash.py"])?;run("cargo",&["test","--workspace"])?;run("python3",&["tests/install.py"])?;},
         "build"=>run("nice",&["-n","10","cargo","build","--release","-p","gui"])? ,
         "local:deploy"=>{
             let started=Instant::now();
