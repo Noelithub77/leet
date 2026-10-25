@@ -20,7 +20,7 @@ fn record_mode(solution: &Path, meta: &serde_json::Value, case: &crate::runner::
     let source=dir.0.join("main.cpp"); let binary=dir.0.join("solution");
     if !stdin { fs::write(&source,cpp_driver::source(meta,&solution,&fs::read_to_string(&solution)?)?)?; }
     let source = if stdin { &solution } else { &source };
-    let mut cmd=Command::new("g++"); cmd.args(["-std=c++20","-O0","-g","-fno-omit-frame-pointer","-o"]).arg(&binary).arg(&source);
+    let mut cmd=crate::background_process::command("g++"); cmd.args(["-std=c++20","-O0","-g","-fno-omit-frame-pointer","-o"]).arg(&binary).arg(&source);
     let (success,timeout,_,stderr)=execute(&mut cmd,"",Duration::from_secs(60),&dir.0)?;
     if !success { let tail=stderr.chars().rev().take(8000).collect::<String>().chars().rev().collect::<String>(); bail!("C++ compilation {}: {tail}",if timeout {"timed out"} else {"failed"}); }
     let events=dir.0.join("steps.jsonl"); let result=dir.0.join("result.json"); let output=dir.0.join("program.stdout"); let error=dir.0.join("program.stderr"); let input=dir.0.join("case.input");

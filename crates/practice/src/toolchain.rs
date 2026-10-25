@@ -66,6 +66,8 @@ pub fn check(language: Language, python: &str) -> Setup {
     };
     let server = lsp::command(language);
     requirements.push(Requirement { label: label.into(), required: false, ready: server.is_ok(), detail: server.map(|(path, _, _)| path.display().to_string()).unwrap_or_else(|error| error.to_string()), setup_url });
+    let debugger = crate::debugger::requirement(language, python);
+    requirements.push(Requirement { label: "Debugger".into(), required: false, ready: debugger.is_ok(), detail: debugger.err().unwrap_or_else(|| "Ready".into()), setup_url: "https://microsoft.github.io/debug-adapter-protocol/" });
     Setup { requirements }
 }
 #[cfg(test)] mod tests {
@@ -84,7 +86,7 @@ pub fn check(language: Language, python: &str) -> Setup {
     #[test] fn checks_only_selected_language_and_configured_interpreter() {
         let setup = check(Language::Python, "leet-missing-python-for-test");
         assert!(!setup.ready());
-        assert_eq!(setup.requirements.len(), 2);
+        assert_eq!(setup.requirements.len(), 3);
         assert!(setup.requirements[0].detail.contains("leet-missing-python-for-test"));
         assert!(setup.requirements.iter().all(|requirement| !requirement.label.contains("Java") && !requirement.label.contains("Go")));
     }

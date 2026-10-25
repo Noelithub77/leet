@@ -1,9 +1,9 @@
 #!/bin/sh
 set -eu
-[ "$#" -eq 2 ] || { echo "Usage: setup-tools.sh DIRECTORY python|cpp|c" >&2; exit 2; }
+[ "$#" -eq 2 ] || { echo "Usage: setup-tools.sh DIRECTORY python|cpp|c|go|java" >&2; exit 2; }
 tools_dir=$1
 language=$2
-case "$language" in python|cpp|c) ;; *) echo "Unsupported tool setup language" >&2; exit 2 ;; esac
+case "$language" in python|cpp|c|go|java) ;; *) echo "Unsupported tool setup language" >&2; exit 2 ;; esac
 mkdir -p "$tools_dir"
 mkdir "$tools_dir/.install-lock" 2>/dev/null || { echo "Tool installation is already running" >&2; exit 1; }
 printf '%s' "${LEET_TOOL_INSTALL_ID:-manual}" > "$tools_dir/.install-lock/owner"
@@ -26,4 +26,8 @@ if [ ! -x "$python" ]; then
   "$stage/python/bin/python3" --version
   mv "$stage/python" "$tools_dir/python"
 fi
-"$python" "$tools_dir/setup-tools.py" "$tools_dir" "$language"
+case "$language" in
+  python) "$python" -u "$tools_dir/setup-tools.py" "$tools_dir" "$language" ;;
+  cpp|c) if [ "$(uname -s):$(uname -m)" != "Linux:aarch64" ]; then "$python" -u "$tools_dir/setup-tools.py" "$tools_dir" "$language"; fi ;;
+esac
+"$python" -u "$tools_dir/setup-toolchains.py" "$tools_dir" "$language"

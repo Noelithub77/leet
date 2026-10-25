@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$Directory, [ValidateSet('python','cpp','c')][string]$Language='python')
+param([Parameter(Mandatory=$true)][string]$Directory, [ValidateSet('python','cpp','c','go','java')][string]$Language='python')
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 New-Item -ItemType Directory -Force -Path $Directory | Out-Null
@@ -36,7 +36,12 @@ try {
         Run-Quiet (Join-Path $stage 'python\python.exe') @('--version')
         Move-Item (Join-Path $stage 'python') (Join-Path $Directory 'python')
     }
-    Run-Quiet $python @((Join-Path $Directory 'setup-tools.py'), $Directory, $Language)
+    if ($Language -in @('python','cpp','c')) {
+        & $python -u (Join-Path $Directory 'setup-tools.py') $Directory $Language
+        if ($LASTEXITCODE -ne 0) { throw 'Editor tool setup failed; retry setup' }
+    }
+    & $python -u (Join-Path $Directory 'setup-toolchains.py') $Directory $Language
+    if ($LASTEXITCODE -ne 0) { throw 'Toolchain setup failed; retry setup' }
 } finally {
     Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
     Remove-Item -Recurse -Force $lock -ErrorAction SilentlyContinue

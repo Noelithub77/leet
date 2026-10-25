@@ -1,0 +1,213 @@
+{
+  "schema": 1,
+  "platforms": {
+    "linux-x86_64": {
+      "zig": {
+        "url": "https://ziglang.org/download/0.17.0/zig-x86_64-linux-0.17.0.tar.xz",
+        "sha256": "1cbe9df9f27e6b78d14ccbca43b6703a404ef79ef1c463de901d7f088d4e2026",
+        "root": "zig-x86_64-linux-0.17.0",
+        "executable": "zig",
+        "version": "0.17.0"
+      },
+      "go": {
+        "url": "https://go.dev/dl/go1.27.3.linux-amd64.tar.gz",
+        "sha256": "65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40",
+        "root": "go",
+        "executable": "bin/go",
+        "version": "go1.27.3"
+      },
+      "codelldb": {
+        "url": "https://github.com/vadimcn/codelldb/releases/download/v1.12.3/codelldb-linux-x64.vsix",
+        "sha256": "1cd7f386598022b51a5b93b9ffa23e812b23f519cfe1833384ec4bef4bfd1be1",
+        "root": "extension",
+        "executable": "adapter/codelldb",
+        "version": "v1.12.3"
+      },
+      "delve": {
+        "url": "https://github.com/go-delve/delve/releases/download/v1.27.2/dlv_1.27.2_linux_amd64.tar.gz",
+        "sha256": "30783eb68dc1598d965491cc97762270cd63ce13f09d0cac22faa7e3eafc1b9c",
+        "root": ".",
+        "executable": "dlv",
+        "version": "v1.27.2"
+      },
+      "jdk": {
+        "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.5%2B8/OpenJDK25U-jdk_x64_linux_hotspot_25.0.5_8.tar.gz",
+        "sha256": "68982529869257d0ee6b824ec5aa270ff8b118bb438670da0b97ebdab178d7fb",
+        "root": "*",
+        "executable": "bin/java",
+        "version": "jdk-25.0.5+8"
+      }
+    },
+    "linux-aarch64": {
+      "zig": {
+        "url": "https://ziglang.org/download/0.17.0/zig-aarch64-linux-0.17.0.tar.xz",
+        "sha256": "9e8d11661d4ae3bd57702a3832781e23ad151dde5798e16a5ccd503f65234ff8",
+        "root": "zig-aarch64-linux-0.17.0",
+        "executable": "zig",
+        "version": "0.17.0"
+      },
+      "go": {
+        "url": "https://go.dev/dl/go1.27.3.linux-arm64.tar.gz",
+        "sha256": "a06e99309dbcbdca1a8ccd2282c3ee146e55930886e26b4f1193269587165f49",
+        "root": "go",
+        "executable": "bin/go",
+        "version": "go1.27.3"
+      },
+      "codelldb": {
+        "url": "https://github.com/vadimcn/codelldb/releases/download/v1.12.3/codelldb-linux-arm64.vsix",
+        "sha256": "0887f67d440554617894266f80706b700907c36b95e6e49d23b95a0e05318101",
+        "root": "extension",
+        "executable": "adapter/codelldb",
+        "version": "v1.12.3"
+      },
+      "delve": {
+        "url": "https://github.com/go-delve/delve/releases/download/v1.27.2/dlv_1.27.2_linux_arm64.tar.gz",
+        "sha256": "b2969e00711f905d189784654e485ea5bc6c2eaa8c5d3effcb646487f4e0bb2f",
+        "root": ".",
+        "executable": "dlv",
+        "version": "v1.27.2"
+      },
+      "jdk": {
+        "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.5%2B8/OpenJDK25U-jdk_aarch64_linux_hotspot_25.0.5_8.tar.gz",
+        "sha256": "bb5b2ded252f21c6090cf780b0a408ad0d83bbb557e702955643557f13231880",
+        "root": "*",
+        "executable": "bin/java",
+        "version": "jdk-25.0.5+8"
+      }
+    },
+    "macos-x86_64": {
+      "zig": {
+        "url": "https://ziglang.org/download/0.17.0/zig-x86_64-macos-0.17.0.tar.xz",
+        "sha256": "4f9a1c5269aa17ebda5e6d3c2b89d6cbf36f7d2b22a0306e9ab98f25f95529c6",
+        "root": "zig-x86_64-macos-0.17.0",
+        "executable": "zig",
+        "version": "0.17.0"
+      },
+      "go": {
+        "url": "https://go.dev/dl/go1.27.3.darwin-amd64.tar.gz",
+        "sha256": "b6f8e931e4ab497fcde6da8ae4499a58f9d258e55c8a80824a516eae5950a750",
+        "root": "go",
+        "executable": "bin/go",
+        "version": "go1.27.3"
+      },
+      "codelldb": {
+        "url": "https://github.com/vadimcn/codelldb/releases/download/v1.12.3/codelldb-darwin-x64.vsix",
+        "sha256": "e25cc716b94c62c07fec268ff2785d2b797245b160502baef8b9c970a0c4d8e8",
+        "root": "extension",
+        "executable": "adapter/codelldb",
+        "version": "v1.12.3"
+      },
+      "delve": {
+        "url": "https://github.com/go-delve/delve/releases/download/v1.27.2/dlv_1.27.2_darwin_amd64.tar.gz",
+        "sha256": "66992990307bd0328994960df0cbfa34ecfb16e9cd32f5cf6c83c34912e59cc3",
+        "root": ".",
+        "executable": "dlv",
+        "version": "v1.27.2"
+      },
+      "jdk": {
+        "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.5%2B8/OpenJDK25U-jdk_x64_mac_hotspot_25.0.5_8.tar.gz",
+        "sha256": "32cd4d2151c91aa00d0fc911edfd05245ed40fa6b1aa894d5f35c928cd67a59d",
+        "root": "*",
+        "executable": "Contents/Home/bin/java",
+        "version": "jdk-25.0.5+8"
+      }
+    },
+    "macos-aarch64": {
+      "zig": {
+        "url": "https://ziglang.org/download/0.17.0/zig-aarch64-macos-0.17.0.tar.xz",
+        "sha256": "b607e9b9234790a008116ae5bdb71c6243b84b9fb42a53a9e70fde41c06c536a",
+        "root": "zig-aarch64-macos-0.17.0",
+        "executable": "zig",
+        "version": "0.17.0"
+      },
+      "go": {
+        "url": "https://go.dev/dl/go1.27.3.darwin-arm64.tar.gz",
+        "sha256": "dd3908cf20959d798c1e06ebe5b72213f0505ce01373b40ce3110975a6cd99c2",
+        "root": "go",
+        "executable": "bin/go",
+        "version": "go1.27.3"
+      },
+      "codelldb": {
+        "url": "https://github.com/vadimcn/codelldb/releases/download/v1.12.3/codelldb-darwin-arm64.vsix",
+        "sha256": "2f114a990e1b368dd1dbd33c80c0e719767af2d228391ec0df0571c957f9ac91",
+        "root": "extension",
+        "executable": "adapter/codelldb",
+        "version": "v1.12.3"
+      },
+      "delve": {
+        "url": "https://github.com/go-delve/delve/releases/download/v1.27.2/dlv_1.27.2_darwin_arm64.tar.gz",
+        "sha256": "c32fc68e11ff3820ba267ab12c96fa68e3804319f807fc5db4fba3b9d868df26",
+        "root": ".",
+        "executable": "dlv",
+        "version": "v1.27.2"
+      },
+      "jdk": {
+        "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.5%2B8/OpenJDK25U-jdk_aarch64_mac_hotspot_25.0.5_8.tar.gz",
+        "sha256": "36dc14d797aaff6d89aab302cd053fdba6207dfdcf772052fa7b023a94b0e857",
+        "root": "*",
+        "executable": "Contents/Home/bin/java",
+        "version": "jdk-25.0.5+8"
+      }
+    },
+    "windows-x86_64": {
+      "zig": {
+        "url": "https://ziglang.org/download/0.17.0/zig-x86_64-windows-0.17.0.zip",
+        "sha256": "b5663f69581dcf391293fbf16c06cb80d81d806545ce618b4d0bab7f0eb8c428",
+        "root": "zig-x86_64-windows-0.17.0",
+        "executable": "zig.exe",
+        "version": "0.17.0"
+      },
+      "go": {
+        "url": "https://go.dev/dl/go1.27.3.windows-amd64.zip",
+        "sha256": "f26081f438319757f8a1b46d7d0b2c5ec7583d4038e485e0aa725cfde7885fff",
+        "root": "go",
+        "executable": "bin/go.exe",
+        "version": "go1.27.3"
+      },
+      "codelldb": {
+        "url": "https://github.com/vadimcn/codelldb/releases/download/v1.12.3/codelldb-win32-x64.vsix",
+        "sha256": "a916e509308dac817732f63ca604a8b93ed29cd16f38a2fa9f0b64ed58e8f51a",
+        "root": "extension",
+        "executable": "adapter/codelldb.exe",
+        "version": "v1.12.3"
+      },
+      "delve": {
+        "url": "https://github.com/go-delve/delve/releases/download/v1.27.2/dlv_1.27.2_windows_amd64.zip",
+        "sha256": "630b5b9b14c89becb1123790563111c70f7e0cf90820a666582ad1caba05dbd6",
+        "root": ".",
+        "executable": "dlv.exe",
+        "version": "v1.27.2"
+      },
+      "jdk": {
+        "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1/OpenJDK25U-jdk_x64_windows_hotspot_25.0.4.1_1.zip",
+        "sha256": "00c847d804f4a78e9f04f2683faf14fed898535b177b7fc704486cb0284e9283",
+        "root": "*",
+        "executable": "bin/java.exe",
+        "version": "jdk-25.0.4.1+1"
+      }
+    }
+  },
+  "gopls": "v0.24.0",
+  "java-debug": {
+    "url": "https://open-vsx.org/api/vscjava/vscode-java-debug/0.60.0/file/vscjava.vscode-java-debug-0.60.0.vsix",
+    "sha256": "f09ebe358a7b08b3c17b21b8d8207b0649acad120eb6f1604dc4f15379f59d66",
+    "root": "extension",
+    "version": "0.60.0"
+  },
+  "jdtls": {
+    "url": "https://open-vsx.org/api/redhat/java/1.58.0/file/redhat.java-1.58.0.vsix",
+    "sha256": "d0118ef167d598343808bccf3ea54e248d2a1ab297dc02e00b26e7ebec9d0cc4",
+    "root": "extension",
+    "version": "1.58.0"
+  },
+  "debugpy": {
+    "url": "https://files.pythonhosted.org/packages/56/3d/c7dc9f35bc9e22cdb53679f844bee40fd5cff871862f60595869a433400d/debugpy-1.8.22-py2.py3-none-any.whl",
+    "sha256": "a9e9d3550e15ca479c59333e90845029190531f0cacfedab3b815a57bd913947",
+    "version": "1.8.22"
+  },
+  "clangd-arm64": {
+    "url": "https://files.pythonhosted.org/packages/ff/6e/bb87d4ebf958b63d0a1a1bc148c013d9b5471211eff75cc49681034b8842/clangd-22.1.1-py2.py3-none-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl",
+    "sha256": "672338afbbb5989b66cd0c1354eb2406f77fdc2a97d5b594ee8dd26c745b250f",
+    "version": "22.1.1"
+  }
+}

@@ -199,7 +199,7 @@ fn execute()->Result<()> {
     println!("{}",json!({"command":command,"environment":"local"}));Ok(())
 }
 fn trace(args:&[String])->Result<()> {
-    const USAGE:&str="./ops trace --language python|cpp --solution PATH (--stdin | --meta PATH) --input PATH [--json] [--max-steps N]";
+    const USAGE:&str="./ops trace --language python|cpp|c|go|java --solution PATH (--stdin | --meta PATH) --input PATH [--json] [--max-steps N]";
     if args.iter().any(|arg|matches!(arg.as_str(),"--help"|"-h")){println!("{USAGE}\nLocal solution execution; no account, cache, or solution repository writes.");return Ok(());}
     let mut language=None;let mut solution=None;let mut meta=None;let mut input=None;let mut max_steps=4000;let mut json_output=false;let mut stdin=false;let mut i=0;
     while i<args.len(){
@@ -208,7 +208,7 @@ fn trace(args:&[String])->Result<()> {
         if option=="--stdin" && !stdin {stdin=true;i+=1;continue;}
         let value=args.get(i+1).with_context(||format!("{option} requires a value; {USAGE}"))?;
         match option {
-            "--language" if language.is_none()=>language=Some(match value.as_str(){"python"=>practice::language::Language::Python,"cpp"=>practice::language::Language::Cpp,_=>bail!("Language must be python or cpp")}),
+            "--language" if language.is_none()=>language=Some(match value.as_str(){"python"=>practice::language::Language::Python,"cpp"=>practice::language::Language::Cpp,"c"=>practice::language::Language::C,"go"=>practice::language::Language::Go,"java"=>practice::language::Language::Java,_=>bail!("Language must be python, cpp, c, go or java")}),
             "--solution" if solution.is_none()=>solution=Some(PathBuf::from(value)),
             "--meta" if meta.is_none()=>meta=Some(PathBuf::from(value)),
             "--input" if input.is_none()=>input=Some(PathBuf::from(value)),

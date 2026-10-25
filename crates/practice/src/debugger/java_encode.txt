@@ -1,0 +1,29 @@
+static String encode(Object value) {
+    if (value == null) return "null";
+    if (value instanceof String || value instanceof Character) {
+        String text = value.toString(); StringBuilder out = new StringBuilder("\"");
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            switch (c) {
+                case '"': out.append("\\\""); break;
+                case '\\': out.append("\\\\"); break;
+                case '\n': out.append("\\n"); break;
+                case '\r': out.append("\\r"); break;
+                case '\t': out.append("\\t"); break;
+                default: if (c < 32) out.append(String.format("\\u%04x", (int)c)); else out.append(c);
+            }
+        }
+        return out.append('"').toString();
+    }
+    if (value.getClass().isArray()) {
+        StringJoiner out = new StringJoiner(",", "[", "]");
+        for (int i = 0; i < java.lang.reflect.Array.getLength(value); i++) out.add(encode(java.lang.reflect.Array.get(value, i)));
+        return out.toString();
+    }
+    if (value instanceof Iterable) {
+        StringJoiner out = new StringJoiner(",", "[", "]");
+        for (Object item : (Iterable<?>)value) out.add(encode(item));
+        return out.toString();
+    }
+    return value.toString();
+}

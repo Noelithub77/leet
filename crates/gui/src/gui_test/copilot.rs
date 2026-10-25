@@ -191,9 +191,9 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
     let db = Arc::new(practice::db::Db::open(&output.join("session/copilot-status.sqlite"))?);
     let config = practice::config::Config { onboarding_completed: true, workspace: output.join("session/solutions"), ..Default::default() };
     let (status_handle, status_fixture) = cx.update(|cx| gpui_kit::open_window(WindowOptions {
-        window_bounds: Some(WindowBounds::Windowed(Bounds { origin: point(px(0.), px(0.)), size: size(px(1200.), px(700.)) })), show: false, focus: false, ..Default::default()
+        window_bounds: Some(WindowBounds::Windowed(Bounds { origin: point(px(0.), px(0.)), size: size(px(1000.), px(700.)) })), show: false, focus: false, ..Default::default()
     }, cx, |window, cx| {
-        let workspace = cx.new(|cx| crate::workspace::Workspace::from_storage(config, db, [None, None], window, cx));
+        let workspace = cx.new(|cx| crate::workspace::Workspace::from_storage(config, db, std::array::from_fn(|_| None), window, cx));
         workspace.read(cx).copilot.clone().update(cx, |connection, _| {
             connection.enabled = true;
             connection.fixture_no_transport = true;
@@ -254,7 +254,47 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         window.click("copilot-sign-out", cx);
         let connection = status_fixture.read(cx).0.read(cx).copilot.read(cx);
         ensure!(connection.signed_in() && connection.error.is_some(), "Missing server reported a false successful sign-out");
-        window.remove_window(); Ok(())
+        status_fixture.read(cx).0.read(cx).copilot.clone().update(cx, |connection, cx| {
+            connection.account = None; connection.error = None; connection.busy = true;
+            connection.progress = Some(practice::copilot::install::Progress::Downloading { received: 5 << 20, total: Some(20 << 20) }.label());
+            connection.elapsed = 12; cx.notify();
+        });
+        status_fixture.read(cx).0.clone().update(cx, |workspace, cx| {
+            workspace.tool_install.fixture = true;
+            workspace.setup_tools(Language::Cpp, false, window, cx);
+            workspace.tool_install_event(Language::Cpp, crate::tool_install::Event::Progress("Downloading compiler · 25% · 10.0 / 40.0 MiB".into()), window, cx);
+        });
+        window.render_frame(cx);
+        ensure!(window.find("copilot-setup-progress").visible(), "Copilot setup has no progress indicator while waiting");
+        ensure!(window.find("copilot-background-progress").visible(), "Copilot setup has no status-bar progress");
+        let tools = window.find("tool-setup-status").bounds();
+        let copilot = window.find("copilot-status-controls").bounds();
+        ensure!(tools.right() <= copilot.left() && copilot.right() <= window.viewport_size().width, "Simultaneous setup indicators overlap or escape the status bar");
+        ensure!(status_fixture.read(cx).0.read(cx).copilot.read(cx).label().contains("25% · 5.0 / 20.0 MiB"), "Setup lost actual transfer progress");
+        Ok(())
     })??;
+    if pixels { cx.capture_screenshot(status_handle)?.save(output.join("copilot-setup-download.png"))?; }
+    cx.update_window(status_handle, |_, window, cx| -> Result<()> {
+        let connection = status_fixture.read(cx).0.read(cx).copilot.clone();
+        connection.update(cx, |connection, cx| { connection.code = Some("TEST-CODE".into()); cx.notify(); });
+        window.render_frame(cx);
+        ensure!(connection.read(cx).label() == "Finish sign-in in your browser", "Browser approval still reads as download progress");
+        window.click("copilot-copy-code", cx);
+        ensure!(cx.read_from_clipboard().and_then(|item| item.text()).as_deref() == Some("TEST-CODE"), "Device code could not be copied while setup was busy");
+        Ok(())
+    })??;
+    if pixels { cx.capture_screenshot(status_handle)?.save(output.join("copilot-setup-sign-in.png"))?; }
+    cx.update_window(status_handle, |_, window, cx| -> Result<()> {
+        window.click("copilot-connect", cx);
+        let connection = status_fixture.read(cx).0.read(cx).copilot.clone();
+        ensure!(!connection.read(cx).busy && connection.read(cx).code.is_none() && connection.read(cx).progress.is_none(), "Cancel left setup activity or a device code behind");
+        connection.update(cx, |connection, cx| { connection.error = Some("Download timed out. Check your connection and retry setup.".into()); cx.notify(); });
+        window.render_frame(cx);
+        ensure!(window.try_find("copilot-setup-progress").is_none(), "Failed setup kept spinning");
+        ensure!(window.find("copilot-connect").visible(), "Failed setup has no retry control");
+        Ok(())
+    })??;
+    if pixels { cx.capture_screenshot(status_handle)?.save(output.join("copilot-setup-failed.png"))?; }
+    cx.update_window(status_handle, |_, window, _| window.remove_window())?;
     Ok(serde_json::json!({"fixture":"copilot","passed":true,"pixels":pixels,"checks":["hidden without Alt","Alt reveals native ghost text","faint syntax colors","stale and invalid highlight ranges rejected","preview preserves document","Alt release hides immediately","Alt+Tab does not accept","Alt+L accepts and Alt+K reverts","revert restores the preview and caret","revert preserves later typing","Escape dismisses","typing invalidates stale predictions","focus loss hides prediction","turning off clears preview","long Unicode preview scrolls without moving the editor"]}))
 }

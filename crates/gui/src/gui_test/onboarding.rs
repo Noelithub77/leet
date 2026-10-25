@@ -81,9 +81,9 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         cx.run_until_parked();
         cx.update_window(handle, |_, window, cx| -> Result<()> {
             ensure!(workspace.read(cx).tool_install.busy(Language::Cpp), "Continue did not start background setup");
-            workspace.update(cx, |workspace, cx| workspace.tool_install_event(Language::Cpp, crate::tool_install::Event::Progress("Downloading clangd".into()), window, cx));
+            workspace.update(cx, |workspace, cx| workspace.tool_install_event(Language::Cpp, crate::tool_install::Event::Progress("Downloading compiler · 25% · 10.0 / 40.0 MiB".into()), window, cx));
             window.render_frame(cx);
-            ensure!(window.find("tool-setup-label").label() == Some("C/C++ tools · Downloading"), "Background progress disappeared after onboarding");
+            ensure!(window.find("tool-setup-label").label() == Some("C/C++ tools · Downloading compiler · 25% · 10.0 / 40.0 MiB"), "Background progress disappeared after onboarding");
             Ok(())
         })??;
         if pixels && name == "optional-server" { cx.capture_screenshot(handle)?.save(output.join("tool-setup-downloading.png"))?; }

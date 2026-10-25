@@ -11,7 +11,10 @@ pub fn hide_console(command: &mut Command) {
 
 pub fn command(program: impl AsRef<std::ffi::OsStr>) -> Command {
     let program = program.as_ref();
-    let mut command = Command::new(crate::tool_setup::interpreter(program).map_or_else(|| program.to_os_string(), |path| path.into_os_string()));
+    let mut command = if let Some((binary, args)) = crate::tool_setup::managed_command(program) {
+        let mut command = Command::new(binary); command.args(args); command
+    } else { Command::new(program) };
+    crate::tool_setup::environment(&mut command);
     hide_console(&mut command);
     command
 }

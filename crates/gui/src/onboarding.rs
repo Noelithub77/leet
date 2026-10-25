@@ -49,7 +49,10 @@ impl Workspace {
         let workspace = cx.weak_entity();
         let config = self.config.clone();
         let copilot = self.copilot.clone();
-        if !accounts { self.setup_tools(config.preferred_language, false, window, cx); }
+        if !accounts {
+            self.setup_tools(config.preferred_language, false, window, cx);
+            for language in Language::ALL { self.setup_tools(language, false, window, cx); }
+        }
         let setup = cx.new(|cx| Setup {
             _copilot_subscription: cx.observe(&copilot, |_, _, cx| cx.notify()),
             focus: cx.focus_handle(), workspace, step: if accounts { 3 } else { 0 }, copilot,

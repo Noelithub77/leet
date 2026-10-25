@@ -89,7 +89,7 @@ fn cpp_stdin_records_globals_and_allows_stderr_logging() {
     let trace = run(Language::Cpp, "#include <iostream>\nint answer = 1;\nint main() {\n std::cin >> answer;\n std::cerr << \"diagnostic\";\n std::cout << answer;\n}\n", "42", Limits::default());
     assert_eq!(trace.error, None);
     assert_eq!(trace.output.as_deref(), Some("42"));
-    assert!(trace.steps.iter().any(|s| s.locals.iter().any(|v| v.name == "answer" && matches!(&v.value, Value::Int { v } if v == "42"))));
+    assert!(trace.steps.iter().any(|s| s.locals.iter().any(|v| v.name == "answer" && matches!(&v.value, Value::Int { v } if v == "42"))), "{trace:#?}");
 }
 
 #[test]

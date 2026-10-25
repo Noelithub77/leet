@@ -165,6 +165,8 @@ impl Workspace {
         cx.notify();
     }
     pub(crate) fn start_language_servers(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Task<()> {
+        self.setup_tools(self.config.preferred_language, false, window, cx);
+        for language in Language::ALL { self.setup_tools(language, false, window, cx); }
         self.warm_language_server(self.config.preferred_language, window, cx);
         cx.spawn_in(window, async move |this, cx| {
             loop {

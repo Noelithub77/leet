@@ -97,13 +97,20 @@ impl Server {
         let initialization_options = match (language, &workspace) {
             (Language::Java, Some(workspace)) => {
                 args.extend(["-data".into(), workspace.0.to_string_lossy().into_owned()]);
-                None
+                crate::tool_setup::java_debug_bundle().map(|bundle| serde_json::json!({"bundles":[bundle]}))
             }
             (Language::Cpp, Some(workspace)) => {
                 let header = workspace.0.join("judge.hpp");
                 std::fs::write(&header, include_str!("lsp/judge.hpp"))?;
                 // Forced inclusion preserves every user-document position. Existing compile commands win.
-                Some(serde_json::json!({"fallbackFlags": ["-std=c++20", "-include", header.to_string_lossy()]}))
+                let mut flags = vec!["-std=c++20".into(), "-include".into(), header.to_string_lossy().into_owned()];
+                flags.extend(crate::tool_setup::cpp_flags(language));
+                Some(serde_json::json!({"fallbackFlags": flags}))
+            }
+            (Language::C, _) => {
+                let mut flags = vec!["-std=c17".into()];
+                flags.extend(crate::tool_setup::cpp_flags(language));
+                Some(serde_json::json!({"fallbackFlags": flags}))
             }
             _ => None,
         };
@@ -128,6 +135,8 @@ impl Server {
                 })
                 .request::<request::RegisterCapability, _>(|_, _| async { Ok(()) })
                 .request::<request::UnregisterCapability, _>(|_, _| async { Ok(()) })
+                // Servers may publish optional extensions such as language/status.
+                .unhandled_notification(|_, _| ControlFlow::Continue(()))
                 .event(|_, _: Stop| ControlFlow::Break(Ok(())));
             router
         });
@@ -135,11 +144,7 @@ impl Server {
         std::thread::Builder::new().name(format!("leet-lsp-{}", language.id())).spawn(move || {
             let _workspace = workspace;
             let outcome: Result<()> = async_io::block_on(async {
-                let mut process = async_process::Command::new(binary);
-                #[cfg(windows)] {
-                    use async_process::windows::CommandExt as _;
-                    process.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-                }
+                let mut process = async_process::Command::from(crate::background_process::command(binary));
                 let mut child = process.args(args).current_dir(&root)
                     .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).kill_on_drop(true).spawn()?;
                 let input = child.stdout.take().context("Server stdout")?;
@@ -377,6 +382,14 @@ impl Drop for Document { fn drop(&mut self) { let _ = self.server.socket.notify:
         }
         check_language_features(&[Language::Python, Language::Cpp]);
     }
+    #[test]
+    #[ignore = "requires all private language tools; isolate XDG_DATA_HOME for verification"]
+    fn live_private_all_language_servers() {
+        for language in Language::ALL {
+            assert!(crate::tool_setup::server(language).is_some(), "Private {} server is required", language.label());
+        }
+        check_language_features(&Language::ALL);
+    }
     fn check_language_features(languages: &[Language]) {
         async_io::block_on(async {
             let root = tempfile::tempdir().unwrap();
@@ -386,6 +399,7 @@ impl Drop for Document { fn drop(&mut self) { let _ = self.server.socket.notify:
                 (Language::Cpp, "#include <cmath>\nint main(){return std::sqrt(4);}\n", "sqrt"),
                 (Language::Go, "package main\nimport \"fmt\"\nfunc main(){fmt.Println(4)}\n", "Println"),
                 (Language::C, "#include <stdio.h>\nint main(){printf(\"ok\");}\n", "printf"),
+                (Language::Java, "class Main {\n static int twice(int number) { return number * 2; }\n static void test() { int answer = twice(3); }\n}\n", "twice(3)"),
             ] {
                 if !languages.contains(&language) { continue; }
                 let path = root.path().join(format!("main.{}", language.extension()));

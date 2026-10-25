@@ -37,6 +37,11 @@ def install(root, language):
         run([str(nodes[0]), "--version"])
         (root / "python-server.json").write_text(json.dumps({"binary": str(nodes[0]), "script": str(scripts[0])}))
     else:
+        existing = root / "clangd/bin" / ("clangd.exe" if os.name == "nt" else "clangd")
+        if existing.is_file():
+            run([str(existing), "--version"])
+            print("Editor tools installed.", flush=True)
+            return
         if platform.system() == "Linux" and platform.machine() != "x86_64":
             raise RuntimeError("The pinned upstream clangd archive supports Linux x64 only")
         name = {"Linux": "linux", "Darwin": "mac", "Windows": "windows"}[platform.system()]

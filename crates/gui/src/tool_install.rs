@@ -2,6 +2,7 @@
 use std::collections::{HashMap, VecDeque};
 use futures::StreamExt as _;
 use gpui_kit::*;
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{ActiveTheme as _, Sizable as _, h_flex};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -10,7 +11,7 @@ use practice::language::Language;
 use crate::workspace::{Center, Workspace};
 
 #[derive(Clone, Debug)]
-enum Phase { Queued, Installing(&'static str), Ready, Failed(String) }
+enum Phase { Queued, Installing(String), Ready, Failed(String) }
 
 #[derive(Default)]
 pub struct State {
@@ -18,6 +19,8 @@ pub struct State {
     queue: VecDeque<Language>,
     active: Option<Language>,
     last: Option<Language>,
+    elapsed: u64,
+    ticker: Option<Task<()>>,
     #[cfg(feature = "gui-test")]
     pub(crate) fixture: bool,
 }
@@ -37,7 +40,8 @@ impl State {
         let language = self.queue.pop_front()?;
         self.active = Some(language);
         self.last = Some(language);
-        self.phases.insert(language, Phase::Installing("Setting up"));
+        self.elapsed = 0;
+        self.phases.insert(language, Phase::Installing("Setting up".into()));
         Some(language)
     }
     pub(crate) fn busy(&self, language: Language) -> bool {
@@ -57,6 +61,15 @@ impl Workspace {
         let Some(language) = self.tool_install.next() else { return };
         #[cfg(feature = "gui-test")]
         if self.tool_install.fixture { return; }
+        self.tool_install.ticker = Some(cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor().timer(std::time::Duration::from_secs(1)).await;
+                if !matches!(this.update(cx, |this, cx| {
+                    if this.tool_install.active.is_none() { return false; }
+                    this.tool_install.elapsed += 1; cx.notify(); true
+                }), Ok(true)) { break; }
+            }
+        }));
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
         std::thread::spawn(move || {
             let result = practice::tool_setup::install(language, &practice::tool_setup::directory(), |line| {
@@ -74,11 +87,9 @@ impl Workspace {
         if self.tool_install.active != Some(language) { return; }
         match event {
             Event::Progress(line) => {
-                let stage = if line.starts_with("Downloading") { Some("Downloading") }
-                    else if line.starts_with("Installing") { Some("Installing") }
-                    else if line.starts_with("Python ") || line.starts_with("clangd version") || line.starts_with("v24.") { Some("Checking") }
-                    else { None };
-                if let Some(stage) = stage { self.tool_install.phases.insert(language, Phase::Installing(stage)); }
+                if ["Downloading", "Installing", "Checking", "Verifying", "Unpacking", "Preparing"].iter().any(|prefix| line.starts_with(prefix)) {
+                    self.tool_install.phases.insert(language, Phase::Installing(line.chars().filter(|character| !character.is_control()).take(180).collect()));
+                }
             }
             Event::Finished(result) => {
                 let installed = result.is_ok();
@@ -90,7 +101,7 @@ impl Workspace {
                     self.suspend_language_servers(cx);
                     self.warm_language_server(self.config.preferred_language, window, cx);
                     if self.center == Center::Editor { self.attach_language_server(window, cx); }
-                    if self.debug_mode { self.debugger.update(cx, |debugger, cx| debugger.tools_installed(cx)); }
+                    if self.debug_mode { self.debugger.update(cx, |debugger, cx| debugger.tools_installed(language, cx)); }
                     if let Some(setup) = self.onboarding.clone() { setup.update(cx, |setup, cx| setup.tools_installed(window, cx)); }
                 }
                 self.start_tool_install(window, cx);
@@ -102,12 +113,14 @@ impl Workspace {
 
 pub(crate) fn status(ws: &Workspace, cx: &mut Context<Workspace>) -> Option<AnyElement> {
     let selected = tool_language(ws.session.as_ref().map_or(ws.config.preferred_language, |session| session.language));
-    let language = ws.tool_install.active.or_else(|| ws.tool_install.phases.contains_key(&selected).then_some(selected)).or(ws.tool_install.last)?;
+    let language = ws.tool_install.active
+        .or_else(|| Language::ALL.into_iter().find(|language| matches!(ws.tool_install.phases.get(language), Some(Phase::Failed(_)))))
+        .or_else(|| ws.tool_install.phases.contains_key(&selected).then_some(selected)).or(ws.tool_install.last)?;
     let phase = ws.tool_install.phases.get(&language)?;
     let name = if language == Language::Cpp { "C/C++" } else { language.label() };
     let (text, icon, color, detail) = match phase {
         Phase::Queued => ("Queued", IconName::Clock, cx.theme().muted_foreground, "Waiting for the current tool setup".to_owned()),
-        Phase::Installing(stage) => (*stage, IconName::Download, cx.theme().muted_foreground, format!("{name} tools are being set up in the background")),
+        Phase::Installing(stage) => (stage.as_str(), IconName::Download, cx.theme().muted_foreground, format!("{name} · {stage}")),
         Phase::Ready => ("Ready", IconName::Check, cx.theme().success, format!("{name} tools are ready")),
         Phase::Failed(error) => ("Retry", IconName::TriangleAlert, cx.theme().warning, error.clone()),
     };
@@ -116,10 +129,12 @@ pub(crate) fn status(ws: &Workspace, cx: &mut Context<Workspace>) -> Option<AnyE
         return Some(Button::new("tool-setup-retry").ghost().xsmall().icon(icon).label(label).tooltip(detail)
             .on_click(cx.listener(move |this, _, window, cx| this.setup_tools(language, true, window, cx))).into_any_element());
     }
-    Some(h_flex().id("tool-setup-status").gap_1().text_color(color)
+    Some(h_flex().id("tool-setup-status").test_support().min_w_0().gap_1().text_color(color)
         .child(if matches!(phase, Phase::Installing(_)) { Spinner::new().xsmall().into_any_element() }
             else { gpui_kit::component::Icon::new(icon).xsmall().into_any_element() })
-        .child(div().id("tool-setup-label").test_support().aria_label(label.clone()).child(label))
+        .child(div().id("tool-setup-label").test_support().min_w_0().max_w(rems(20.)).truncate().aria_label(label.clone()).child(label))
+        .when(matches!(phase, Phase::Installing(_)), |view| view.child(format!("{} s", ws.tool_install.elapsed)))
+        .when(!ws.tool_install.queue.is_empty(), |view| view.child(format!("+{} queued", ws.tool_install.queue.len())))
         .tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(detail.clone()).build(window, cx)).into_any_element())
 }
 
@@ -143,6 +158,6 @@ mod tests {
         state.request(Language::Python, true);
         assert_eq!(state.queue.front(), Some(&Language::Python));
         state.request(Language::Java, false);
-        assert_eq!(state.queue.len(), 1);
+        assert_eq!(state.queue.len(), 2);
     }
 }

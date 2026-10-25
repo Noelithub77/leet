@@ -1,6 +1,9 @@
 <details open>
 <summary>Feat</summary>
 
+- Download and set up language runtimes, compilers, editor tools, and debuggers automatically in the background.
+- Show language-tool and Copilot setup stages, download progress, elapsed time, and retry status in the status bar.
+- Record native C, Go, and Java debug traces alongside Python and C++.
 - Sign in to LeetCode, NeetCode, and Take U Forward in a private window on Windows and macOS, with manual import available.
 - Browse Striver A2Z and SDE sheets by section; open linked LeetCode problems in the editor and other entries on TUF.
 - Connect a TUF account and sync sheet completion marks.
@@ -29,6 +32,7 @@
 <details>
 <summary>Fix</summary>
 
+- Show what Copilot setup is doing while downloading, starting its server, and waiting for GitHub sign-in.
 - Give parameter hints more height, bottom padding, and a draggable scrollbar.
 - Show Quote, Explain, and Fix shortcuts directly in the selection toolbar.
 

@@ -192,7 +192,10 @@ impl Debugger {
         let Some(workspace) = self.explanation.as_ref().map(|explanation| explanation.workspace.clone()) else { return };
         window.defer(cx, move |window, cx| { let _ = workspace.update(cx, |workspace, cx| workspace.setup_tools(language, true, window, cx)); });
     }
-    pub(crate) fn tools_installed(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn tools_installed(&mut self, language: Language, cx: &mut Context<Self>) {
+        let Some(snapshot) = &self.snapshot else { return; };
+        if snapshot.language != language && !matches!((snapshot.language, language), (Language::C, Language::Cpp) | (Language::Cpp, Language::C)) { return; }
+        if self.unsupported.is_none() { self.editor_ready = practice::toolchain::editor_ready(snapshot.language); cx.notify(); return; }
         if let Some(snapshot) = self.snapshot.take() { self.load_mode(snapshot, self.selected, self.preview, cx); }
     }
 
@@ -335,9 +338,9 @@ impl Render for Debugger {
             .child(chips)
             .child(div().flex_1())
             .when(self.snapshot.as_ref().is_some_and(|snapshot| practice::tool_setup::supported(snapshot.language))
-                && (!self.editor_ready || self.snapshot.as_ref().is_some_and(|snapshot| snapshot.language == Language::Python && self.unsupported.is_some())), |el| {
-                el.child(Button::new("debug-install-tools").ghost().xsmall().label("Install tools").disabled(tools_busy)
-                    .tooltip("Install private Python / basedpyright or clangd editor tools. C++ debugging also requires a compiler and GDB with Python support.")
+                && (!self.editor_ready || self.unsupported.is_some()), |el| {
+                el.child(Button::new("debug-install-tools").ghost().xsmall().label(if tools_busy { "Setting up tools" } else { "Set up tools" }).disabled(tools_busy)
+                    .tooltip("Download and configure this language's runtime, compiler, editor tools and debugger in the background")
                     .on_click(cx.listener(|this, _, window, cx| this.install_tools(window, cx))))
             })
             .when_some(trace, |el, t| el.child(div().text_xs().text_color(theme.muted_foreground)

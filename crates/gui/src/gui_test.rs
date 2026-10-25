@@ -51,7 +51,7 @@ pub fn run() -> Result<()> {
         match args[i].as_str() {
             "--output" if output.is_none() => { i += 1; output = Some(PathBuf::from(args.get(i).context("--output requires a path")?)); }
             "--statement" if !statement_view => statement_view = true,
-            "--fixture" if fixture.is_none() => { i += 1; let name = args.get(i).context("--fixture requires a name")?.as_str(); ensure!(matches!(name, "snippets" | "copilot" | "chat" | "selection" | "statement" | "notes" | "tour" | "vim" | "striver"), "Supported focused fixtures: snippets, copilot, chat, selection, statement, notes, tour, vim, striver"); fixture = Some(name); }
+            "--fixture" if fixture.is_none() => { i += 1; let name = args.get(i).context("--fixture requires a name")?.as_str(); ensure!(matches!(name, "snippets" | "copilot" | "chat" | "selection" | "statement" | "notes" | "tour" | "vim" | "striver" | "setup"), "Supported focused fixtures: snippets, copilot, chat, selection, statement, notes, tour, vim, striver, setup"); fixture = Some(name); }
             "--video" if !video => video = true,
             "--wayland" if !wayland => wayland = true,
             "--explore" if !explore => { explore = true; wayland = true; }
@@ -81,6 +81,7 @@ pub fn run() -> Result<()> {
             else if name == "striver" { striver::native(&mut cx, &output, pixels)? }
             else if name == "tour" { tour::native(&mut cx, &output, pixels, false)? }
             else if name == "notes" { crate::notes::fixture::native(&mut cx, &output, pixels)? }
+            else if name == "setup" { crate::onboarding::fixture::native(&mut cx, &output, pixels)? }
             else if name == "copilot" { crate::copilot::fixture::native(&mut cx, &output, pixels)? }
             else if name == "vim" { vim::native(&mut cx, &output, pixels)? }
             else { crate::snippets::fixture::native(&mut cx, &output, pixels)? };

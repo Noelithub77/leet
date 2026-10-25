@@ -31,25 +31,19 @@ Unix launch commands are installed in `~/.local/bin`; if that directory is absen
 
 These releases have no publisher signing certificates. macOS bundles have the ad-hoc signature required for Apple Silicon, but are not notarized; Gatekeeper may require approval in System Settings → Privacy & Security. Windows may show SmartScreen warnings or organizational policy may block an unsigned executable. The installer does not disable OS security controls. Signing alone cannot guarantee a Windows reputation warning disappears.
 
-The app itself needs no compiler. Running local Python solutions requires Python (`python3` on Unix, `python` on Windows); other local languages require their respective compiler. LeetCode's remote judge remains available with an account. Continue in onboarding works while tools are missing or still being checked.
+Leet downloads the tools needed to run local Python, C, C++, Go, and Java solutions in the background. Continue in onboarding stays available during setup. LeetCode's remote judge remains available with an account.
 
-## Private editor tools
+## Private language tools
 
-Onboarding starts private tool setup automatically for Python, C, and C++, and Continue stays available throughout. Setup keeps running after onboarding closes; the status bar shows progress, Ready, or Retry with the failure details on hover. Debug mode also offers Install tools. Leet downloads pinned archives and wheels directly, verifies SHA-256 digests, and keeps them in its user data directory under `leet/tools`. Existing vg data directories remain compatible. Installation does not change system PATH, replace system tools, install a package manager, or request administrator access. Leet launches its managed language servers and default Python interpreter by their full paths; a custom Python executable remains authoritative.
+Onboarding and ordinary startup queue all supported language tools, with the preferred language first. Setup keeps running after onboarding closes. The status bar shows the current stage, transfer progress when available, elapsed time, queued jobs, Ready, or Retry with failure details on hover. Debug mode also offers Set up tools. Copilot downloads and connection stages have a separate indicator in the status bar and Settings; GitHub browser approval remains a user action.
 
-Pinned versions are portable Python 3.13.16 (Astral build 20261003), basedpyright 1.40.2, Node 24.19.0, and clangd 23.1.0. Only the selected language tools are downloaded; Python is reused when installing another language. Windows setup uses built-in Windows PowerShell 5.1 and tar, available on Windows 10 version 1803 and newer. macOS setup uses the built-in shell, curl, shasum, and tar; Homebrew is not required. Downloads need internet access. Windows setup, tool checks, language servers, runners, and debugger processes request no console window.
+Leet downloads pinned archives and wheels, verifies SHA-256 digests, and keeps them in its user data directory under `leet/tools`. Existing vg data directories remain compatible. Installation preserves system tools, system PATH, and personal solutions. It needs no system package manager or administrator access. The app selects managed executables directly and keeps explicit custom Python paths authoritative.
 
-Python tools include a portable interpreter and basedpyright with its private Node runtime. C/C++ tools install clangd for completion and diagnostics; they do not include a compiler or GDB. Native C++ debugging requires GDB with Python support and a C++ compiler. clangd alone does not provide debugging. The pinned upstream Linux clangd archive is x64 only; Python setup also supports Linux ARM64. macOS editor setup supports Intel and Apple Silicon; Windows builds target x64.
+Python includes portable CPython, basedpyright, private Node, and debugpy. C/C++ include Zig's compiler and standard libraries, clangd, and CodeLLDB with LLDB. Go includes its official toolchain, gopls, and Delve. Java includes Temurin Java 25, Eclipse JDT LS, and the Java debug plugin. Setup prepares compiler caches and private standard-header paths for the editor. See [private toolchains](toolchains.md) for package versions, debugger behavior, and function-harness limits.
 
-| Download | Windows x64 | macOS Intel / Apple Silicon | Linux x64 |
-| --- | --- | --- | --- |
-| Portable Python | 21.0 MiB | 23.8–24.1 MiB | 33.5 MiB |
-| basedpyright + Node | 53.6 MiB | 66.6–66.7 MiB | 71.4 MiB |
-| clangd | 28.3 MiB | 95.4 MiB | 112.5 MiB |
+The catalogs cover Linux x64 and arm64, macOS Intel and Apple Silicon, and Windows x64. Pinned URLs and hashes live in `crates/practice/setup/tools.json` and `crates/practice/setup/toolchains.json`. Downloads and cache sizes vary by platform and language; setup reports actual transfer bytes. Windows setup uses built-in Windows PowerShell 5.1 and tar, available on Windows 10 version 1803 and newer. macOS setup uses its built-in shell, curl, shasum, and tar. Downloads need internet access. Windows setup, checks, language servers, runners, and debuggers request no console window.
 
-These are compressed asset sizes from the pinned upstream releases. Actual Linux x64 installation measured 388 MiB for Python tools and an additional 225 MiB for clangd, totaling 613 MiB. Temporary downloads need extra space during setup; installed sizes on Windows/macOS have not been measured. The pinned URLs and hashes live in `crates/practice/setup/tools.json`.
-
-For manual setup, use the installed binary or the tracked operator:
+For an isolated install or a retry, use the installed binary or the tracked operator:
 
 ```sh
 leet --setup-tools --language python

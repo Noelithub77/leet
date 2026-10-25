@@ -45,7 +45,7 @@ Native mode also checks long statement cards at regular and compact sizes, in li
 
 Hint controls share the problem toolbar. Statement captures verify their containment; the production workspace fixture exercises hint cycling, hiding, and a customized shortcut, and saves `hint-tooltip.png` with the shortcut shown on hover.
 
-The onboarding fixture renders the production setup view with missing clangd, a missing compiler, and pending tool checks. Hit-tested Continue clicks advance in every case. The retained workspace receives deterministic installer events after leaving setup: progress stays visible, a hit-tested Retry restarts a failed job, and success shows Ready. Prerequisite results are deterministic; this fixture never detects or downloads tools. Setup PNGs are saved alongside the other captures. The ignored `live_private_python_and_cpp_servers` core test verifies completion, hover, definition, and diagnostics against managed tools; isolate its data directory and install the tools there before running it.
+Run `./ops gui:test --fixture setup --json` for onboarding and background tool progress. The fixture renders the production setup view with missing clangd, a missing compiler, and pending tool checks. Hit-tested Continue clicks advance in every case. The retained workspace receives deterministic installer events after leaving setup: transfer progress stays visible, a hit-tested Retry restarts a failed job, and success shows Ready. Prerequisite results are deterministic; this fixture never detects or downloads tools. Setup PNGs are saved alongside the other captures. The ignored `live_private_python_and_cpp_servers` core test verifies completion, hover, definition, and diagnostics against managed tools; isolate its data directory and install the tools there before running it.
 
 Run `./ops gui:test --fixture tour --json` for focused guided-tour checks.
 
@@ -120,6 +120,9 @@ real monitors, native system services, or performance on another GPU.
 `./ops gui:test --fixture copilot --json` runs focused Copilot checks.
 Copilot fixtures use the production source editor with deterministic predictions,
 without downloading a server, reading credentials, or making network requests.
+Settings and status-bar checks cover download progress, browser approval, copying
+the device code, cancellation, and failure/retry controls. They save
+`copilot-setup-download.png`, `copilot-setup-sign-in.png`, and `copilot-setup-failed.png`.
 They dispatch real modifier and keyboard events to verify hidden predictions,
 Alt-held previews, release dismissal, Alt+L acceptance, Alt+K reversion, Escape, and stale-document
 rejection. `copilot-alt-preview.png` and `copilot-hidden.png` separate rendered

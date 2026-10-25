@@ -52,15 +52,15 @@ pub fn run(language: Language, python: &str, path: &Path, cases: &[Case], timeou
     if language == Language::Java {
         let source = scratch.0.join("Main.java");
         fs::copy(path, &source)?;
-        let mut compiler = Command::new("javac");
+        let mut compiler = crate::background_process::command("javac");
         compiler.arg("-encoding").arg("UTF-8").arg("-d").arg(&scratch.0).arg(&source);
         let output = execute(compiler, String::new(), Duration::from_secs(60), &scratch.0)?;
         if !output.success { return Ok(Some(if output.timeout { "Compilation timed out".into() } else { output.stderr })); }
     } else if language != Language::Python {
         let mut compiler = match language {
-            Language::Cpp => { let mut cmd = Command::new("g++"); cmd.args(["-std=c++20", "-O2"]); cmd },
-            Language::C => { let mut cmd = Command::new("gcc"); cmd.args(["-std=c17", "-O2"]); cmd },
-            Language::Go => { let mut cmd = Command::new("go"); cmd.arg("build"); cmd },
+            Language::Cpp => { let mut cmd = crate::background_process::command("g++"); cmd.args(["-std=c++20", "-O2"]); cmd },
+            Language::C => { let mut cmd = crate::background_process::command("gcc"); cmd.args(["-std=c17", "-O2"]); cmd },
+            Language::Go => { let mut cmd = crate::background_process::command("go"); cmd.arg("build"); cmd },
             Language::Python | Language::Java => unreachable!(),
         };
         compiler.arg("-o").arg(&binary).arg(path);
@@ -72,7 +72,7 @@ pub fn run(language: Language, python: &str, path: &Path, cases: &[Case], timeou
             let mut cmd = crate::background_process::command(python);
             cmd.args(["-u", "-c"]).arg(format!("{}\nimport runpy\nrunpy.run_path(sys.argv[1], run_name='__main__', init_globals=globals())", crate::python::PRELUDE)).arg(path); cmd
         } else if language == Language::Java {
-            let mut cmd = Command::new("java");
+            let mut cmd = crate::background_process::command("java");
             cmd.args(["-Dfile.encoding=UTF-8", "-cp"]).arg(&scratch.0).arg("Main"); cmd
         } else { Command::new(&binary) };
         command.current_dir(path.parent().unwrap_or(Path::new(".")));

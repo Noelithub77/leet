@@ -181,7 +181,7 @@ impl Client {
     pub fn status(&self) -> Status { let state = lock(&self.state); state.failure.as_ref().map_or_else(|| state.status.clone(), |message| Status::Unavailable(message.clone())) }
     pub fn message(&self) -> Option<String> { lock(&self.state).message.clone() }
     pub fn quota(&self) -> Option<Quota> { lock(&self.state).quota.clone() }
-    async fn ready(&self) -> Result<()> {
+    pub async fn ready(&self) -> Result<()> {
         for _ in 0..320 {
             { let state = lock(&self.state); if let Some(error) = &state.failure { bail!("{error}"); } if state.initialized { return Ok(()); } }
             async_io::Timer::after(Duration::from_millis(100)).await;

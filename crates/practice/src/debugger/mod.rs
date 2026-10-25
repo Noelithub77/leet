@@ -11,6 +11,10 @@ use crate::language::Language;
 use crate::runner::Case;
 
 mod cpp;
+mod dap;
+mod adapters;
+mod drivers;
+mod c_driver;
 mod cpp_driver;
 mod python;
 mod structures;
@@ -122,35 +126,38 @@ impl Default for Limits {
     }
 }
 
-/// Languages with a native recorder; others fall back to the AI dry run.
+/// Languages with a native recorder.
 pub fn supported(language: Language) -> bool {
-    matches!(language, Language::Python | Language::Cpp)
+    Language::ALL.contains(&language)
 }
 
 /// What the recorder needs on this machine, or why it cannot run.
 pub fn requirement(language: Language, python: &str) -> Result<(), String> {
+    if crate::tool_setup::ready(language) && (language != Language::Python || matches!(python, "python" | "python3")) { return Ok(()); }
     match language {
         Language::Python => python::available(python),
         Language::Cpp => cpp::available(),
-        _ => Err(format!("{} has no native debugger yet", language.label())),
+        _ => Err(format!("{} tools are being set up; check setup progress in the status bar", language.label())),
     }
 }
 
 /// Records one LeetCode case. `meta` is the question's `metaData` JSON.
 pub fn record(language: Language, python: &str, solution: &Path, meta: &serde_json::Value, case: &Case, limits: Limits) -> anyhow::Result<Trace> {
+    if language != Language::Python && crate::tool_setup::ready(language) { return adapters::record(language, python, solution, Some(meta), case, limits); }
     match language {
         Language::Python => python::record(python, solution, meta, case, limits),
         Language::Cpp => cpp::record(solution, meta, case, limits),
-        _ => anyhow::bail!("{} has no native debugger yet", language.label()),
+        _ => anyhow::bail!("{} tools are not ready; check setup progress in the status bar", language.label()),
     }
 }
 
 /// Records a complete stdin/stdout program, including its top-level entry point.
 pub fn record_stdin(language: Language, python: &str, solution: &Path, case: &Case, limits: Limits) -> anyhow::Result<Trace> {
+    if crate::tool_setup::ready(language) && (language != Language::Python || matches!(python, "python" | "python3")) { return adapters::record(language, python, solution, None, case, limits); }
     match language {
         Language::Python => python::record_stdin(python, solution, case, limits),
         Language::Cpp => cpp::record_stdin(solution, case, limits),
-        _ => anyhow::bail!("{} has no native debugger yet", language.label()),
+        _ => anyhow::bail!("{} tools are not ready; check setup progress in the status bar", language.label()),
     }
 }
 
@@ -185,3 +192,5 @@ mod snapshot_tests {
 
 #[cfg(test)]
 mod stdin_tests;
+#[cfg(test)]
+mod adapter_tests;
