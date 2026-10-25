@@ -3835,7 +3835,7 @@ dependencies = [
 
 [[package]]
 name = "gui"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "dirs 6.0.0",
@@ -6534,7 +6534,7 @@ dependencies = [
 
 [[package]]
 name = "practice"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "agent-client-protocol",
  "anyhow",
