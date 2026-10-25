@@ -187,6 +187,63 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool, v
             Ok(())
         })??;
         cx.run_until_parked();
+        if step == 8 {
+            cx.update_window(handle, |_, window, cx| -> Result<()> {
+                window.render_frame(cx);
+                window.press("ctrl-k", cx);
+                Ok(())
+            })??;
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| -> Result<()> {
+                ensure!(workspace.read(cx).omni.open && workspace.read(cx).omni.scope == crate::omnibar::Scope::All, "Tour Ctrl+K did not open universal search");
+                window.render_frame(cx);
+                window.input("alt+d", cx);
+                Ok(())
+            })??;
+            cx.run_until_parked();
+            cx.advance_clock(Duration::from_millis(450));
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| -> Result<()> {
+                let view = workspace.read(cx);
+                let command = crate::actions::COMMANDS.iter().position(|command| command.id == "ToggleRight").context("Missing assistant command")?;
+                ensure!(view.omni.results().any(|(_, target)| *target == crate::omnibar::Target::Command(command)), "Universal search could not find a keybinding");
+                ensure!(view.tour.as_ref().is_some_and(|tour| tour.index() == step), "Tour finished while exploring universal search");
+                window.press("escape", cx);
+                window.render_frame(cx);
+                ensure!(window.find("tour-try").visible(), "Closing search did not restore the tour card");
+                window.click("tour-try", cx);
+                Ok(())
+            })??;
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| -> Result<()> {
+                ensure!(workspace.read(cx).omni.open, "Tour search button did not open universal search");
+                window.press("escape", cx);
+                workspace.update(cx, |view, cx| {
+                    view.config.keybindings.insert("Search".into(), "ctrl-alt-k".into());
+                    crate::actions::reload_keys(&view.config, cx);
+                });
+                Ok(())
+            })??;
+            cx.advance_clock(Duration::from_millis(450));
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| -> Result<()> {
+                window.render_frame(cx);
+                window.press("ctrl-k", cx);
+                ensure!(!workspace.read(cx).omni.open, "Tour used the old search binding after customization");
+                window.press("ctrl-alt-k", cx);
+                Ok(())
+            })??;
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| -> Result<()> {
+                ensure!(workspace.read(cx).omni.open, "Tour ignored the customized search binding");
+                window.press("escape", cx);
+                workspace.update(cx, |view, cx| {
+                    view.config.keybindings.remove("Search");
+                    crate::actions::reload_keys(&view.config, cx);
+                });
+                Ok(())
+            })??;
+        }
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
             match step {
@@ -332,5 +389,5 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool, v
         cx.run_until_parked();
     }
     cx.update(|cx| { crate::theme::apply("Vesper", cx); crate::theme::set_zoom(1., cx); });
-    Ok(json!({"fixture":"guided-tour","passed":true,"checks":["Explorer and NeetCode 150 defaults","automatic start","problem required","clickable search and editor","Explorer action and shortcut","description and AI keyboard shortcuts","shortcut confirmation before automatic advance","wrong keys do not confirm","repeated shortcuts run once","manual navigation cancels pending advance","playback arrow confirmation clears without advancing","automatic action and shortcut advancement","tour input priority over editor","custom shortcut overrides editor Cut","Left/Right tour navigation","Ctrl+P and Ctrl+Shift+P full search","Skip persistence across workspaces","manual replay","Escape after shortcut reload","eight steps and Done","layout restoration","dark/light, minimum size and zoom bounds"],"pixels":pixels,"video":video}))
+    Ok(json!({"fixture":"guided-tour","passed":true,"checks":["Explorer and NeetCode 150 defaults","automatic start","problem required","clickable search and editor","Explorer action and shortcut","description and AI keyboard shortcuts","shortcut confirmation before automatic advance","wrong keys do not confirm","repeated shortcuts run once","manual navigation cancels pending advance","playback arrow confirmation clears without advancing","automatic action and shortcut advancement","tour input priority over editor","custom shortcut overrides editor Cut","Left/Right tour navigation","Ctrl+P and Ctrl+Shift+P full search","Ctrl+K tour step searches keybindings and restores the card","search action respects customized bindings","Skip persistence across workspaces","manual replay","Escape after shortcut reload","nine steps and Done","layout restoration","dark/light, minimum size and zoom bounds"],"pixels":pixels,"video":video}))
 }

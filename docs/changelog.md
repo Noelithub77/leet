@@ -1,6 +1,7 @@
 <details open>
 <summary>Feat</summary>
 
+- Learn universal search with Ctrl+K in the guided tour to find commands, keybindings, settings, and problems.
 - Download and set up language runtimes, compilers, editor tools, and debuggers automatically in the background.
 - Show language-tool and Copilot setup stages, download progress, elapsed time, and retry status in the status bar.
 - Record native C, Go, and Java debug traces alongside Python and C++.

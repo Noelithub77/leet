@@ -59,13 +59,15 @@ WebView2/WKWebView login or authenticated progress sync.
 
 The guided-tour fixture uses isolated SQLite storage and a bundled public
 question. It checks startup defaults, automatic display, search actions, Skip
-and Done persistence, replay, Escape after shortcut reload, all eight steps,
+and Done persistence, replay, Escape after shortcut reload, all nine steps,
 Explorer, description and AI toggle actions, automatic advancement from actions and shortcuts,
 brief shortcut confirmation, cancellation on navigation, editor input isolation, Left/Right tour navigation, full search on Ctrl+P and Ctrl+Shift+P, and layout restoration.
+The final step opens universal search with Ctrl+K or its button, finds a
+keybinding, restores the card after Escape, and respects a customized search shortcut.
 It checks minimum window size, a light theme, and 140% zoom.
 Tour PNGs are saved alongside the other captures; no
 account loading, agent detection, language servers, or network jobs run.
-With `--video`, `tour-motion.mp4` shows the eight step transitions using 240
+With `--video`, `tour-motion.mp4` shows the nine step transitions using 270
 offscreen frames encoded at 60 fps. This does not measure real-time performance.
 
 Native mode checks real recorder results, case selection, step buttons, arrow

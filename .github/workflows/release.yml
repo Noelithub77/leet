@@ -217,7 +217,7 @@ jobs:
 
           Linux portable: download the versioned `leet-linux-vX.Y.Z.AppImage` or `leet-linux-arm-vX.Y.Z.AppImage`, make it executable, and open it. AppImages include shared application libraries; graphical desktop, compatible glibc, and GPU drivers are still required.
 
-          These builds are unsigned (macOS uses an ad-hoc signature, without notarization). OS security prompts may appear. Linux needs a graphical desktop and Vulkan GPU drivers; x86_64 requires glibc 2.35+, ARM64 requires glibc 2.39+. macOS requires version 13+. Use Setup to install Python or editor tools; compiled solutions still need a compiler. Settings, accounts, and solutions are stored separately from the executable.
+          These builds are unsigned (macOS uses an ad-hoc signature, without notarization). OS security prompts may appear. Linux needs a graphical desktop and Vulkan GPU drivers; x86_64 requires glibc 2.35+, ARM64 requires glibc 2.39+. macOS requires version 13+. Leet downloads language runtimes, compilers, editor tools, and debuggers in the background. Settings, accounts, and solutions are stored separately from the executable.
 
           See `docs/releases.md` for requirements, verification, and release operation.
           EOF

@@ -21,10 +21,10 @@ pub fn bind_keys(cx: &mut App) {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Step { Problem, Explorer, Description, Editor, Tests, Assist, Debugger, Playback }
+enum Step { Problem, Explorer, Description, Editor, Tests, Assist, Debugger, Playback, Search }
 
-pub(crate) const STEP_COUNT: usize = 8;
-const STEPS: [Step; STEP_COUNT] = [Step::Problem, Step::Explorer, Step::Description, Step::Editor, Step::Tests, Step::Assist, Step::Debugger, Step::Playback];
+pub(crate) const STEP_COUNT: usize = 9;
+const STEPS: [Step; STEP_COUNT] = [Step::Problem, Step::Explorer, Step::Description, Step::Editor, Step::Tests, Step::Assist, Step::Debugger, Step::Playback, Step::Search];
 
 #[derive(Clone, Copy)]
 struct Layout { left: bool, home_sidebar: bool, right: bool, bottom: bool, zen: bool, description: bool, history: bool, debug: bool, center: Center, had_problem: bool }
@@ -43,7 +43,7 @@ impl Step {
         match self {
             Self::Problem => "FindProblem", Self::Explorer => "ToggleLeft", Self::Description => "ToggleDescription",
             Self::Editor => "FocusEditor", Self::Tests => "RunTests", Self::Assist => "ToggleRight",
-            Self::Debugger => "ToggleDebug", Self::Playback => "",
+            Self::Debugger => "ToggleDebug", Self::Playback => "", Self::Search => "Search",
         }
     }
 }
@@ -192,7 +192,7 @@ impl Workspace {
             tour.focus.focus(window, cx);
             (action.action)()
         };
-        self.confirm_tour_step(command != "FindProblem", window, cx);
+        self.confirm_tour_step(!matches!(STEPS[index], Step::Problem | Step::Search), window, cx);
         window.dispatch_action(action, cx);
     }
 
@@ -263,6 +263,7 @@ pub fn panel(workspace: &Workspace, window: &mut Window, cx: &mut Context<Worksp
         Step::Assist => ("Toggle the right sidebar", "Show or hide AI for hints, explanations, and solution reviews.", IconName::PanelRight, "ToggleRight"),
         Step::Debugger => ("See your code in motion", "Switch between Code and Debug to inspect your solution.", IconName::Code, "ToggleDebug"),
         Step::Playback => ("Explore every step", "Follow variables and output as your solution runs.", IconName::Play, ""),
+        Step::Search => ("Search everything", "Find commands, keybindings, settings, and problems in one place.", IconName::Search, "Search"),
     };
     let theme = cx.theme().clone();
     let can_next = workspace.session.as_ref().is_some_and(|session| session.question.is_some());
@@ -297,7 +298,7 @@ pub fn panel(workspace: &Workspace, window: &mut Window, cx: &mut Context<Worksp
                 .child(feedback(Button::new("tour-play").outline().small().label("Play / pause")).child(crate::view::key("space"))
                     .on_click(cx.listener(|this, _, window, cx| this.try_tour_step(window, cx)))).into_any_element()
         } else {
-            feedback(Button::new("tour-try").outline().label(match step { Step::Problem => "Find a problem", Step::Explorer => "Toggle Explorer", Step::Description => "Toggle description", Step::Editor => "Focus editor", Step::Tests => "Run tests", Step::Assist => "Toggle AI", _ => "Switch Code / Debug" }))
+            feedback(Button::new("tour-try").outline().label(match step { Step::Problem => "Find a problem", Step::Explorer => "Toggle Explorer", Step::Description => "Toggle description", Step::Editor => "Focus editor", Step::Tests => "Run tests", Step::Assist => "Toggle AI", Step::Search => "Search everything", _ => "Switch Code / Debug" }))
                 .child(crate::view::key(crate::actions::key_for(command, &workspace.config)))
                 .on_click(cx.listener(|this, _, window, cx| this.try_tour_step(window, cx))).into_any_element()
         })
