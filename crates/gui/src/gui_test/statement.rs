@@ -35,6 +35,7 @@ fn headers(window: &gpui_kit::Window) -> Result<()> {
 }
 
 pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -> Result<serde_json::Value> {
+    math(cx, output, pixels)?;
     media(cx, output, pixels)?;
     for (name, width, height, theme, zoom) in [("regular", 1280., 800., "Vesper", 1.), ("compact", 420., 400., "Vesper", 1.), ("light", 1280., 800., "Solarized Light", 1.), ("zoom", 520., 600., "Vesper", 1.4)] {
         cx.update(|cx| { cx.set_global(Sections::default()); crate::theme::apply(theme, cx); crate::theme::set_zoom(zoom, cx); });
@@ -145,6 +146,68 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
     }
     cx.update(|cx| { crate::theme::apply("Vesper", cx); crate::theme::set_zoom(1., cx); });
     Ok(json!({"fixture":"statement-cards","passed":true,"checks":["complete statements from all four providers", "production image HTTP loading and persistent cache", "offline image reopening", "long description scroll","visible headers at regular and compact sizes","independent expansion and scrolling","faster wheel scrolling","scrollbar thumb dragging","shared persisted flags","natural short content without overflow","PageDown","Tab/Space card activation","all collapsed"],"pixels":pixels}))
+}
+
+fn math(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -> Result<()> {
+    let html = r#"<div class="problem-statement"><div class="header"><div class="title">A. Reversing boxes</div></div>
+<p>He wants to sort them in non-decreasing order based on their number, however, his machine works in a strange way. It can only reverse any subarray of boxes with length at most $$$k$$$.</p>
+<p>Find if it's possible to sort the boxes using any number of reverses.</p>
+<p>Reversing a subarray means choosing two indices $$$i$$$ and $$$j$$$ (where $$$1 \le i \le j \le n$$$) and changing the array $$$a_1,a_2,\ldots,a_n$$$ to $$$a_1,\ldots,a_{i-1},a_j,a_{j-1},\ldots,a_i,a_{j+1},\ldots,a_n$$$. The length of the subarray is then $$$j-i+1$$$.</p>
+<h3>Input</h3><p>The first line contains a single integer $$$t$$$ ($$$1 \le t \le 100$$$) - the number of test cases.</p>
+<p>Each test case consists of two lines.</p><p>The first line of each test case contains two integers $$$n$$$ and $$$k$$$ ($$$1 \le k \le n \le 100$$$) - the number of boxes and the length of the maximum reverse.</p>
+<p>The second line contains $$$n$$$ integers $$$a_1,a_2,\ldots,a_n$$$ ($$$1 \le a_i \le 10^9$$$) - the number written on each box.</p>
+<p>Geometry checks: $$$x$$$, $$$x_i$$$, $$$x_{j-1}$$$, $$$\sqrt{x_i}$$$, $$$\frac{1}{2}$$$, $$$\frac{x_i}{y_j}$$$.</p>
+<h3>Output</h3><p>For each test case, print YES if the array can be sorted, or NO otherwise.</p></div>"#;
+    let question = practice::codeforces::parse_statement("cf:1:A", html)?;
+    let blocks = practice::description::for_question(&question)?;
+    for (name, width, theme, zoom, font) in [
+        ("dark", 733., "Vesper", 1., "Liberation Sans"),
+        ("mono", 733., "Vesper", 1., "Liberation Mono"),
+        ("compact", 420., "Vesper", 1., "Liberation Sans"),
+        ("light-zoom", 520., "Solarized Light", 1.4, "Liberation Sans"),
+    ] {
+        cx.update(|cx| { crate::theme::apply(theme, cx); crate::theme::set_zoom(zoom, cx); crate::theme::set_font(font, cx); cx.set_global(Sections([true, false, false])); });
+        let (handle, statement) = cx.update(|cx| gpui_kit::open_window(WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(Bounds { origin: point(px(0.), px(0.)), size: size(px(width), px(740.)) })),
+            show: false, focus: false, ..Default::default()
+        }, cx, |window, cx| {
+            let view = cx.new(|_| Statement { slug: question.slug.clone().into(), title: question.title.clone().into(), blocks: blocks.clone(), ..Default::default() });
+            view.update(cx, |view, cx| view.focus(window, cx)); view
+        }))?;
+        let handle = handle.into();
+        cx.update_window(handle, |_, window, cx| window.render_frame(cx))?;
+        cx.run_until_parked();
+        if pixels { cx.capture_screenshot(handle)?.save(output.join(format!("statement-math-{name}.png")))?; }
+        cx.update_window(handle, |_, window, cx| -> Result<()> {
+            window.scroll(("statement-section", 0usize), gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-10000.))), cx);
+            let scroll = &statement.read(cx).section_scroll[0];
+            ensure!(scroll.offset().y == -scroll.max_offset().y, "Math statement cannot scroll to its end");
+            Ok(())
+        })??;
+        if pixels { cx.capture_screenshot(handle)?.save(output.join(format!("statement-math-{name}-end.png")))?; }
+        cx.update_window(handle, |_, window, cx| {
+            statement.update(cx, |view, cx| {
+                view.blocks = vec![Block::Markdown("Copy $a_{j-1}$ and $10^9$.".into())];
+                view.section_scroll[0].set_offset(point(px(0.), px(0.))); cx.notify();
+            });
+            window.render_frame(cx);
+        })?;
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| -> Result<()> {
+            window.render_frame(cx);
+            let header = window.find(("statement-section", 0usize)).bounds();
+            let line = header.bottom() + gpui_kit::rems(1.).to_pixels(window.rem_size());
+            window.drag(point(header.left() + px(14.), line), point(header.right() - px(24.), line), cx);
+            window.render_frame(cx);
+            window.press("ctrl-c", cx);
+            let copied = cx.read_from_clipboard().and_then(|item| item.text()).unwrap_or_default();
+            ensure!(copied == "Copy a_{j-1} and 10^9.", "Statement math copy lost prose or TeX: {copied:?}");
+            Ok(())
+        })??;
+        cx.update_window(handle, |_, window, _| window.remove_window())?;
+    }
+    cx.update(|cx| { crate::theme::apply("Vesper", cx); crate::theme::set_zoom(1., cx); crate::theme::set_font("Liberation Sans", cx); });
+    Ok(())
 }
 
 pub(super) fn explore(output: PathBuf) -> Result<()> {
