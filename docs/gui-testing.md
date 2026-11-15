@@ -43,6 +43,8 @@ Run `./ops gui:test --fixture statement --json` for focused statement cards and 
 
 The statement fixture also renders the reversing-boxes Codeforces payload with inline variables, array indices, inequalities, exponents, roots, and fractions. It captures sans-serif and monospace prose, compact width, and zoomed light mode as `statement-math-*.png`, and checks copying a prose-and-variable sentence and scrolling to the end. Small-size renderer tests cover 1x/2x raster scale, dark/light foregrounds, baseline stability with subscripts, crop containment of all raster ink, cache reuse, and the formula cache's byte budget. Native captures use the headless platform's default 2x scale.
 
+Its report includes `math_cache` requests, hits, misses, and evictions for the math cases. These counters exist only with `gui-test`. Renderer regressions compare margin-only cropping to the original full scan at fractional device scales and verify deferred inline-prefix rendering produces identical pixels and respects the original source-length limit.
+
 Native mode also checks long statement cards at regular and compact sizes, in light and dark themes, and at 140% zoom: visible headers, independent expansion and scrolling, increased wheel speed, scrollbar thumb dragging, natural short-content sizing without overflow, shared saved flags across questions and reopened storage, PageDown, and Tab/Space activation. Statement PNGs are saved alongside debugger captures.
 
 Hint controls share the problem toolbar. Statement captures verify their containment; the production workspace fixture exercises hint cycling, hiding, and a customized shortcut, and saves `hint-tooltip.png` with the shortcut shown on hover.

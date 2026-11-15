@@ -35,7 +35,7 @@ fn headers(window: &gpui_kit::Window) -> Result<()> {
 }
 
 pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -> Result<serde_json::Value> {
-    math(cx, output, pixels)?;
+    let math_cache = math(cx, output, pixels)?;
     media(cx, output, pixels)?;
     for (name, width, height, theme, zoom) in [("regular", 1280., 800., "Vesper", 1.), ("compact", 420., 400., "Vesper", 1.), ("light", 1280., 800., "Solarized Light", 1.), ("zoom", 520., 600., "Vesper", 1.4)] {
         cx.update(|cx| { cx.set_global(Sections::default()); crate::theme::apply(theme, cx); crate::theme::set_zoom(zoom, cx); });
@@ -145,10 +145,11 @@ pub(super) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
         cx.run_until_parked();
     }
     cx.update(|cx| { crate::theme::apply("Vesper", cx); crate::theme::set_zoom(1., cx); });
-    Ok(json!({"fixture":"statement-cards","passed":true,"checks":["complete statements from all four providers", "production image HTTP loading and persistent cache", "offline image reopening", "long description scroll","visible headers at regular and compact sizes","independent expansion and scrolling","faster wheel scrolling","scrollbar thumb dragging","shared persisted flags","natural short content without overflow","PageDown","Tab/Space card activation","all collapsed"],"pixels":pixels}))
+    Ok(json!({"fixture":"statement-cards","passed":true,"math_cache":math_cache,"checks":["complete statements from all four providers", "production image HTTP loading and persistent cache", "offline image reopening", "long description scroll","visible headers at regular and compact sizes","independent expansion and scrolling","faster wheel scrolling","scrollbar thumb dragging","shared persisted flags","natural short content without overflow","PageDown","Tab/Space card activation","all collapsed"],"pixels":pixels}))
 }
 
-fn math(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -> Result<()> {
+fn math(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -> Result<serde_json::Value> {
+    let before = crate::rich_text::formula_cache_activity();
     let html = r#"<div class="problem-statement"><div class="header"><div class="title">A. Reversing boxes</div></div>
 <p>He wants to sort them in non-decreasing order based on their number, however, his machine works in a strange way. It can only reverse any subarray of boxes with length at most $$$k$$$.</p>
 <p>Find if it's possible to sort the boxes using any number of reverses.</p>
@@ -207,7 +208,9 @@ fn math(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -> Result<()> 
         cx.update_window(handle, |_, window, _| window.remove_window())?;
     }
     cx.update(|cx| { crate::theme::apply("Vesper", cx); crate::theme::set_zoom(1., cx); crate::theme::set_font("Liberation Sans", cx); });
-    Ok(())
+    let after = crate::rich_text::formula_cache_activity();
+    let (requests, hits) = (after.0 - before.0, after.1 - before.1);
+    Ok(json!({"requests":requests,"hits":hits,"misses":requests-hits,"evictions":after.2-before.2}))
 }
 
 pub(super) fn explore(output: PathBuf) -> Result<()> {

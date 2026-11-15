@@ -33,6 +33,7 @@
 <details>
 <summary>Fix</summary>
 
+- Reduce repeated work when displaying cached math.
 - Make statement variables and indices easier to read without shrinking long descriptions.
 - Align inline formulas with surrounding text and preserve italic glyph edges.
 - Show what Copilot setup is doing while downloading, starting its server, and waiting for GitHub sign-in.

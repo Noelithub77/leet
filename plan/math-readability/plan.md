@@ -6,6 +6,14 @@ Status: implemented. Stable description sizing, inline math sizing/style, engine
 
 Match the reference's legibility: clear italic math variables, readable subscripts and superscripts, natural spacing, and alignment with surrounding prose. Preserve the native statement cards, selected theme, user font preference, selection/copy, and app zoom.
 
+## Optimization follow-up
+
+- Cache hits now compare borrowed source and an inline/display style key. Owned keys and inline-prefix strings are constructed only on misses. Cached failures, recency updates, dimensions/color/device-scale invalidation, and the 4096-byte rendered-source limit are preserved.
+- Crop inspection skips the nominal box interior, reduces integer ink bounds, and preserves the original one-physical-pixel guard. Reference tests cover empty/full/sparse alpha masks at six device scales, including fractional scales.
+- Six focused math tests passed. Native statement and chat suites passed under `/tmp/leet-math-opt-final` and `/tmp/leet-math-opt-chat`; eight statement and four chat formula screenshots are byte-for-byte identical to their baselines.
+- The actual statement fixture recorded 656 cache requests, 616 hits, 40 misses, and zero evictions. Keep the existing 256-entry/32-MiB LRU bounds: this fixture does not exhibit the hypothetical 257-source eviction cycle. This is cache activity evidence, not a latency benchmark.
+- Removing duplicate parsing/layout on the first miss remains pending approval for direct use of the already-locked `ratex-render` 0.1.14 and `image` 0.25.10 crates. A reviewable single-pass adapter patch is prepared at `/tmp/leet-math-single-pass.patch`. The renderer boundary is unchanged until that choice is approved.
+
 ## Diagnosis before implementation
 
 - The supplied screenshot shows small, thin formulas beside larger-looking prose. It is the visual bug report, not a fresh native reproduction.
