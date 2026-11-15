@@ -356,7 +356,7 @@ pub(crate) fn native(cx: &mut HeadlessAppContext, output: &Path, pixels: bool) -
             let mut turn = db.chat_messages(thread)?.remove(0).turn;
             for prompt in ["Explain the first approach", "Compare it with a hash map", "Trace the final example"] {
                 turn.instructions = prompt.into();
-                turn.answer = Some(practice::assist::Answer::Chat("A detailed explanation.\n\n".repeat(25)));
+                turn.answer = Some(practice::assist::Answer::Chat("Compare $a_i$ with $a_{j-1}$ when $1 \\le i \\le j \\le n$. The midpoint is $\\frac{i+j}{2}$, with bound $10^9$.\n\nA detailed explanation.\n\n".repeat(25)));
                 let message_id = db.append_chat(thread, &turn)?;
                 let message = db.chat_messages(thread)?.into_iter().find(|message| message.id == message_id).unwrap();
                 assist.update(cx, |assist, cx| { assist.restore_message(message); cx.notify(); });

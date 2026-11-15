@@ -3846,6 +3846,8 @@ dependencies = [
  "open",
  "practice",
  "ratex-gpui",
+ "ratex-layout",
+ "ratex-parser",
  "ropey",
  "serde",
  "serde_json",

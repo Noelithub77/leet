@@ -174,7 +174,6 @@ impl Statement {
     fn render_sections(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let sections = cx.global::<Sections>().0;
         let hint_section = sections.iter().position(|open| *open);
-        let description_length = self.blocks.iter().filter_map(|block| match block { Block::Markdown(text) => Some(text.chars().count()), _ => None }).sum();
         let cards = ["Description", "Examples", "Constraints"].into_iter().enumerate().filter_map(|(section, label)| {
                 let exists = self.blocks.iter().any(|block| match block {
                     Block::Markdown(_) => section == 0, Block::Example { .. } => section == 1, Block::Constraints(_) => section == 2,
@@ -182,7 +181,7 @@ impl Statement {
                 exists.then(|| self.section_card(section, label, cx)
                     .when(sections[section], |view| view
                             .child(div().id(("statement-content", section)).flex_initial().min_h_0().overflow_y_scroll().track_scroll(&self.section_scroll[section])
-                                .child(v_flex().flex_shrink_0().text_sm().when(section == 0, |view| view.text_size(rems(description_font_size(description_length) / 16.))).pl_3().pr_4().pb_3().pt_2().gap_4().child(self.render_blocks(section, cx))
+                                .child(v_flex().flex_shrink_0().text_sm().when(section == 0, |view| view.text_size(rems(0.875)).line_height(relative(1.5))).pl_3().pr_4().pb_3().pt_2().gap_4().child(self.render_blocks(section, cx))
                                     .when(hint_section == Some(section), |view| view.child(self.render_hints(cx)))))
                             .child(div().absolute().top(rems(2.25)).bottom_0().left_0().right_0().child(Scrollbar::vertical(&self.section_scroll[section]).id(("statement-scrollbar", section)).mode(ScrollbarMode::Always).viewport_from_layout()
                                 .styles(|styles| styles
@@ -296,22 +295,9 @@ fn toggle_section(mut sections: [bool; 3], section: usize) -> [bool; 3] {
     sections
 }
 
-fn description_font_size(length: usize) -> f32 {
-    // Scale only statement prose, with a readable floor that still follows app zoom.
-    13. - (length.saturating_sub(600) as f32 / 2400.).clamp(0., 1.)
-}
-
 #[cfg(test)]
 mod section_tests {
-    use super::{description_font_size, toggle_section};
-
-    #[test]
-    fn description_font_shrinks_gradually_with_a_readable_floor() {
-        assert_eq!(description_font_size(100), 13.);
-        assert_eq!(description_font_size(1800), 12.5);
-        assert_eq!(description_font_size(3000), 12.);
-        assert_eq!(description_font_size(100000), 12.);
-    }
+    use super::toggle_section;
 
     #[test]
     fn sections_toggle_independently() {
